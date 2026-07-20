@@ -15,8 +15,12 @@ repository** — no fixture, no test, no "temporary" file.
 | `assumptions.json` | Written with the partner | Currency, rate cards, thresholds, attention ranges — customer-owned (doc 03 P4) |
 | `salt.txt` | Generated per org, once | The pseudonymization salt (see §3) |
 
-Keep all partner files in a dedicated directory OUTSIDE any git repository,
-e.g. `~/partners/<org>/2026-07-20/`.
+Keep all partner files under the git-ignored `partner-runs/<partner-code>/`
+structure (`raw/`, `config/`, `output/`, `notes/`), scaffolded by
+`tools/partner/new-run.sh`. The ignore rule is enforced by a guardrail test
+(`apps/cli/test/partner-guardrail.test.ts`); if that test is red, no partner
+session may proceed. Operational toolkit and session checklist:
+[tools/partner/](../tools/partner/README.md).
 
 ## 2. Mapping configuration
 
@@ -121,10 +125,10 @@ a different column as `title`.
 ## 8. Deletion procedure (end of engagement, or on request)
 
 ```bash
-rm -rf ~/partners/<org>/            # raw exports, salt, artifacts
+./tools/partner/cleanup.sh <partner-code>   # confirms, deletes, verifies absence
 ```
 
-Then verify: `ls ~/partners/<org>` errors; check `~/.zsh_history` for
+Then verify: `ls partner-runs/<partner-code>` errors; check `~/.zsh_history` for
 accidentally pasted data paths with content (salts never appear on the
 command line if this workflow was followed); empty the OS trash if the files
 ever touched it. If artifacts were shared (e.g., the report sent back to the

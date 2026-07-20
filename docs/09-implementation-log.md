@@ -460,3 +460,39 @@ attempt (real activity logs are messy) — that failure output is itself the
 M1 learning artifact; capture it in the findings memo. If events prove
 unusable, the F2-only path still delivers the session. Do NOT relax
 validation ad hoc during a session; log what broke and decide deliberately.
+
+---
+
+## M1 Concierge Cycle 1 — preparation (2026-07-20)
+
+M0 frozen; no engineering slice. Prep for the first real external dataset,
+limited to operational material per the M1 authorization.
+
+**Added (all data-free, committable):**
+- `partner-runs/` git-ignored wholesale; guardrail test
+  (`partner-guardrail.test.ts`) asserts the pattern exists, git agrees on all
+  path shapes, and a real canary file never reaches `git status`.
+- `tools/partner/`: `new-run.sh` (scaffold that REFUSES to run if the
+  directory is not ignored; salt generated mode-600), `intake-checklist.md`
+  (passes 1–5 procedure), `findings-memo-template.md` (8 categories ×
+  severity/evidence/impact/response/now-later-never/generalizes),
+  `run-commands.sh.template`, `verify-privacy.sh` (counts only, never
+  values), `cleanup.sh` (confirm → delete → verify absence).
+- `costflow preflight` subcommand (explicitly authorized): composes
+  `importCsv`'s existing structural validation into a values-free structure
+  summary — rows/drops/warnings, capability profile, actor coverage counts,
+  rate-card coverage, unmapped columns, event validation status. No
+  detectors, no money, no artifacts. CLI io helpers extracted to `io.ts`.
+- Doc 11 amended: partner data location is `partner-runs/` (guardrail-backed)
+  instead of a home directory; cleanup via the script.
+
+**Dry-run verification:** scaffold created + git status clean with canary
+present; salt file mode `-rw-------`; verify-privacy proved BOTH directions
+(clean → exit 0, seeded leak → exit 1) — the clean path initially exposed a
+pipefail bug in the script itself, fixed and re-verified; cleanup removed the
+tree. Preflight smoke-tested against synthetic golden fixtures only.
+`pnpm check` green: 95/95 tests (6 added).
+
+**Status: waiting on the real partner dataset.** No partner data exists in
+the repo or this log. Session execution (passes 1–5, findings memo, final
+report) begins when files land in `partner-runs/<code>/raw/`.

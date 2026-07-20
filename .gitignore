@@ -7,3 +7,8 @@ coverage/
 /out/
 # Boundary-proof test debris if the run is killed mid-test (R-16)
 packages/cost-engine/src/tmp-boundary-violation.ts
+
+# Partner data NEVER enters version control: raw exports, configs, salts,
+# outputs, and findings notes all live under partner-runs/ (M1 concierge).
+# A guardrail test asserts this pattern stays present and effective.
+partner-runs/

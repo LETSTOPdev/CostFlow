@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Partner run commands — <PARTNER>. Copied by new-run.sh; fill placeholders.
+# Run from the repository root. Passes run IN ORDER; stop at first failure.
+set -euo pipefail
+
+PARTNER="<PARTNER>"
+BASE="partner-runs/$PARTNER"
+NOW="<EXPORT-CUTOFF, e.g. 2026-07-21T00:00:00Z>"   # pinned, never machine clock
+ORG="<PARTNER-SCOPE-ID, e.g. acme-prod>"
+
+ITEMS="$BASE/raw/<items.csv>"
+EVENTS="$BASE/raw/<events.csv>"            # delete EVENT lines below if none
+MAPPING="$BASE/config/mapping.json"
+ASSUMPTIONS="$BASE/config/assumptions.json"
+SALT="$BASE/config/salt.txt"
+
+# ── Pass 1: structural preflight (NO financials) ───────────────────────────
+pnpm --silent costflow preflight \
+  --csv "$ITEMS" --mapping "$MAPPING" --assumptions "$ASSUMPTIONS" \
+  --org "$ORG" --salt-file "$SALT" \
+  | tee "$BASE/output/preflight-items.txt"
+
+pnpm --silent costflow preflight \
+  --csv "$ITEMS" --events "$EVENTS" --mapping "$MAPPING" --assumptions "$ASSUMPTIONS" \
+  --org "$ORG" --salt-file "$SALT" \
+  | tee "$BASE/output/preflight-events.txt"
+
+# ── Pass 2: F2-only baseline (no events) ───────────────────────────────────
+pnpm --silent costflow analyze \
+  --csv "$ITEMS" --mapping "$MAPPING" --assumptions "$ASSUMPTIONS" \
+  --org "$ORG" --salt-file "$SALT" --now "$NOW" \
+  --out "$BASE/output/f2-baseline"
+
+# ── Pass 3: F1 + F2 (only after Pass 2 succeeded) ──────────────────────────
+pnpm --silent costflow analyze \
+  --csv "$ITEMS" --events "$EVENTS" --mapping "$MAPPING" --assumptions "$ASSUMPTIONS" \
+  --org "$ORG" --salt-file "$SALT" --now "$NOW" \
+  --out "$BASE/output/full"
+
+# ── Pass 4: privacy verification (values file is local + ignored) ──────────
+./tools/partner/verify-privacy.sh "$BASE/config/actor-values.txt" "$BASE/output" "$BASE/notes"
+
+# ── Pass 5: reproducibility (byte-compare a second identical run) ──────────
+pnpm --silent costflow analyze \
+  --csv "$ITEMS" --events "$EVENTS" --mapping "$MAPPING" --assumptions "$ASSUMPTIONS" \
+  --org "$ORG" --salt-file "$SALT" --now "$NOW" \
+  --out "$BASE/output/full-rerun"
+cmp "$BASE/output/full/run.json" "$BASE/output/full-rerun/run.json"
+cmp "$BASE/output/full/report.md" "$BASE/output/full-rerun/report.md"
+echo "reproducibility: byte-identical"

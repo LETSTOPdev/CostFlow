@@ -1,12 +1,13 @@
 import { parseArgs } from 'node:util';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { z } from 'zod';
 import { parseIsoUtc } from '@costflow/domain';
 import { importCsv } from '@costflow/ingestion';
 import { runAnalysis } from '@costflow/analysis';
 import { buildReportModel, renderMarkdown } from '@costflow/reporting';
+import { CliError, readJsonFile, readTextFile } from './io';
+import { preflight } from './preflight';
 import { buildPseudonymizationContext } from './pseudonym';
 import { assumptionSetSchema, mappingTemplateSchema } from './schemas';
 
@@ -14,17 +15,23 @@ import { assumptionSetSchema, mappingTemplateSchema } from './schemas';
 // with a non-zero exit (R-01/R-08): "no frictions detected" may only ever
 // follow a valid, completed analysis.
 
-const USAGE = `Usage: costflow analyze --csv <file> --mapping <file> --assumptions <file> [options]
+const USAGE = `Usage:
+  costflow analyze   --csv <file> --mapping <file> --assumptions <file> [options]
+  costflow preflight --csv <file> --mapping <file> [--assumptions <file>] [options]
+
+analyze runs the full pipeline and writes artifacts. preflight runs ONLY the
+structural import validation and prints a values-free structure summary — no
+detectors, no cost figures, no artifacts (M1 intake pass 1).
 
 Options:
-  --csv <file>           Work-items CSV export to analyze (required)
+  --csv <file>           Work-items CSV export (required)
   --mapping <file>       Mapping template JSON (required)
-  --assumptions <file>   Assumption set JSON (required)
+  --assumptions <file>   Assumption set JSON (required for analyze)
   --events <file>        Optional event-history CSV (requires "events" in the mapping)
   --org <scope>          Pseudonymization scope id (required when an actor column is mapped)
   --salt-file <file>     File containing the org's pseudonymization salt (required with --org;
                          keep it out of the repo and out of shell history)
-  --now <iso>            Analysis time, ISO-8601 UTC (default: current time)
+  --now <iso>            Analysis time, ISO-8601 UTC (default: current time; analyze only)
   --run-id <id>          Run id (default: sha256 of inputs + now — deterministic)
   --out <dir>            Output directory for run.json + report.md (default: ./out)
   --quiet                Suppress report on stdout
@@ -32,36 +39,27 @@ Options:
 Status messages go to stderr; the report goes to stdout unless --quiet.
 `;
 
-class CliError extends Error {}
-
-function readTextFile(path: string, label: string): string {
-  try {
-    return readFileSync(path, 'utf8');
-  } catch (error) {
-    throw new CliError(`Cannot read ${label} at "${path}": ${(error as Error).message}`);
+/**
+ * R-20: pseudonymization is mandatory whenever actor data flows in — the
+ * core refuses unmapped actors without a context, and we refuse earlier,
+ * with a friendlier message. The salt comes from a file, never from argv.
+ */
+function resolvePseudonymization(
+  values: { org?: string | undefined; 'salt-file'?: string | undefined },
+  actorColumnMapped: boolean,
+) {
+  if (!actorColumnMapped) return undefined;
+  if (!values.org || !values['salt-file']) {
+    throw new CliError(
+      'The mapping template maps an actor column, so --org <scope> and --salt-file <file> are required: ' +
+        'unmapped actor values are pseudonymized with an org-scoped salt (raw identities are never stored).',
+    );
   }
-}
-
-function readJsonFile<T>(
-  path: string,
-  label: string,
-  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
-): T {
-  const text = readTextFile(path, label);
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text);
-  } catch (error) {
-    throw new CliError(`${label} at "${path}" is not valid JSON: ${(error as Error).message}`);
+  const salt = readTextFile(values['salt-file'], 'salt file').trim();
+  if (salt.length < 8) {
+    throw new CliError('The salt file must contain at least 8 non-whitespace characters.');
   }
-  const result = schema.safeParse(raw);
-  if (!result.success) {
-    const issues = result.error.issues
-      .map((i) => `  ${i.path.join('.') || '(root)'}: ${i.message}`)
-      .join('\n');
-    throw new CliError(`Invalid ${label} at "${path}":\n${issues}`);
-  }
-  return result.data;
+  return buildPseudonymizationContext(values.org, salt);
 }
 
 function run(): void {
@@ -81,7 +79,28 @@ function run(): void {
     },
   });
 
-  if (positionals[0] !== 'analyze' || !values.csv || !values.mapping || !values.assumptions) {
+  const subcommand = positionals[0];
+  if (subcommand === 'preflight') {
+    if (!values.csv || !values.mapping) {
+      throw new CliError(USAGE);
+    }
+    const mapping = readJsonFile(values.mapping, 'mapping template', mappingTemplateSchema);
+    const result = preflight({
+      csvText: readTextFile(values.csv, 'CSV file'),
+      eventsCsvText:
+        values.events !== undefined ? readTextFile(values.events, 'event-history CSV') : undefined,
+      mapping,
+      assumptions: values.assumptions
+        ? readJsonFile(values.assumptions, 'assumption set', assumptionSetSchema)
+        : undefined,
+      pseudonymization: resolvePseudonymization(values, mapping.columns.actor !== undefined),
+    });
+    console.log(result.lines.join('\n'));
+    if (!result.ok) process.exit(1);
+    return;
+  }
+
+  if (subcommand !== 'analyze' || !values.csv || !values.mapping || !values.assumptions) {
     throw new CliError(USAGE);
   }
 
@@ -95,23 +114,7 @@ function run(): void {
   const mapping = readJsonFile(values.mapping, 'mapping template', mappingTemplateSchema);
   const assumptions = readJsonFile(values.assumptions, 'assumption set', assumptionSetSchema);
 
-  // R-20: pseudonymization is mandatory whenever actor data flows in — the
-  // core refuses unmapped actors without a context, and we refuse earlier,
-  // with a friendlier message. The salt comes from a file, never from argv.
-  let pseudonymization = undefined;
-  if (mapping.columns.actor !== undefined) {
-    if (!values.org || !values['salt-file']) {
-      throw new CliError(
-        'The mapping template maps an actor column, so --org <scope> and --salt-file <file> are required: ' +
-          'unmapped actor values are pseudonymized with an org-scoped salt (raw identities are never stored).',
-      );
-    }
-    const salt = readTextFile(values['salt-file'], 'salt file').trim();
-    if (salt.length < 8) {
-      throw new CliError('The salt file must contain at least 8 non-whitespace characters.');
-    }
-    pseudonymization = buildPseudonymizationContext(values.org, salt);
-  }
+  const pseudonymization = resolvePseudonymization(values, mapping.columns.actor !== undefined);
 
   const eventsCsvText =
     values.events !== undefined ? readTextFile(values.events, 'event-history CSV') : undefined;

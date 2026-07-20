@@ -53,6 +53,9 @@ importers:
       '@costflow/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
+      csv-parse:
+        specifier: ^5.6.0
+        version: 5.6.0
       zod:
         specifier: ^3.24.1
         version: 3.25.76

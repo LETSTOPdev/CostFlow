@@ -5,10 +5,11 @@
   "type": "module",
   "main": "./src/main.ts",
   "dependencies": {
+    "@costflow/analysis": "workspace:*",
     "@costflow/domain": "workspace:*",
     "@costflow/ingestion": "workspace:*",
-    "@costflow/analysis": "workspace:*",
     "@costflow/reporting": "workspace:*",
+    "csv-parse": "^5.6.0",
     "zod": "^3.24.1"
   }
 }
