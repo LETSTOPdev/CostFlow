@@ -19,15 +19,32 @@ export const mappingTemplateSchema = z
         itemId: z.string().min(1).optional(),
         title: z.string().min(1),
         status: z.string().min(1),
-        role: z.string().min(1).optional(),
+        actor: z.string().min(1).optional(),
         createdAt: z.string().min(1).optional(),
         dueAt: z.string().min(1).optional(),
         lastUpdatedAt: z.string().min(1).optional(),
       })
       .strict(),
     statusMap: z.record(z.string(), stageKind),
+    actorRoleMap: z.record(z.string(), z.string().min(1)).optional(),
+    events: z
+      .object({
+        columns: z
+          .object({
+            itemId: z.string().min(1),
+            from: z.string().min(1).optional(),
+            to: z.string().min(1),
+            at: z.string().min(1),
+          })
+          .strict(),
+      })
+      .strict()
+      .optional(),
   })
-  .strict() satisfies z.ZodType<MappingTemplate, z.ZodTypeDef, unknown>;
+  .strict()
+  .refine((m) => m.actorRoleMap === undefined || m.columns.actor !== undefined, {
+    message: 'actorRoleMap requires columns.actor to be mapped',
+  }) satisfies z.ZodType<MappingTemplate, z.ZodTypeDef, unknown>;
 
 // Money and effort inputs must be non-negative plain decimals (R-10):
 // a negative rate or attention range would flow into nonsense negative costs.
@@ -54,6 +71,10 @@ export const assumptionSetSchema = z
           .object({ value: z.number().int().nonnegative(), provenance })
           .strict(),
         attentionHoursPerDay: z.object({ range: rangeSpec, provenance }).strict(),
+        queueWaitAttentionHoursPerDay: z
+          .object({ range: rangeSpec, provenance })
+          .strict()
+          .optional(),
       })
       .strict(),
   })

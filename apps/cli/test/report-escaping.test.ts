@@ -12,10 +12,11 @@ const mapping: MappingTemplate = {
     itemId: 'ID',
     title: 'Title',
     status: 'Status',
-    role: 'Role',
+    actor: 'Actor',
     lastUpdatedAt: 'Updated',
   },
   statusMap: { 'Wait | huh': 'review' },
+  actorRoleMap: { 'legal person': 'Le|gal' },
 };
 
 const assumptions: AssumptionSet = {
@@ -36,8 +37,8 @@ const assumptions: AssumptionSet = {
 describe('report escapes customer-controlled strings (regression: R-07)', () => {
   it('hostile titles, statuses, and roles cannot corrupt tables or inject links', () => {
     const csv = [
-      'ID,Title,Status,Role,Updated',
-      '"1","Evil | [click me](https://evil.example) `code`","Wait | huh","Le|gal","2026-06-01"',
+      'ID,Title,Status,Actor,Updated',
+      '"1","Evil | [click me](https://evil.example) `code`","Wait | huh","legal person","2026-06-01"',
     ].join('\n');
     const batch = importCsv({
       batchId: 'b',
@@ -66,7 +67,7 @@ describe('report escapes customer-controlled strings (regression: R-07)', () => 
   });
 
   it('remains deterministic with escaping applied', () => {
-    const csv = 'ID,Title,Status,Role,Updated\n1,"A|B","Wait | huh",Le|gal,2026-06-01';
+    const csv = 'ID,Title,Status,Actor,Updated\n1,"A|B","Wait | huh",legal person,2026-06-01';
     const make = () => {
       const batch = importCsv({
         batchId: 'b',

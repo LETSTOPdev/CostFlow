@@ -45,6 +45,10 @@ const VALID = [
   join(FIXTURES, 'mapping.json'),
   '--assumptions',
   join(FIXTURES, 'assumptions.json'),
+  '--org',
+  'test-org',
+  '--salt-file',
+  join(FIXTURES, 'salt.txt'),
 ];
 
 describe('CLI fails visibly on invalid input (regressions: R-01, R-04, R-05, R-08)', () => {
@@ -147,7 +151,7 @@ describe('CLI fails visibly on invalid input (regressions: R-01, R-04, R-05, R-0
     const csv = join(dir, 'dupe.csv');
     writeFileSync(
       csv,
-      'Item ID,Name,Status,Status,Owner Role,Created,Due,Last Updated\n1,A,Done,Open,Ops,2026-01-01,2026-02-01,2026-03-01\n',
+      'Item ID,Name,Status,Status,Owner,Created,Due,Last Updated\n1,A,Done,Open,Sarah Cohen,2026-01-01,2026-02-01,2026-03-01\n',
     );
     const result = cli(['analyze', '--csv', csv, ...VALID.slice(2)]);
     expectCleanFailure(result, /duplicate mapped column/i);

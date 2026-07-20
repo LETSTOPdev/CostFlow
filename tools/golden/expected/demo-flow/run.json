@@ -1,0 +1,832 @@
+{
+  "runId": "golden-demo-flow",
+  "engineVersions": {
+    "analysis": "0.2.0",
+    "signals": {
+      "f2-aging": "1.0.0",
+      "f1-queue-wait": "1.0.0"
+    },
+    "costModels": {
+      "cm-aging-attention": "1.0.0",
+      "cm-queue-wait-attention": "1.0.0"
+    }
+  },
+  "now": "2026-07-20T00:00:00Z",
+  "batch": {
+    "id": "batch-golden-demo-flow",
+    "provider": "csv",
+    "mappingTemplateId": "demo-flow-board",
+    "mappingTemplateVersion": "1",
+    "importedAt": "2026-07-20T00:00:00Z",
+    "counts": {
+      "totalRows": 4,
+      "imported": 4,
+      "dropped": 0
+    },
+    "diagnostics": [],
+    "capability": {
+      "hasEventHistory": true,
+      "hasDueDates": true,
+      "hasLastUpdated": true,
+      "hasActors": true
+    },
+    "pseudonymizationScope": "costflow-golden",
+    "items": [
+      {
+        "id": "2001",
+        "sourceId": "2001",
+        "title": "Vendor agreement",
+        "stage": {
+          "name": "Contract Review",
+          "kind": "review"
+        },
+        "actor": {
+          "kind": "role",
+          "roleRef": "Legal"
+        },
+        "createdAt": "2026-06-01",
+        "dueAt": "2026-07-15",
+        "lastUpdatedAt": "2026-07-01"
+      },
+      {
+        "id": "2002",
+        "sourceId": "2002",
+        "title": "Supplier onboarding",
+        "stage": {
+          "name": "Done",
+          "kind": "done"
+        },
+        "actor": {
+          "kind": "role",
+          "roleRef": "Finance"
+        },
+        "createdAt": "2026-06-01",
+        "dueAt": "2026-07-20",
+        "lastUpdatedAt": "2026-07-10"
+      },
+      {
+        "id": "2003",
+        "sourceId": "2003",
+        "title": "Data processing addendum",
+        "stage": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "actor": {
+          "kind": "unknown",
+          "pseudonym": "anon-404becfe2c1c"
+        },
+        "createdAt": "2026-06-05",
+        "dueAt": "2026-08-01",
+        "lastUpdatedAt": "2026-06-20"
+      },
+      {
+        "id": "2004",
+        "sourceId": "2004",
+        "title": "NDA batch",
+        "stage": {
+          "name": "Contract Review",
+          "kind": "review"
+        },
+        "actor": {
+          "kind": "role",
+          "roleRef": "Procurement"
+        },
+        "createdAt": "2026-06-10",
+        "dueAt": "2026-07-30",
+        "lastUpdatedAt": "2026-07-18"
+      }
+    ],
+    "events": [
+      {
+        "workItemId": "2001",
+        "from": null,
+        "to": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "at": "2026-06-01T00:00:00Z"
+      },
+      {
+        "workItemId": "2001",
+        "from": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "to": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "at": "2026-06-03T00:00:00Z"
+      },
+      {
+        "workItemId": "2001",
+        "from": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "to": {
+          "name": "Contract Review",
+          "kind": "review"
+        },
+        "at": "2026-06-25T00:00:00Z"
+      },
+      {
+        "workItemId": "2002",
+        "from": null,
+        "to": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "at": "2026-06-01T00:00:00Z"
+      },
+      {
+        "workItemId": "2002",
+        "from": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "to": {
+          "name": "Contract Review",
+          "kind": "review"
+        },
+        "at": "2026-06-06T00:00:00Z"
+      },
+      {
+        "workItemId": "2002",
+        "from": {
+          "name": "Contract Review",
+          "kind": "review"
+        },
+        "to": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "at": "2026-06-16T00:00:00Z"
+      },
+      {
+        "workItemId": "2002",
+        "from": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "to": {
+          "name": "Contract Review",
+          "kind": "review"
+        },
+        "at": "2026-07-01T00:00:00Z"
+      },
+      {
+        "workItemId": "2002",
+        "from": {
+          "name": "Contract Review",
+          "kind": "review"
+        },
+        "to": {
+          "name": "Done",
+          "kind": "done"
+        },
+        "at": "2026-07-10T00:00:00Z"
+      },
+      {
+        "workItemId": "2003",
+        "from": null,
+        "to": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "at": "2026-06-05T00:00:00Z"
+      },
+      {
+        "workItemId": "2004",
+        "from": null,
+        "to": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "at": "2026-06-10T00:00:00Z"
+      },
+      {
+        "workItemId": "2004",
+        "from": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "to": {
+          "name": "Contract Review",
+          "kind": "review"
+        },
+        "at": "2026-07-18T00:00:00Z"
+      }
+    ]
+  },
+  "assumptions": {
+    "id": "demo-flow-assumptions",
+    "version": "1",
+    "currency": "USD",
+    "rates": [
+      {
+        "roleRef": "Legal",
+        "hourlyRate": "120",
+        "provenance": "customer"
+      },
+      {
+        "roleRef": "Finance",
+        "hourlyRate": "95",
+        "provenance": "customer"
+      },
+      {
+        "roleRef": "Procurement",
+        "hourlyRate": "80",
+        "provenance": "customer"
+      }
+    ],
+    "defaultRate": {
+      "hourlyRate": "75",
+      "provenance": "default"
+    },
+    "parameters": {
+      "agingThresholdDays": {
+        "value": 14,
+        "provenance": "customer"
+      },
+      "attentionHoursPerDay": {
+        "range": {
+          "low": "0.15",
+          "expected": "0.3",
+          "high": "0.6"
+        },
+        "provenance": "customer"
+      },
+      "queueWaitAttentionHoursPerDay": {
+        "range": {
+          "low": "0.1",
+          "expected": "0.2",
+          "high": "0.4"
+        },
+        "provenance": "customer"
+      }
+    }
+  },
+  "detectors": [
+    {
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "signalName": "Aging / stagnation",
+      "status": "ran",
+      "instanceCount": 2
+    },
+    {
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "signalName": "Queue wait",
+      "status": "ran",
+      "instanceCount": 2
+    }
+  ],
+  "frictions": [
+    {
+      "id": "f2-aging:working-on-it",
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "frictionType": "aging",
+      "location": {
+        "stage": {
+          "name": "Working on it",
+          "kind": "active"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-beyond-threshold",
+        "value": 16
+      },
+      "evidence": [
+        {
+          "workItemId": "2003",
+          "title": "Data processing addendum",
+          "actor": {
+            "kind": "unknown",
+            "pseudonym": "anon-404becfe2c1c"
+          },
+          "lastUpdatedAt": "2026-06-20",
+          "agingDays": 30,
+          "excessDays": 16
+        }
+      ]
+    },
+    {
+      "id": "f2-aging:contract-review",
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "frictionType": "aging",
+      "location": {
+        "stage": {
+          "name": "Contract Review",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-beyond-threshold",
+        "value": 5
+      },
+      "evidence": [
+        {
+          "workItemId": "2001",
+          "title": "Vendor agreement",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "lastUpdatedAt": "2026-07-01",
+          "agingDays": 19,
+          "excessDays": 5
+        }
+      ]
+    },
+    {
+      "id": "f1-queue-wait:contract-review",
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "frictionType": "queue-wait",
+      "location": {
+        "stage": {
+          "name": "Contract Review",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-hours-waiting",
+        "value": 1104
+      },
+      "evidence": [
+        {
+          "workItemId": "2001",
+          "title": "Vendor agreement",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "waitHours": 600,
+          "visits": 1,
+          "openAtAnalysisTime": true
+        },
+        {
+          "workItemId": "2002",
+          "title": "Supplier onboarding",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Finance"
+          },
+          "waitHours": 456,
+          "visits": 2,
+          "openAtAnalysisTime": false
+        },
+        {
+          "workItemId": "2004",
+          "title": "NDA batch",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Procurement"
+          },
+          "waitHours": 48,
+          "visits": 1,
+          "openAtAnalysisTime": true
+        }
+      ]
+    },
+    {
+      "id": "f1-queue-wait:backlog",
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "frictionType": "queue-wait",
+      "location": {
+        "stage": {
+          "name": "Backlog",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-hours-waiting",
+        "value": 1080
+      },
+      "evidence": [
+        {
+          "workItemId": "2004",
+          "title": "NDA batch",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Procurement"
+          },
+          "waitHours": 912,
+          "visits": 1,
+          "openAtAnalysisTime": false
+        },
+        {
+          "workItemId": "2002",
+          "title": "Supplier onboarding",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Finance"
+          },
+          "waitHours": 120,
+          "visits": 1,
+          "openAtAnalysisTime": false
+        },
+        {
+          "workItemId": "2001",
+          "title": "Vendor agreement",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "waitHours": 48,
+          "visits": 1,
+          "openAtAnalysisTime": false
+        }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "frictionInstanceId": "f2-aging:working-on-it",
+      "status": "priced",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f2-aging:contract-review",
+      "status": "priced",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:contract-review",
+      "status": "priced",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:backlog",
+      "status": "priced",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0"
+    }
+  ],
+  "estimates": [
+    {
+      "frictionInstanceId": "f2-aging:working-on-it",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "180",
+        "expected": "360",
+        "high": "720"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "C",
+        "reasons": [
+          "C: Default hourly rate applied to unmapped (pseudonymized) actor(s).",
+          "B: Durations inferred from snapshot dates, not event history."
+        ]
+      },
+      "assumptionSetId": "demo-flow-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated attention cost of 1 item(s) aging beyond 14 days in stage \"Working on it\".",
+        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "aging-attention",
+            "workItemId": "2003",
+            "excessDays": 16,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "75",
+            "rateSource": "defaultRate:unmapped-actor",
+            "subtotal": {
+              "low": "180",
+              "expected": "360",
+              "high": "720"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "defaultRate:unmapped-actor",
+            "value": "75 USD/h",
+            "provenance": "default"
+          },
+          {
+            "ref": "parameters.agingThresholdDays",
+            "value": "14 days",
+            "provenance": "customer"
+          },
+          {
+            "ref": "parameters.attentionHoursPerDay",
+            "value": "0.15–0.6 h/day (expected 0.3)",
+            "provenance": "customer"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "2003"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f2-aging:contract-review",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "90",
+        "expected": "180",
+        "high": "360"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "B",
+        "reasons": [
+          "B: Durations inferred from snapshot dates, not event history."
+        ]
+      },
+      "assumptionSetId": "demo-flow-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated attention cost of 1 item(s) aging beyond 14 days in stage \"Contract Review\".",
+        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "aging-attention",
+            "workItemId": "2001",
+            "excessDays": 5,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "90",
+              "expected": "180",
+              "high": "360"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.agingThresholdDays",
+            "value": "14 days",
+            "provenance": "customer"
+          },
+          {
+            "ref": "parameters.attentionHoursPerDay",
+            "value": "0.15–0.6 h/day (expected 0.3)",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "2001"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:contract-review",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "496.5",
+        "expected": "993",
+        "high": "1986"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "B",
+        "reasons": [
+          "B: Includes open stage intervals measured to the analysis time."
+        ]
+      },
+      "assumptionSetId": "demo-flow-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated follow-up cost of 3 item(s) waiting in stage \"Contract Review\", observed from event history.",
+        "formula": "Σ over items: waitDays × queueWaitAttentionHoursPerDay × hourlyRate(role); waitDays = observed waitHours ÷ 24; low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "2001",
+            "waitHours": 600,
+            "waitDays": "25",
+            "visits": 1,
+            "openAtAnalysisTime": true,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "300",
+              "expected": "600",
+              "high": "1200"
+            }
+          },
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "2002",
+            "waitHours": 456,
+            "waitDays": "19",
+            "visits": 2,
+            "openAtAnalysisTime": false,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "95",
+            "rateSource": "rates.Finance",
+            "subtotal": {
+              "low": "180.5",
+              "expected": "361",
+              "high": "722"
+            }
+          },
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "2004",
+            "waitHours": 48,
+            "waitDays": "2",
+            "visits": 1,
+            "openAtAnalysisTime": true,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "80",
+            "rateSource": "rates.Procurement",
+            "subtotal": {
+              "low": "16",
+              "expected": "32",
+              "high": "64"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.queueWaitAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Finance",
+            "value": "95 USD/h",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Procurement",
+            "value": "80 USD/h",
+            "provenance": "customer"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "2001",
+            "2002",
+            "2004"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:backlog",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "375.5",
+        "expected": "751",
+        "high": "1502"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "A",
+        "reasons": []
+      },
+      "assumptionSetId": "demo-flow-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated follow-up cost of 3 item(s) waiting in stage \"Backlog\", observed from event history.",
+        "formula": "Σ over items: waitDays × queueWaitAttentionHoursPerDay × hourlyRate(role); waitDays = observed waitHours ÷ 24; low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "2004",
+            "waitHours": 912,
+            "waitDays": "38",
+            "visits": 1,
+            "openAtAnalysisTime": false,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "80",
+            "rateSource": "rates.Procurement",
+            "subtotal": {
+              "low": "304",
+              "expected": "608",
+              "high": "1216"
+            }
+          },
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "2002",
+            "waitHours": 120,
+            "waitDays": "5",
+            "visits": 1,
+            "openAtAnalysisTime": false,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "95",
+            "rateSource": "rates.Finance",
+            "subtotal": {
+              "low": "47.5",
+              "expected": "95",
+              "high": "190"
+            }
+          },
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "2001",
+            "waitHours": 48,
+            "waitDays": "2",
+            "visits": 1,
+            "openAtAnalysisTime": false,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "24",
+              "expected": "48",
+              "high": "96"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.queueWaitAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Finance",
+            "value": "95 USD/h",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Procurement",
+            "value": "80 USD/h",
+            "provenance": "customer"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "2004",
+            "2002",
+            "2001"
+          ]
+        }
+      }
+    }
+  ]
+}

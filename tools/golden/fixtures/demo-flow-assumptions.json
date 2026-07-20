@@ -1,0 +1,22 @@
+{
+  "id": "demo-flow-assumptions",
+  "version": "1",
+  "currency": "USD",
+  "rates": [
+    { "roleRef": "Legal", "hourlyRate": "120", "provenance": "customer" },
+    { "roleRef": "Finance", "hourlyRate": "95", "provenance": "customer" },
+    { "roleRef": "Procurement", "hourlyRate": "80", "provenance": "customer" }
+  ],
+  "defaultRate": { "hourlyRate": "75", "provenance": "default" },
+  "parameters": {
+    "agingThresholdDays": { "value": 14, "provenance": "customer" },
+    "attentionHoursPerDay": {
+      "range": { "low": "0.15", "expected": "0.3", "high": "0.6" },
+      "provenance": "customer"
+    },
+    "queueWaitAttentionHoursPerDay": {
+      "range": { "low": "0.1", "expected": "0.2", "high": "0.4" },
+      "provenance": "customer"
+    }
+  }
+}

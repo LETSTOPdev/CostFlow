@@ -27,6 +27,7 @@ documents. Read them in order:
 | [08-implementation-roadmap.md](docs/08-implementation-roadmap.md)                     | Phase 1 implementation roadmap: milestones M0–M4, stack, standards, testing, CI/CD, security, deferred work                     |
 | [09-implementation-log.md](docs/09-implementation-log.md)                             | Running implementation log: M0 slice 1 checklist, decisions D-1…D-9, verification results                                       |
 | [10-engineering-review.md](docs/10-engineering-review.md)                             | Staff-engineer review of slice 1: verified defects R-01…R-20, decision verdicts, re-scoped next slices                          |
+| [11-partner-run-workflow.md](docs/11-partner-run-workflow.md)                         | Safe CLI workflow for real partner datasets: files, mapping, pseudonymization, validation, retention, deletion                  |
 
 ## The three non-negotiable decisions
 

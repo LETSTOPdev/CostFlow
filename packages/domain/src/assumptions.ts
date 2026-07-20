@@ -42,22 +42,16 @@ export interface AssumptionSet {
       readonly range: RangeSpec;
       readonly provenance: Provenance;
     };
-  };
-}
-
-export function rateForRole(
-  assumptions: AssumptionSet,
-  roleRef: string | null,
-): { hourlyRate: DecimalString; provenance: Provenance; matchedRole: string | null } {
-  if (roleRef !== null) {
-    const entry = assumptions.rates.find((r) => r.roleRef === roleRef);
-    if (entry) {
-      return { hourlyRate: entry.hourlyRate, provenance: entry.provenance, matchedRole: roleRef };
-    }
-  }
-  return {
-    hourlyRate: assumptions.defaultRate.hourlyRate,
-    provenance: assumptions.defaultRate.provenance,
-    matchedRole: null,
+    /**
+     * Follow-up/chasing effort a queued item consumes per day of waiting.
+     * Optional: when absent, the queue-wait cost model is skipped with a
+     * visible reason (FR-13) — never a fabricated default.
+     */
+    readonly queueWaitAttentionHoursPerDay?:
+      | {
+          readonly range: RangeSpec;
+          readonly provenance: Provenance;
+        }
+      | undefined;
   };
 }

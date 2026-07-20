@@ -10,7 +10,7 @@ function item(overrides: Partial<WorkItem>): WorkItem {
     sourceId: 'x',
     title: 'Item',
     stage: { name: 'Working on it', kind: 'active' },
-    roleRef: 'Ops',
+    actor: { kind: 'role', roleRef: 'Ops' },
     createdAt: null,
     dueAt: null,
     lastUpdatedAt: '2026-06-01',
@@ -18,7 +18,7 @@ function item(overrides: Partial<WorkItem>): WorkItem {
   };
 }
 
-function batch(items: WorkItem[]): ImportBatch {
+function batch(items: WorkItem[], overrides: Partial<ImportBatch> = {}): ImportBatch {
   return {
     id: 'b1',
     provider: 'csv',
@@ -31,9 +31,12 @@ function batch(items: WorkItem[]): ImportBatch {
       hasEventHistory: false,
       hasDueDates: false,
       hasLastUpdated: true,
-      hasRoles: true,
+      hasActors: true,
     },
+    pseudonymizationScope: null,
     items,
+    events: [],
+    ...overrides,
   };
 }
 
@@ -93,7 +96,7 @@ describe('f2-aging detector', () => {
       hasEventHistory: false,
       hasDueDates: true,
       hasLastUpdated: false,
-      hasRoles: true,
+      hasActors: true,
     });
     expect(result.canRun).toBe(false);
     if (!result.canRun) expect(result.reason).toContain('hasLastUpdated');

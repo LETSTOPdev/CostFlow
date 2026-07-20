@@ -1,4 +1,5 @@
 import type { CapabilityProfile } from './capability';
+import type { WorkItemEvent } from './events';
 import type { IsoDateString, WorkItem } from './work-item';
 
 export interface ImportDiagnostic {
@@ -26,5 +27,9 @@ export interface ImportBatch {
   };
   readonly diagnostics: readonly ImportDiagnostic[];
   readonly capability: CapabilityProfile;
+  /** Scope label under which unmapped actors were pseudonymized; null if none. */
+  readonly pseudonymizationScope: string | null;
   readonly items: readonly WorkItem[];
+  /** Canonical lifecycle events, present only when history was imported. */
+  readonly events: readonly WorkItemEvent[];
 }

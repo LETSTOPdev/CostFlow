@@ -1,8 +1,12 @@
 # Golden datasets — the engines' constitution
 
-`fixtures/` holds the input CSV, mapping template, and assumption set.
-`expected/` holds the frozen outputs (`run.json`, `report.md`) that CI compares
-byte-exactly against every pipeline run (NFR-1).
+`fixtures/` holds the input CSVs, mapping templates, assumption sets, and the
+synthetic pseudonymization salt. `expected/<fixture>/` holds the frozen outputs
+(`run.json`, `report.md`) that CI compares byte-exactly against every pipeline
+run (NFR-1). Two fixtures: `demo-ops` (snapshot-only, F2 + visible F1 skip) and
+`demo-flow` (items + event history, F1 + F2 multi-signal). All actor values in
+fixtures are synthetic; the privacy test asserts none of them reach expected
+outputs.
 
 ## Rules
 

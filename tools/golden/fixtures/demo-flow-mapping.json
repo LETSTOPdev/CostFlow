@@ -1,6 +1,6 @@
 {
-  "id": "monday-standard-board",
-  "version": "2",
+  "id": "demo-flow-board",
+  "version": "1",
   "columns": {
     "itemId": "Item ID",
     "title": "Name",
@@ -11,16 +11,22 @@
     "lastUpdatedAt": "Last Updated"
   },
   "statusMap": {
+    "Backlog": "queue",
     "Working on it": "active",
-    "Waiting for approval": "review",
-    "Stuck": "blocked",
+    "Contract Review": "review",
     "Done": "done"
   },
   "actorRoleMap": {
     "Sarah Cohen": "Legal",
-    "Dana Peretz": "Finance",
-    "procurement-team": "Procurement",
-    "maya@company.com": "Marketing",
-    "Yossi Katz": "IT"
+    "john@company.com": "Finance",
+    "procurement-team": "Procurement"
+  },
+  "events": {
+    "columns": {
+      "itemId": "Item ID",
+      "from": "From",
+      "to": "To",
+      "at": "At"
+    }
   }
 }

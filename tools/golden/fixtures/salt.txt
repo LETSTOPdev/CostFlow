@@ -1,0 +1,1 @@
+golden-fixture-salt-not-a-real-secret

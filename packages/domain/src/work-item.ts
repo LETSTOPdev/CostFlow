@@ -1,3 +1,4 @@
+import type { ActorRef } from './actor';
 import type { StageRef } from './stage';
 
 /**
@@ -18,8 +19,8 @@ export interface WorkItem {
   readonly sourceId: string;
   readonly title: string;
   readonly stage: StageRef;
-  /** Role reference for rate-card matching; never an individual identity. */
-  readonly roleRef: string | null;
+  /** Mapped role, pseudonymized unknown, or missing — never a raw identity. */
+  readonly actor: ActorRef;
   readonly createdAt: IsoDateString | null;
   readonly dueAt: IsoDateString | null;
   readonly lastUpdatedAt: IsoDateString | null;

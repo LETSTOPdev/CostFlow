@@ -4,11 +4,12 @@
  * degradation (A7) is driven by this profile, never by runtime surprises.
  */
 export interface CapabilityProfile {
-  /** CSV snapshot exports carry no status-change history. */
+  /** True when a validated event-history file accompanied the import. */
   readonly hasEventHistory: boolean;
   readonly hasDueDates: boolean;
   readonly hasLastUpdated: boolean;
-  readonly hasRoles: boolean;
+  /** True when an actor column is mapped and at least one item has an actor. */
+  readonly hasActors: boolean;
 }
 
 export type CapabilityKey = keyof CapabilityProfile;

@@ -1,12 +1,14 @@
 {
   "runId": "golden-demo-ops",
   "engineVersions": {
-    "analysis": "0.1.0",
+    "analysis": "0.2.0",
     "signals": {
-      "f2-aging": "1.0.0"
+      "f2-aging": "1.0.0",
+      "f1-queue-wait": "1.0.0"
     },
     "costModels": {
-      "cm-aging-attention": "1.0.0"
+      "cm-aging-attention": "1.0.0",
+      "cm-queue-wait-attention": "1.0.0"
     }
   },
   "now": "2026-07-20T00:00:00Z",
@@ -14,7 +16,7 @@
     "id": "batch-golden-demo-ops",
     "provider": "csv",
     "mappingTemplateId": "monday-standard-board",
-    "mappingTemplateVersion": "1",
+    "mappingTemplateVersion": "2",
     "importedAt": "2026-07-20T00:00:00Z",
     "counts": {
       "totalRows": 10,
@@ -37,8 +39,9 @@
       "hasEventHistory": false,
       "hasDueDates": true,
       "hasLastUpdated": true,
-      "hasRoles": true
+      "hasActors": true
     },
+    "pseudonymizationScope": "costflow-golden",
     "items": [
       {
         "id": "1001",
@@ -48,7 +51,10 @@
           "name": "Waiting for approval",
           "kind": "review"
         },
-        "roleRef": "Legal",
+        "actor": {
+          "kind": "role",
+          "roleRef": "Legal"
+        },
         "createdAt": "2026-05-02",
         "dueAt": "2026-06-15",
         "lastUpdatedAt": "2026-06-20"
@@ -61,7 +67,10 @@
           "name": "Working on it",
           "kind": "active"
         },
-        "roleRef": "Finance",
+        "actor": {
+          "kind": "unknown",
+          "pseudonym": "anon-46071309527d"
+        },
         "createdAt": "2026-06-01",
         "dueAt": "2026-08-01",
         "lastUpdatedAt": "2026-07-18"
@@ -74,7 +83,10 @@
           "name": "Waiting for approval",
           "kind": "review"
         },
-        "roleRef": "Procurement",
+        "actor": {
+          "kind": "role",
+          "roleRef": "Procurement"
+        },
         "createdAt": "2026-04-20",
         "dueAt": "2026-06-01",
         "lastUpdatedAt": "2026-06-05"
@@ -87,7 +99,10 @@
           "name": "Stuck",
           "kind": "blocked"
         },
-        "roleRef": "Marketing",
+        "actor": {
+          "kind": "role",
+          "roleRef": "Marketing"
+        },
         "createdAt": "2026-05-10",
         "dueAt": "2026-06-30",
         "lastUpdatedAt": "2026-06-10"
@@ -100,7 +115,10 @@
           "name": "Working on it",
           "kind": "active"
         },
-        "roleRef": "Finance",
+        "actor": {
+          "kind": "role",
+          "roleRef": "Finance"
+        },
         "createdAt": "2026-03-15",
         "dueAt": "2026-09-30",
         "lastUpdatedAt": "2026-05-30"
@@ -113,7 +131,10 @@
           "name": "Done",
           "kind": "done"
         },
-        "roleRef": "Marketing",
+        "actor": {
+          "kind": "role",
+          "roleRef": "Marketing"
+        },
         "createdAt": "2026-02-01",
         "dueAt": "2026-03-01",
         "lastUpdatedAt": "2026-03-05"
@@ -126,7 +147,9 @@
           "name": "Working on it",
           "kind": "active"
         },
-        "roleRef": null,
+        "actor": {
+          "kind": "missing"
+        },
         "createdAt": "2026-05-20",
         "dueAt": null,
         "lastUpdatedAt": "2026-06-01"
@@ -139,7 +162,10 @@
           "name": "Working on it",
           "kind": "active"
         },
-        "roleRef": "IT",
+        "actor": {
+          "kind": "role",
+          "roleRef": "IT"
+        },
         "createdAt": "2026-04-01",
         "dueAt": "2026-07-01",
         "lastUpdatedAt": null
@@ -152,12 +178,16 @@
           "name": "Waiting for approval",
           "kind": "review"
         },
-        "roleRef": "Marketing",
+        "actor": {
+          "kind": "role",
+          "roleRef": "Marketing"
+        },
         "createdAt": "2026-07-01",
         "dueAt": "2026-07-25",
         "lastUpdatedAt": "2026-07-15"
       }
-    ]
+    ],
+    "events": []
   },
   "assumptions": {
     "id": "demo-ops-assumptions",
@@ -216,6 +246,14 @@
       "signalName": "Aging / stagnation",
       "status": "ran",
       "instanceCount": 3
+    },
+    {
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "signalName": "Queue wait",
+      "status": "skipped",
+      "reason": "Requires hasEventHistory — not present in this import.",
+      "instanceCount": 0
     }
   ],
   "frictions": [
@@ -238,7 +276,10 @@
         {
           "workItemId": "1005",
           "title": "Annual audit prep",
-          "roleRef": "Finance",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Finance"
+          },
           "lastUpdatedAt": "2026-05-30",
           "agingDays": 51,
           "excessDays": 37
@@ -246,7 +287,9 @@
         {
           "workItemId": "1007",
           "title": "CRM cleanup",
-          "roleRef": null,
+          "actor": {
+            "kind": "missing"
+          },
           "lastUpdatedAt": "2026-06-01",
           "agingDays": 49,
           "excessDays": 35
@@ -272,7 +315,10 @@
         {
           "workItemId": "1003",
           "title": "Onboard new supplier",
-          "roleRef": "Procurement",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Procurement"
+          },
           "lastUpdatedAt": "2026-06-05",
           "agingDays": 45,
           "excessDays": 31
@@ -280,7 +326,10 @@
         {
           "workItemId": "1001",
           "title": "Renew vendor contract",
-          "roleRef": "Legal",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
           "lastUpdatedAt": "2026-06-20",
           "agingDays": 30,
           "excessDays": 16
@@ -306,12 +355,35 @@
         {
           "workItemId": "1004",
           "title": "Website copy refresh",
-          "roleRef": "Marketing",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Marketing"
+          },
           "lastUpdatedAt": "2026-06-10",
           "agingDays": 40,
           "excessDays": 26
         }
       ]
+    }
+  ],
+  "pricing": [
+    {
+      "frictionInstanceId": "f2-aging:working-on-it",
+      "status": "priced",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f2-aging:waiting-for-approval",
+      "status": "priced",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f2-aging:stuck",
+      "status": "priced",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0"
     }
   ],
   "estimates": [
@@ -328,7 +400,7 @@
       "confidence": {
         "tier": "C",
         "reasons": [
-          "C: Default hourly rate applied to one or more items without a matched role.",
+          "C: Default hourly rate applied to item(s) with no actor.",
           "B: Durations inferred from snapshot dates, not event history."
         ]
       },
@@ -339,6 +411,7 @@
         "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
         "terms": [
           {
+            "kind": "aging-attention",
             "workItemId": "1005",
             "excessDays": 37,
             "attentionHoursPerDay": {
@@ -355,6 +428,7 @@
             }
           },
           {
+            "kind": "aging-attention",
             "workItemId": "1007",
             "excessDays": 35,
             "attentionHoursPerDay": {
@@ -363,7 +437,7 @@
               "high": "0.6"
             },
             "hourlyRate": "75",
-            "rateSource": "defaultRate",
+            "rateSource": "defaultRate:missing-actor",
             "subtotal": {
               "low": "393.75",
               "expected": "787.5",
@@ -373,7 +447,7 @@
         ],
         "assumptionsUsed": [
           {
-            "ref": "defaultRate",
+            "ref": "defaultRate:missing-actor",
             "value": "75 USD/h",
             "provenance": "default"
           },
@@ -424,6 +498,7 @@
         "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
         "terms": [
           {
+            "kind": "aging-attention",
             "workItemId": "1003",
             "excessDays": 31,
             "attentionHoursPerDay": {
@@ -440,6 +515,7 @@
             }
           },
           {
+            "kind": "aging-attention",
             "workItemId": "1001",
             "excessDays": 16,
             "attentionHoursPerDay": {
@@ -509,6 +585,7 @@
         "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
         "terms": [
           {
+            "kind": "aging-attention",
             "workItemId": "1004",
             "excessDays": 26,
             "attentionHoursPerDay": {

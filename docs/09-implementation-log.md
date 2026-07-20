@@ -274,3 +274,189 @@ instruction. It closes in Slice 2 with F1.
    first.
 2. R-11: evidence type generalization + cost-model registry keyed by signal.
 3. F1 queue-wait on event history (closes the M0 "both data modes" DoD item).
+
+---
+
+## Slice 2 — Role mapping & pseudonymization → generalization → F1 (authorized 2026-07-20)
+
+Strict order: Part A (actors) → Part B (R-11 generalization) → Part C (F1).
+
+### Execution checklist
+
+Part A — Actor→role mapping + pseudonymization (R-20, NFR-5)
+- [x] Domain: `ActorRef` union — `{kind:'role', roleRef}` | `{kind:'unknown',
+      pseudonym}` | `{kind:'missing'}`; replaces `WorkItem.roleRef` (documented
+      schema migration). Capability key `hasRoles` → `hasActors`.
+- [x] Domain: `PseudonymizationContext` type `{scopeId, pseudonymFor(raw)}` —
+      pure packages receive the mapper as explicit input; salt/HMAC live only
+      at the edge (`apps/cli/src/pseudonym.ts`, HMAC-SHA256(salt,
+      scopeId+raw) → `anon-<12 hex>`; one-way, never encryption).
+- [x] MappingTemplate: `columns.role` → `columns.actor`; new `actorRoleMap`
+      (raw actor value → roleRef; explicit, versioned with the template).
+- [x] Ingestion: actor resolution at import — mapped → role; unmapped →
+      pseudonym via context (error if context absent); empty → missing. Raw
+      values never stored. Batch records `pseudonymizationScope`.
+- [x] CLI: `--org <scope>` + `--salt-file <path>` required whenever an actor
+      column is mapped; salt never on argv; included in default run-id hash.
+- [x] Rate resolution moves to cost-engine (`resolveActorRate`) — operates on
+      ActorRef only, with distinct sources/confidence caps for
+      role-with-rate / role-without-rate / unmapped / missing (closes R-12:
+      two consumers now exist).
+- [x] Tests: pseudonym determinism, org isolation (different salt/scope →
+      unlinkable), raw-value absence from artifacts (automated privacy test
+      over golden outputs), rate resolution per actor kind, missing/unknown
+      actor safety.
+
+Part B — Generalization (R-11)
+- [x] `FrictionInstance` = discriminated union (`AgingInstance` |
+      `QueueWaitInstance`) on `frictionType`; common base (id, signal id +
+      version, location, magnitude); per-signal typed evidence.
+- [x] Cost-model registry in cost-engine keyed by signal id: `{id, version,
+      appliesToSignal, canPrice(assumptions), price(instance, assumptions)}`.
+      Static object — no plugins, reflection, or DI.
+- [x] Analysis dispatches through the registry; unpriceable instances produce
+      explicit `pricing` outcomes (`priced` | `skipped` + reason) in the run
+      artifact and an "Unpriced frictions" report section — never a crash or
+      silent omission.
+- [x] Trace terms get `kind` discriminants per model.
+- [x] Tests: runtime guard (wrong model × wrong evidence throws), compile-time
+      guard (`@ts-expect-error` type-safety file checked by tsc), registry-miss
+      → skipped outcome.
+
+Part C — F1 queue-wait over event history
+- [x] Domain: `WorkItemEvent {workItemId, from: StageRef|null, to: StageRef,
+      at}`; `ImportBatch.events`; `hasEventHistory` from actual events.
+- [x] MappingTemplate: optional `events` section (columns: itemId, from?, to,
+      at) sharing the template's `statusMap`.
+- [x] Ingestion: optional events CSV. STRICT validation (hard errors, no
+      silent repair): unknown item ids; unparseable timestamps; statuses
+      missing from statusMap; `from`-chain mismatches; events before item
+      creation; events present + duplicate item ids (ambiguous linkage).
+- [x] Deterministic interval semantics (documented, not repaired):
+      per-item order = (timestamp, file row) — file row breaks exact ties;
+      repeated stage visits accumulate; reopened items are just more visits;
+      pre-first-event time is never attributed; open last interval closes at
+      analysis time iff stage is non-terminal (marked `open`, confidence cap);
+      terminal transitions end attribution; zero-length intervals contribute 0.
+- [x] F1 detector (`f1-queue-wait@1.0.0`): requires `hasEventHistory`;
+      eligible stage kinds `queue` + `review` only; magnitude in integer
+      item-hours; evidence per item (waitHours, visits, open, actor).
+- [x] Cost model `cm-queue-wait-attention@1.0.0`: requires OPTIONAL assumption
+      `queueWaitAttentionHoursPerDay` (skipped-with-reason if absent);
+      waitDays = hours/24 exact decimal; Σ waitDays × attention × rate;
+      confidence caps: open intervals → B; eligible items lacking events → B;
+      default rate/assumptions → C; none → A.
+- [x] Golden fixture 2 (`demo-flow`): items + events CSVs exercising both
+      signals, an unmapped actor in a priced item, reopened item, open
+      intervals, terminal transition. Two expected dirs:
+      `expected/demo-ops/`, `expected/demo-flow/`.
+- [x] Tests: multi-signal ranking determinism (double-run byte compare);
+      events do not alter F2 results (same fixture ± events → identical F2
+      estimates); invalid-history failures; F1 skip without history.
+
+Cross-cutting
+- [x] Fixture 1 updated to realistic actors (person names/emails/aliases →
+      actorRoleMap); expected COST NUMBERS unchanged from Slice 1 table.
+- [x] docs/11-partner-run-workflow.md — real-partner CLI workflow (files,
+      configs, salt handling, validation, artifacts, non-retention, deletion).
+- [x] Full check + all demos + privacy grep + completion entry + commit.
+
+### Hand-computed expectations — fixture 2 `demo-flow` (frozen before code)
+
+`now = 2026-07-20T00:00:00Z`. Rates (customer): Legal 120, Finance 95,
+Procurement 80; default 75 (default provenance). Aging: threshold 14d,
+attention {0.15, 0.3, 0.6} customer. Queue-wait attention {0.1, 0.2, 0.4}
+customer. Actors: Sarah Cohen→Legal, john@company.com→Finance,
+procurement-team→Procurement; `unknown.person` unmapped → pseudonym + default
+rate.
+
+Event-derived waits (integer hours ÷ 24 = exact days here):
+
+| Item | Backlog (queue) | Contract Review (review) | Notes |
+|---|---|---|---|
+| 2001 (Legal) | 2d (closed) | 25d (OPEN 06-25 → now) | |
+| 2002 (Finance) | 5d (closed) | 10d + 9d = 19d (2 visits, closed) | reopened; ends terminal (Done) |
+| 2004 (Procurement) | 38d (closed) | 2d (OPEN 07-18 → now) | |
+| 2003 (unmapped) | — | — | active only; no eligible wait |
+
+Expected estimates (expected = Σ days × attention.expected × rate):
+
+| Rank | Instance | Expected | Low | High | Confidence |
+|---|---|---|---|---|---|
+| 1 | F1 Contract Review (600+361+32) | 993 | 496.5 | 1986 | B — open intervals |
+| 2 | F1 Backlog (48+95+608) | 751 | 375.5 | 1502 | **A** — closed intervals, customer assumptions |
+| 3 | F2 Working on it (2003: 16 excess × 0.3 × 75) | 360 | 180 | 720 | C — default rate (unmapped actor) |
+| 4 | F2 Contract Review (2001: 5 excess × 0.3 × 120) | 180 | 90 | 360 | B — snapshot durations |
+
+Fixture 1 (`demo-ops`, actors updated to names): cost table IDENTICAL to the
+Slice 1 hand-computed table (1842/1320/546 etc.); only actor representation
+and rate-source labels change. 1007 (empty owner) prices at default rate
+labeled missing-actor; 1002 → "Uri Levi" stays unmapped (below threshold —
+pseudonym visible in run.json only).
+
+### Schema migration note (Part B req 9 — documented, genuinely required)
+
+`run.json` schema changes in this slice: `WorkItem.actor` union replaces
+`roleRef`; capability `hasRoles` → `hasActors`; `ImportBatch.events` +
+`pseudonymizationScope`; run gains `pricing` outcomes; assumption set gains
+optional `queueWaitAttentionHoursPerDay`; trace terms gain `kind`. All golden
+changes regenerate via `pnpm golden:update` with this entry as the required
+justification. Underlying fixture-1 cost values are unchanged.
+
+### Slice 2 completion record (2026-07-20)
+
+**Decisions added:**
+- **D-11 Pseudonymization as injected function.** Pure packages receive
+  `PseudonymizationContext` (scope id + deterministic mapper) as an explicit
+  input; HMAC-SHA256 and the salt live only in `apps/cli/src/pseudonym.ts`.
+  Not a DI framework — one function parameter. Salt participates in the
+  default run-id hash so different salts cannot silently share a run id.
+- **D-12 Wait durations are integer hours.** F1 intervals are floor-hours
+  (pure integer arithmetic); the cost model converts to days as exact decimal
+  (`hours ÷ 24` at pinned precision). Magnitudes stay integers; money stays
+  decimal; no floats anywhere.
+- **D-13 Event validation severity is asymmetric by design.** Item rows with
+  unmapped statuses degrade (drop + diagnostic) because each row is
+  independent; event-history problems are hard errors because a broken chain
+  poisons interval semantics for the whole item — repairing it silently would
+  fabricate durations (doc 03 P5).
+- **D-14 rate resolution moved domain → cost-engine** (`resolveActorRate`),
+  closing R-12: rate fallback is pricing policy, and with two models it has
+  two consumers. Domain now holds types + time/stage logic only.
+- **D-15 Engine version bumps:** analysis 0.1.0 → 0.2.0 (run schema migration);
+  reporting 0.2.0 → 0.3.0 (new sections/columns); `f2-aging` stays 1.0.0
+  (evidence field renamed with the schema migration, detection semantics for
+  valid inputs unchanged); new `f1-queue-wait@1.0.0`,
+  `cm-queue-wait-attention@1.0.0`.
+
+**Verification (all green, 2026-07-20):**
+- Full `pnpm check`: typecheck · lint · format · depcruise (64 modules,
+  184 deps, 0 violations) · **89/89 tests** (was 50; 39 added).
+- Golden: both fixtures reproduce byte-exactly; demo-flow matched the
+  hand-computed table above cell-for-cell on first generation (496/376
+  display lows are the half-even renderings of 496.5/375.5 — trace keeps full
+  precision). Double CLI runs byte-identical to each other and to frozen files.
+- Privacy: automated test + manual grep — all 8 raw fixture actor values have
+  **0 occurrences** across every generated artifact; pseudonyms are
+  `anon-<12 hex>`; the three actor states (role/unknown/missing) verified in
+  artifacts.
+- Demos: F2-only run shows F1 **skipped** with reason; combined run ranks
+  4 instances across both signals (B/A/C/B confidence spread — Backlog earns
+  A on fully-closed observed intervals); invalid history (chain mismatch)
+  exits 1 naming item, row, and stages; unknown actors pseudonymized; mapped
+  actors price via `rates.<role>` sources.
+- F2-invariance proven by test: adding events changes no aging estimate byte.
+
+**M0 DoD status:** the "both data modes" item is now CLOSED — F2 (snapshot)
+and F1 (event history) run through the same pipeline with capability-driven
+degradation. Remaining M0 gaps: none against the doc 08 M0 deliverable list
+as amended; review items R-13 (structured trace values), R-16 (boundary-test
+mechanics), R-19 (artifact-confidentiality note — now partially addressed by
+doc 11 §6) remain open at P2/P3.
+
+**Recommendation for the first real partner run:** follow doc 11 verbatim.
+Expect the partner's export to fail strict event validation on the first
+attempt (real activity logs are messy) — that failure output is itself the
+M1 learning artifact; capture it in the findings memo. If events prove
+unusable, the F2-only path still delivers the session. Do NOT relax
+validation ad hoc during a session; log what broke and decide deliberately.

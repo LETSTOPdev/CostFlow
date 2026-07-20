@@ -1,16 +1,17 @@
-import type { AssumptionSet, RangeSpec } from '@costflow/domain';
-import { rateForRole } from '@costflow/domain';
-import type { FrictionInstance } from '@costflow/friction';
+import type { AssumptionSet } from '@costflow/domain';
+import type { AgingInstance } from '@costflow/friction';
 import { dec } from '../decimal';
 import { addRanges, rangeFromSpec, rangeToSpec, scaleRange, ZERO_RANGE } from '../range';
-import { composeConfidence, type Confidence, type ConfidenceCap } from '../confidence';
+import { composeConfidence, type ConfidenceCap } from '../confidence';
+import { resolveActorRate } from '../rate';
+import type { AgingTraceTerm, CostEstimate } from '../estimate';
 
 /**
  * cm-aging-attention — prices F2 aging as carrying/attention cost (lens L1/C5,
  * doc 02 §5): each item aging beyond threshold consumes an assumed slice of
- * daily attention, priced at the role's rate. Documented bias: this
- * underestimates — it prices attention drag only, not deferred value (L2),
- * which needs value attribution the customer has not supplied.
+ * daily attention, priced at the actor's resolved role rate. Documented bias:
+ * this underestimates — it prices attention drag only, not deferred value
+ * (L2), which needs value attribution the customer has not supplied.
  */
 export const AGING_ATTENTION_MODEL = {
   id: 'cm-aging-attention',
@@ -19,42 +20,8 @@ export const AGING_ATTENTION_MODEL = {
   lens: 'L1-direct-resource-cost',
 } as const;
 
-/** One priced term per evidence item — the trace is built from these, never alongside them (doc 03 E3). */
-export interface TraceTerm {
-  readonly workItemId: string;
-  readonly excessDays: number;
-  readonly attentionHoursPerDay: RangeSpec;
-  readonly hourlyRate: string;
-  readonly rateSource: string;
-  readonly subtotal: RangeSpec;
-}
-
-export interface FormulaTrace {
-  readonly claim: string;
-  readonly formula: string;
-  readonly terms: readonly TraceTerm[];
-  readonly assumptionsUsed: readonly {
-    readonly ref: string;
-    readonly value: string;
-    readonly provenance: string;
-  }[];
-  readonly inputs: { readonly workItemIds: readonly string[] };
-}
-
-export interface CostEstimate {
-  readonly frictionInstanceId: string;
-  readonly costModelId: string;
-  readonly costModelVersion: string;
-  readonly cost: RangeSpec;
-  readonly currency: string;
-  readonly confidence: Confidence;
-  readonly assumptionSetId: string;
-  readonly assumptionSetVersion: string;
-  readonly trace: FormulaTrace;
-}
-
 export function priceAgingInstance(
-  instance: FrictionInstance,
+  instance: AgingInstance,
   assumptions: AssumptionSet,
 ): CostEstimate {
   const attention = rangeFromSpec(assumptions.parameters.attentionHoursPerDay.range);
@@ -71,9 +38,10 @@ export function priceAgingInstance(
     caps.push({ tier: 'C', reason: 'Aging threshold is an unconfirmed default.' });
   }
 
-  const terms: TraceTerm[] = [];
+  const terms: AgingTraceTerm[] = [];
   let total = ZERO_RANGE;
   const assumptionsUsed = new Map<string, { ref: string; value: string; provenance: string }>();
+  const capReasons = new Set(caps.map((c) => c.reason));
 
   assumptionsUsed.set('attentionHoursPerDay', {
     ref: 'parameters.attentionHoursPerDay',
@@ -86,29 +54,25 @@ export function priceAgingInstance(
     provenance: assumptions.parameters.agingThresholdDays.provenance,
   });
 
-  let defaultRateUsed = false;
   for (const evidence of instance.evidence) {
-    const rate = rateForRole(assumptions, evidence.roleRef);
-    if (rate.matchedRole === null && !defaultRateUsed) {
-      defaultRateUsed = true;
-      caps.push({
-        tier: 'C',
-        reason: 'Default hourly rate applied to one or more items without a matched role.',
-      });
+    const rate = resolveActorRate(assumptions, evidence.actor);
+    if (rate.cap && !capReasons.has(rate.cap.reason)) {
+      capReasons.add(rate.cap.reason);
+      caps.push(rate.cap);
     }
-    const rateSource = rate.matchedRole === null ? 'defaultRate' : `rates.${rate.matchedRole}`;
-    assumptionsUsed.set(rateSource, {
-      ref: rateSource,
+    assumptionsUsed.set(rate.source, {
+      ref: rate.source,
       value: `${rate.hourlyRate} ${assumptions.currency}/h`,
       provenance: rate.provenance,
     });
     const subtotal = scaleRange(attention, dec(evidence.excessDays).mul(dec(rate.hourlyRate)));
     terms.push({
+      kind: 'aging-attention',
       workItemId: evidence.workItemId,
       excessDays: evidence.excessDays,
       attentionHoursPerDay: assumptions.parameters.attentionHoursPerDay.range,
       hourlyRate: rate.hourlyRate,
-      rateSource,
+      rateSource: rate.source,
       subtotal: rangeToSpec(subtotal),
     });
     total = addRanges(total, subtotal);

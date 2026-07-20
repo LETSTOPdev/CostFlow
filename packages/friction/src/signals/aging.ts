@@ -1,6 +1,7 @@
-import type { ImportBatch, IsoDateString } from '@costflow/domain';
+import type { ImportBatch, IsoDateString, StageRef } from '@costflow/domain';
 import { isTerminal, parseIsoUtc, wholeDaysBetween } from '@costflow/domain';
-import type { AgingEvidence, FrictionInstance, FrictionSignalMeta } from '../signal';
+import type { AgingEvidence, AgingInstance, FrictionSignalMeta } from '../signal';
+import { slugify } from './slug';
 
 /**
  * F2 — Aging / stagnation (doc 02 §4): an in-flight item untouched beyond a
@@ -26,7 +27,7 @@ export interface AgingParams {
  * evaluable and are simply absent from evidence — their absence was already
  * surfaced as an import diagnostic, not invented into a duration (doc 03 P5).
  */
-export function detectAging(batch: ImportBatch, params: AgingParams): FrictionInstance[] {
+export function detectAging(batch: ImportBatch, params: AgingParams): AgingInstance[] {
   // R-01: an unparseable analysis time is an input error, never data
   // degradation — silently skipping every item would assert "no frictions"
   // about data that was never actually analyzed (doc 03 P5).
@@ -35,10 +36,7 @@ export function detectAging(batch: ImportBatch, params: AgingParams): FrictionIn
       `Invalid analysis time "${params.now}" — expected ISO-8601 (YYYY-MM-DD or full timestamp).`,
     );
   }
-  const byStage = new Map<
-    string,
-    { stage: ImportBatch['items'][number]['stage']; evidence: AgingEvidence[] }
-  >();
+  const byStage = new Map<string, { stage: StageRef; evidence: AgingEvidence[] }>();
 
   for (const item of batch.items) {
     if (isTerminal(item.stage) || item.lastUpdatedAt === null) continue;
@@ -48,7 +46,7 @@ export function detectAging(batch: ImportBatch, params: AgingParams): FrictionIn
     entry.evidence.push({
       workItemId: item.id,
       title: item.title,
-      roleRef: item.roleRef,
+      actor: item.actor,
       lastUpdatedAt: item.lastUpdatedAt,
       agingDays,
       excessDays: agingDays - params.thresholdDays,
@@ -56,12 +54,12 @@ export function detectAging(batch: ImportBatch, params: AgingParams): FrictionIn
     byStage.set(item.stage.name, entry);
   }
 
-  const instances: FrictionInstance[] = [...byStage.values()].map(({ stage, evidence }) => {
+  const instances: AgingInstance[] = [...byStage.values()].map(({ stage, evidence }) => {
     const sorted = [...evidence].sort(
       (a, b) => b.excessDays - a.excessDays || a.workItemId.localeCompare(b.workItemId),
     );
     return {
-      id: `${AGING_SIGNAL.id}:${slug(stage.name)}`,
+      id: `${AGING_SIGNAL.id}:${slugify(stage.name)}`,
       signalId: AGING_SIGNAL.id,
       signalVersion: AGING_SIGNAL.version,
       frictionType: 'aging',
@@ -77,11 +75,4 @@ export function detectAging(batch: ImportBatch, params: AgingParams): FrictionIn
   return instances.sort(
     (a, b) => b.magnitude.value - a.magnitude.value || a.id.localeCompare(b.id),
   );
-}
-
-function slug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '');
 }
