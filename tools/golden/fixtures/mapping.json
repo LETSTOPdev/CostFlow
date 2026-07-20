@@ -1,0 +1,19 @@
+{
+  "id": "monday-standard-board",
+  "version": "1",
+  "columns": {
+    "itemId": "Item ID",
+    "title": "Name",
+    "status": "Status",
+    "role": "Owner Role",
+    "createdAt": "Created",
+    "dueAt": "Due",
+    "lastUpdatedAt": "Last Updated"
+  },
+  "statusMap": {
+    "Working on it": "active",
+    "Waiting for approval": "review",
+    "Stuck": "blocked",
+    "Done": "done"
+  }
+}

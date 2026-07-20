@@ -1,0 +1,11 @@
+Item ID,Name,Status,Owner Role,Created,Due,Last Updated
+1001,Renew vendor contract,Waiting for approval,Legal,2026-05-02,2026-06-15,2026-06-20
+1002,Q3 budget review,Working on it,Finance,2026-06-01,2026-08-01,2026-07-18
+1003,Onboard new supplier,Waiting for approval,Procurement,2026-04-20,2026-06-01,2026-06-05
+1004,Website copy refresh,Stuck,Marketing,2026-05-10,2026-06-30,2026-06-10
+1005,Annual audit prep,Working on it,Finance,2026-03-15,2026-09-30,2026-05-30
+1006,Old campaign wrap-up,Done,Marketing,2026-02-01,2026-03-01,2026-03-05
+1007,CRM cleanup,Working on it,,2026-05-20,,2026-06-01
+1008,Mystery task,Some Unknown Status,Ops,2026-05-01,2026-06-01,2026-06-15
+1009,Legacy migration,Working on it,IT,2026-04-01,2026-07-01,not-a-date
+1010,Press release,Waiting for approval,Marketing,2026-07-01,2026-07-25,2026-07-15

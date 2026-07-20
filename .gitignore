@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+*.log
+.env
+.DS_Store
+/out/
+# Boundary-proof test debris if the run is killed mid-test (R-16)
+packages/cost-engine/src/tmp-boundary-violation.ts

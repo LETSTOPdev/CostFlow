@@ -1,0 +1,28 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@costflow/domain": ["packages/domain/src/index.ts"],
+      "@costflow/ingestion": ["packages/ingestion/src/index.ts"],
+      "@costflow/friction": ["packages/friction/src/index.ts"],
+      "@costflow/cost-engine": ["packages/cost-engine/src/index.ts"],
+      "@costflow/analysis": ["packages/analysis/src/index.ts"],
+      "@costflow/reporting": ["packages/reporting/src/index.ts"]
+    }
+  },
+  "include": ["packages/**/*.ts", "apps/**/*.ts", "vitest.config.ts"]
+}

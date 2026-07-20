@@ -1,0 +1,553 @@
+{
+  "runId": "golden-demo-ops",
+  "engineVersions": {
+    "analysis": "0.1.0",
+    "signals": {
+      "f2-aging": "1.0.0"
+    },
+    "costModels": {
+      "cm-aging-attention": "1.0.0"
+    }
+  },
+  "now": "2026-07-20T00:00:00Z",
+  "batch": {
+    "id": "batch-golden-demo-ops",
+    "provider": "csv",
+    "mappingTemplateId": "monday-standard-board",
+    "mappingTemplateVersion": "1",
+    "importedAt": "2026-07-20T00:00:00Z",
+    "counts": {
+      "totalRows": 10,
+      "imported": 9,
+      "dropped": 1
+    },
+    "diagnostics": [
+      {
+        "row": 8,
+        "severity": "dropped",
+        "message": "Status \"Some Unknown Status\" is not mapped to a stage kind — row dropped."
+      },
+      {
+        "row": 9,
+        "severity": "warning",
+        "message": "Unparseable lastUpdatedAt \"not-a-date\" — field ignored (ISO dates only in M0)."
+      }
+    ],
+    "capability": {
+      "hasEventHistory": false,
+      "hasDueDates": true,
+      "hasLastUpdated": true,
+      "hasRoles": true
+    },
+    "items": [
+      {
+        "id": "1001",
+        "sourceId": "1001",
+        "title": "Renew vendor contract",
+        "stage": {
+          "name": "Waiting for approval",
+          "kind": "review"
+        },
+        "roleRef": "Legal",
+        "createdAt": "2026-05-02",
+        "dueAt": "2026-06-15",
+        "lastUpdatedAt": "2026-06-20"
+      },
+      {
+        "id": "1002",
+        "sourceId": "1002",
+        "title": "Q3 budget review",
+        "stage": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "roleRef": "Finance",
+        "createdAt": "2026-06-01",
+        "dueAt": "2026-08-01",
+        "lastUpdatedAt": "2026-07-18"
+      },
+      {
+        "id": "1003",
+        "sourceId": "1003",
+        "title": "Onboard new supplier",
+        "stage": {
+          "name": "Waiting for approval",
+          "kind": "review"
+        },
+        "roleRef": "Procurement",
+        "createdAt": "2026-04-20",
+        "dueAt": "2026-06-01",
+        "lastUpdatedAt": "2026-06-05"
+      },
+      {
+        "id": "1004",
+        "sourceId": "1004",
+        "title": "Website copy refresh",
+        "stage": {
+          "name": "Stuck",
+          "kind": "blocked"
+        },
+        "roleRef": "Marketing",
+        "createdAt": "2026-05-10",
+        "dueAt": "2026-06-30",
+        "lastUpdatedAt": "2026-06-10"
+      },
+      {
+        "id": "1005",
+        "sourceId": "1005",
+        "title": "Annual audit prep",
+        "stage": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "roleRef": "Finance",
+        "createdAt": "2026-03-15",
+        "dueAt": "2026-09-30",
+        "lastUpdatedAt": "2026-05-30"
+      },
+      {
+        "id": "1006",
+        "sourceId": "1006",
+        "title": "Old campaign wrap-up",
+        "stage": {
+          "name": "Done",
+          "kind": "done"
+        },
+        "roleRef": "Marketing",
+        "createdAt": "2026-02-01",
+        "dueAt": "2026-03-01",
+        "lastUpdatedAt": "2026-03-05"
+      },
+      {
+        "id": "1007",
+        "sourceId": "1007",
+        "title": "CRM cleanup",
+        "stage": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "roleRef": null,
+        "createdAt": "2026-05-20",
+        "dueAt": null,
+        "lastUpdatedAt": "2026-06-01"
+      },
+      {
+        "id": "1009",
+        "sourceId": "1009",
+        "title": "Legacy migration",
+        "stage": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "roleRef": "IT",
+        "createdAt": "2026-04-01",
+        "dueAt": "2026-07-01",
+        "lastUpdatedAt": null
+      },
+      {
+        "id": "1010",
+        "sourceId": "1010",
+        "title": "Press release",
+        "stage": {
+          "name": "Waiting for approval",
+          "kind": "review"
+        },
+        "roleRef": "Marketing",
+        "createdAt": "2026-07-01",
+        "dueAt": "2026-07-25",
+        "lastUpdatedAt": "2026-07-15"
+      }
+    ]
+  },
+  "assumptions": {
+    "id": "demo-ops-assumptions",
+    "version": "1",
+    "currency": "USD",
+    "rates": [
+      {
+        "roleRef": "Legal",
+        "hourlyRate": "120",
+        "provenance": "customer"
+      },
+      {
+        "roleRef": "Finance",
+        "hourlyRate": "95",
+        "provenance": "customer"
+      },
+      {
+        "roleRef": "Procurement",
+        "hourlyRate": "80",
+        "provenance": "customer"
+      },
+      {
+        "roleRef": "Marketing",
+        "hourlyRate": "70",
+        "provenance": "customer"
+      },
+      {
+        "roleRef": "IT",
+        "hourlyRate": "90",
+        "provenance": "customer"
+      }
+    ],
+    "defaultRate": {
+      "hourlyRate": "75",
+      "provenance": "default"
+    },
+    "parameters": {
+      "agingThresholdDays": {
+        "value": 14,
+        "provenance": "customer"
+      },
+      "attentionHoursPerDay": {
+        "range": {
+          "low": "0.15",
+          "expected": "0.3",
+          "high": "0.6"
+        },
+        "provenance": "customer"
+      }
+    }
+  },
+  "detectors": [
+    {
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "signalName": "Aging / stagnation",
+      "status": "ran",
+      "instanceCount": 3
+    }
+  ],
+  "frictions": [
+    {
+      "id": "f2-aging:working-on-it",
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "frictionType": "aging",
+      "location": {
+        "stage": {
+          "name": "Working on it",
+          "kind": "active"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-beyond-threshold",
+        "value": 72
+      },
+      "evidence": [
+        {
+          "workItemId": "1005",
+          "title": "Annual audit prep",
+          "roleRef": "Finance",
+          "lastUpdatedAt": "2026-05-30",
+          "agingDays": 51,
+          "excessDays": 37
+        },
+        {
+          "workItemId": "1007",
+          "title": "CRM cleanup",
+          "roleRef": null,
+          "lastUpdatedAt": "2026-06-01",
+          "agingDays": 49,
+          "excessDays": 35
+        }
+      ]
+    },
+    {
+      "id": "f2-aging:waiting-for-approval",
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "frictionType": "aging",
+      "location": {
+        "stage": {
+          "name": "Waiting for approval",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-beyond-threshold",
+        "value": 47
+      },
+      "evidence": [
+        {
+          "workItemId": "1003",
+          "title": "Onboard new supplier",
+          "roleRef": "Procurement",
+          "lastUpdatedAt": "2026-06-05",
+          "agingDays": 45,
+          "excessDays": 31
+        },
+        {
+          "workItemId": "1001",
+          "title": "Renew vendor contract",
+          "roleRef": "Legal",
+          "lastUpdatedAt": "2026-06-20",
+          "agingDays": 30,
+          "excessDays": 16
+        }
+      ]
+    },
+    {
+      "id": "f2-aging:stuck",
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "frictionType": "aging",
+      "location": {
+        "stage": {
+          "name": "Stuck",
+          "kind": "blocked"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-beyond-threshold",
+        "value": 26
+      },
+      "evidence": [
+        {
+          "workItemId": "1004",
+          "title": "Website copy refresh",
+          "roleRef": "Marketing",
+          "lastUpdatedAt": "2026-06-10",
+          "agingDays": 40,
+          "excessDays": 26
+        }
+      ]
+    }
+  ],
+  "estimates": [
+    {
+      "frictionInstanceId": "f2-aging:working-on-it",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "921",
+        "expected": "1842",
+        "high": "3684"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "C",
+        "reasons": [
+          "C: Default hourly rate applied to one or more items without a matched role.",
+          "B: Durations inferred from snapshot dates, not event history."
+        ]
+      },
+      "assumptionSetId": "demo-ops-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated attention cost of 2 item(s) aging beyond 14 days in stage \"Working on it\".",
+        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "workItemId": "1005",
+            "excessDays": 37,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "95",
+            "rateSource": "rates.Finance",
+            "subtotal": {
+              "low": "527.25",
+              "expected": "1054.5",
+              "high": "2109"
+            }
+          },
+          {
+            "workItemId": "1007",
+            "excessDays": 35,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "75",
+            "rateSource": "defaultRate",
+            "subtotal": {
+              "low": "393.75",
+              "expected": "787.5",
+              "high": "1575"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "defaultRate",
+            "value": "75 USD/h",
+            "provenance": "default"
+          },
+          {
+            "ref": "parameters.agingThresholdDays",
+            "value": "14 days",
+            "provenance": "customer"
+          },
+          {
+            "ref": "parameters.attentionHoursPerDay",
+            "value": "0.15–0.6 h/day (expected 0.3)",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Finance",
+            "value": "95 USD/h",
+            "provenance": "customer"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "1005",
+            "1007"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f2-aging:waiting-for-approval",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "660",
+        "expected": "1320",
+        "high": "2640"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "B",
+        "reasons": [
+          "B: Durations inferred from snapshot dates, not event history."
+        ]
+      },
+      "assumptionSetId": "demo-ops-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated attention cost of 2 item(s) aging beyond 14 days in stage \"Waiting for approval\".",
+        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "workItemId": "1003",
+            "excessDays": 31,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "80",
+            "rateSource": "rates.Procurement",
+            "subtotal": {
+              "low": "372",
+              "expected": "744",
+              "high": "1488"
+            }
+          },
+          {
+            "workItemId": "1001",
+            "excessDays": 16,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "288",
+              "expected": "576",
+              "high": "1152"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.agingThresholdDays",
+            "value": "14 days",
+            "provenance": "customer"
+          },
+          {
+            "ref": "parameters.attentionHoursPerDay",
+            "value": "0.15–0.6 h/day (expected 0.3)",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Procurement",
+            "value": "80 USD/h",
+            "provenance": "customer"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "1003",
+            "1001"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f2-aging:stuck",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "273",
+        "expected": "546",
+        "high": "1092"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "B",
+        "reasons": [
+          "B: Durations inferred from snapshot dates, not event history."
+        ]
+      },
+      "assumptionSetId": "demo-ops-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated attention cost of 1 item(s) aging beyond 14 days in stage \"Stuck\".",
+        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "workItemId": "1004",
+            "excessDays": 26,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "70",
+            "rateSource": "rates.Marketing",
+            "subtotal": {
+              "low": "273",
+              "expected": "546",
+              "high": "1092"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.agingThresholdDays",
+            "value": "14 days",
+            "provenance": "customer"
+          },
+          {
+            "ref": "parameters.attentionHoursPerDay",
+            "value": "0.15–0.6 h/day (expected 0.3)",
+            "provenance": "customer"
+          },
+          {
+            "ref": "rates.Marketing",
+            "value": "70 USD/h",
+            "provenance": "customer"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "1004"
+          ]
+        }
+      }
+    }
+  ]
+}
