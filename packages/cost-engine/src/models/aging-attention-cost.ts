@@ -31,11 +31,14 @@ export function priceAgingInstance(
       reason: 'Durations inferred from snapshot dates, not event history.',
     },
   ];
-  if (assumptions.parameters.attentionHoursPerDay.provenance === 'default') {
-    caps.push({ tier: 'C', reason: 'Attention-hours assumption is an unconfirmed default.' });
+  if (assumptions.parameters.attentionHoursPerDay.provenance === 'vendor-suggested') {
+    caps.push({
+      tier: 'C',
+      reason: 'Attention-hours assumption is vendor-suggested (unconfirmed).',
+    });
   }
-  if (assumptions.parameters.agingThresholdDays.provenance === 'default') {
-    caps.push({ tier: 'C', reason: 'Aging threshold is an unconfirmed default.' });
+  if (assumptions.parameters.agingThresholdDays.provenance === 'vendor-suggested') {
+    caps.push({ tier: 'C', reason: 'Aging threshold is vendor-suggested (unconfirmed).' });
   }
 
   const terms: AgingTraceTerm[] = [];

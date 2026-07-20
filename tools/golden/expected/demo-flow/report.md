@@ -11,6 +11,7 @@ Import batch `batch-golden-demo-flow` (provider: csv, mapping `demo-flow-board` 
 
 - Rows: 4 total, 4 imported, 0 dropped
 - Capability profile: event history yes · last-updated dates yes · due dates yes · actors yes
+- Due-date coverage: 3 of 3 in-flight items carry due dates
 - Lifecycle events imported: 11
 - Unmapped actors pseudonymized (scope `costflow-golden`); raw identities are not retained
 
@@ -18,6 +19,7 @@ Import batch `batch-golden-demo-flow` (provider: csv, mapping `demo-flow-board` 
 
 - Aging / stagnation (`f2-aging@1.0.0`): ran — 2 finding(s)
 - Queue wait (`f1-queue-wait@1.0.0`): ran — 2 finding(s)
+- Overdue exposure (`f3-overdue@1.0.0`): ran — 1 finding(s)
 
 ## Ranked frictions
 
@@ -25,8 +27,20 @@ Import batch `batch-golden-demo-flow` (provider: csv, mapping `demo-flow-board` 
 |---|---|---|---|---|---|
 | 1 | queue-wait | stage "Contract Review" (review) | 1104 item-hours-waiting | 496 USD – 1,986 USD (expected ~993 USD) | B |
 | 2 | queue-wait | stage "Backlog" (queue) | 1080 item-hours-waiting | 376 USD – 1,502 USD (expected ~751 USD) | A |
-| 3 | aging | stage "Working on it" (active) | 16 item-days-beyond-threshold | 180 USD – 720 USD (expected ~360 USD) | C |
-| 4 | aging | stage "Contract Review" (review) | 5 item-days-beyond-threshold | 90 USD – 360 USD (expected ~180 USD) | B |
+| 3 | aging | stage "Contract Review" (review) | 5 item-days-beyond-threshold | 90 USD – 360 USD (expected ~180 USD) | B |
+
+## Unpriced frictions
+
+Detected but not priced — the magnitude is real; the missing input is named.
+
+- aging at stage "Working on it" — 16 item-days-beyond-threshold. Not priced: Rests on vendor-suggested assumption(s): defaultRate:unmapped-actor — confirm or customize them to price this friction, or run in simulation mode.
+- overdue at stage "Contract Review" — 5 item-days-overdue. Not priced: Missing assumption parameters.overdueAttentionHoursPerDay — add it to price overdue frictions.
+
+## Context
+
+Context signals describe conditions that explain frictions. They are not priced, graded, or ranked.
+
+- Work-in-flight load (`c6-wip-load@1.0.0`): 2 of 3 in-flight items (67%) sit in queue- or review-kind stages; the largest single pool is stage "Contract Review" (2 items).
 
 ## Drill-down #1: queue-wait at stage "Contract Review"
 
@@ -45,10 +59,10 @@ Import batch `batch-golden-demo-flow` (provider: csv, mapping `demo-flow-board` 
 
 **What was assumed?**
 
-- `parameters.queueWaitAttentionHoursPerDay` = 0.1–0.4 h/day (expected 0.2) — set by customer
-- `rates.Finance` = 95 USD/h — set by customer
-- `rates.Legal` = 120 USD/h — set by customer
-- `rates.Procurement` = 80 USD/h — set by customer
+- `parameters.queueWaitAttentionHoursPerDay` = 0.1–0.4 h/day (expected 0.2) — customized by customer
+- `rates.Finance` = 95 USD/h — customized by customer
+- `rates.Legal` = 120 USD/h — customized by customer
+- `rates.Procurement` = 80 USD/h — customized by customer
 
 **Confidence B**, limited by:
 
@@ -71,38 +85,14 @@ Import batch `batch-golden-demo-flow` (provider: csv, mapping `demo-flow-board` 
 
 **What was assumed?**
 
-- `parameters.queueWaitAttentionHoursPerDay` = 0.1–0.4 h/day (expected 0.2) — set by customer
-- `rates.Finance` = 95 USD/h — set by customer
-- `rates.Legal` = 120 USD/h — set by customer
-- `rates.Procurement` = 80 USD/h — set by customer
+- `parameters.queueWaitAttentionHoursPerDay` = 0.1–0.4 h/day (expected 0.2) — customized by customer
+- `rates.Finance` = 95 USD/h — customized by customer
+- `rates.Legal` = 120 USD/h — customized by customer
+- `rates.Procurement` = 80 USD/h — customized by customer
 
 **Confidence A** — no binding constraints: fully observed data and customer-confirmed assumptions.
 
-## Drill-down #3: aging at stage "Working on it"
-
-**What is this?** Estimated attention cost of 1 item(s) aging beyond 14 days in stage "Working on it".
-
-**How was it computed?** `Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range`
-(cost model `cm-aging-attention@1.0.0`, assumption set `demo-flow-assumptions` v1)
-
-**What data went in?**
-
-| Item | Days beyond threshold | Attention h/day | Rate | Subtotal |
-|---|---|---|---|---|
-| 2003 "Data processing addendum" | 16 | 0.15–0.6 | 75/h (defaultRate:unmapped-actor) | 180 USD – 720 USD (expected ~360 USD) |
-
-**What was assumed?**
-
-- `defaultRate:unmapped-actor` = 75 USD/h — **unconfirmed default**
-- `parameters.agingThresholdDays` = 14 days — set by customer
-- `parameters.attentionHoursPerDay` = 0.15–0.6 h/day (expected 0.3) — set by customer
-
-**Confidence C**, limited by:
-
-- C: Default hourly rate applied to unmapped (pseudonymized) actor(s).
-- B: Durations inferred from snapshot dates, not event history.
-
-## Drill-down #4: aging at stage "Contract Review"
+## Drill-down #3: aging at stage "Contract Review"
 
 **What is this?** Estimated attention cost of 1 item(s) aging beyond 14 days in stage "Contract Review".
 
@@ -117,9 +107,9 @@ Import batch `batch-golden-demo-flow` (provider: csv, mapping `demo-flow-board` 
 
 **What was assumed?**
 
-- `parameters.agingThresholdDays` = 14 days — set by customer
-- `parameters.attentionHoursPerDay` = 0.15–0.6 h/day (expected 0.3) — set by customer
-- `rates.Legal` = 120 USD/h — set by customer
+- `parameters.agingThresholdDays` = 14 days — customized by customer
+- `parameters.attentionHoursPerDay` = 0.15–0.6 h/day (expected 0.3) — customized by customer
+- `rates.Legal` = 120 USD/h — customized by customer
 
 **Confidence B**, limited by:
 
@@ -127,4 +117,4 @@ Import batch `batch-golden-demo-flow` (provider: csv, mapping `demo-flow-board` 
 
 ---
 
-Engine versions: analysis 0.2.0 · signals f2-aging@1.0.0, f1-queue-wait@1.0.0 · cost models cm-aging-attention@1.0.0, cm-queue-wait-attention@1.0.0
+Engine versions: analysis 0.4.0 · signals f2-aging@1.0.0, f1-queue-wait@1.0.0, f3-overdue@1.0.0 · context c6-wip-load@1.0.0 · cost models cm-aging-attention@1.0.0, cm-overdue-attention@1.0.0, cm-queue-wait-attention@1.0.0

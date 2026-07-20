@@ -7,15 +7,15 @@ const assumptions: AssumptionSet = {
   version: '1',
   currency: 'USD',
   rates: [
-    { roleRef: 'Legal', hourlyRate: '120', provenance: 'customer' },
-    { roleRef: 'Temp', hourlyRate: '50', provenance: 'default' },
+    { roleRef: 'Legal', hourlyRate: '120', provenance: 'customer-customized' },
+    { roleRef: 'Temp', hourlyRate: '50', provenance: 'vendor-suggested' },
   ],
-  defaultRate: { hourlyRate: '75', provenance: 'default' },
+  defaultRate: { hourlyRate: '75', provenance: 'vendor-suggested' },
   parameters: {
-    agingThresholdDays: { value: 14, provenance: 'customer' },
+    agingThresholdDays: { value: 14, provenance: 'customer-customized' },
     attentionHoursPerDay: {
       range: { low: '0.1', expected: '0.2', high: '0.4' },
-      provenance: 'customer',
+      provenance: 'customer-customized',
     },
   },
 };
@@ -25,7 +25,7 @@ describe('resolveActorRate (R-20 rules 8–10)', () => {
     const r = resolveActorRate(assumptions, { kind: 'role', roleRef: 'Legal' });
     expect(r).toEqual({
       hourlyRate: '120',
-      provenance: 'customer',
+      provenance: 'customer-customized',
       source: 'rates.Legal',
       cap: null,
     });

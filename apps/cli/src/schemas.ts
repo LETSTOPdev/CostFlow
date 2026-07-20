@@ -51,7 +51,12 @@ export const mappingTemplateSchema = z
 const nonNegativeDecimal = z
   .string()
   .regex(/^\d+(\.\d+)?$/, 'must be a non-negative decimal string, e.g. "85" or "0.25"');
-const provenance = z.enum(['default', 'customer']);
+const provenance = z.enum([
+  'vendor-suggested',
+  'customer-accepted',
+  'customer-customized',
+  'customer-measured',
+]);
 const rangeSpec = z
   .object({ low: nonNegativeDecimal, expected: nonNegativeDecimal, high: nonNegativeDecimal })
   .strict();
@@ -75,6 +80,7 @@ export const assumptionSetSchema = z
           .object({ range: rangeSpec, provenance })
           .strict()
           .optional(),
+        overdueAttentionHoursPerDay: z.object({ range: rangeSpec, provenance }).strict().optional(),
       })
       .strict(),
   })

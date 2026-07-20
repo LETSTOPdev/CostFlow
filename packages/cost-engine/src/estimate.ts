@@ -30,7 +30,19 @@ export interface QueueWaitTraceTerm {
   readonly subtotal: RangeSpec;
 }
 
-export type TraceTerm = AgingTraceTerm | QueueWaitTraceTerm;
+export interface OverdueTraceTerm {
+  readonly kind: 'overdue-attention';
+  readonly workItemId: string;
+  readonly overdueDays: number;
+  /** "Overdue relative to what?" is an auditor's first question — answered inline. */
+  readonly dueAt: string;
+  readonly attentionHoursPerDay: RangeSpec;
+  readonly hourlyRate: DecimalString;
+  readonly rateSource: string;
+  readonly subtotal: RangeSpec;
+}
+
+export type TraceTerm = AgingTraceTerm | QueueWaitTraceTerm | OverdueTraceTerm;
 
 export interface FormulaTrace {
   readonly claim: string;

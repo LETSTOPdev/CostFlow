@@ -71,4 +71,22 @@ export interface QueueWaitInstance extends FrictionInstanceBase {
   readonly evidence: readonly QueueWaitEvidence[];
 }
 
-export type FrictionInstance = AgingInstance | QueueWaitInstance;
+export interface OverdueEvidence {
+  readonly workItemId: string;
+  readonly title: string;
+  readonly actor: ActorRef;
+  /** The customer's own commitment — the threshold F3 never has to invent. */
+  readonly dueAt: string;
+  readonly overdueDays: number;
+  /** Due date precedes creation — bulk-import artifact, disclosed not hidden. */
+  readonly dueBeforeCreated: boolean;
+  /** Other overdue items in the batch sharing this exact dueAt (doc 12 §5). */
+  readonly sharedDueDateCohortSize: number;
+}
+
+export interface OverdueInstance extends FrictionInstanceBase {
+  readonly frictionType: 'overdue';
+  readonly evidence: readonly OverdueEvidence[];
+}
+
+export type FrictionInstance = AgingInstance | QueueWaitInstance | OverdueInstance;

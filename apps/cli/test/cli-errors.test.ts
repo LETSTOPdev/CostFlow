@@ -94,13 +94,13 @@ describe('CLI fails visibly on invalid input (regressions: R-01, R-04, R-05, R-0
         id: 'a',
         version: '1',
         currency: 'USD',
-        rates: [{ roleRef: 'Ops', hourlyRate: '-50', provenance: 'customer' }],
-        defaultRate: { hourlyRate: '75', provenance: 'default' },
+        rates: [{ roleRef: 'Ops', hourlyRate: '-50', provenance: 'customer-customized' }],
+        defaultRate: { hourlyRate: '75', provenance: 'vendor-suggested' },
         parameters: {
-          agingThresholdDays: { value: 14, provenance: 'customer' },
+          agingThresholdDays: { value: 14, provenance: 'customer-customized' },
           attentionHoursPerDay: {
             range: { low: '0.1', expected: '0.2', high: '0.3' },
-            provenance: 'customer',
+            provenance: 'customer-customized',
           },
         },
       }),

@@ -12,4 +12,5 @@ export type {
   DecimalString,
   Provenance,
 } from './assumptions';
+export { isCustomerOwned } from './assumptions';
 export { parseIsoUtc, wholeDaysBetween } from './time';

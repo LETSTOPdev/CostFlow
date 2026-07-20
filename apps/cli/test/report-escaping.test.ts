@@ -23,13 +23,13 @@ const assumptions: AssumptionSet = {
   id: 'a',
   version: '1',
   currency: 'USD',
-  rates: [{ roleRef: 'Le|gal', hourlyRate: '100', provenance: 'customer' }],
-  defaultRate: { hourlyRate: '75', provenance: 'default' },
+  rates: [{ roleRef: 'Le|gal', hourlyRate: '100', provenance: 'customer-customized' }],
+  defaultRate: { hourlyRate: '75', provenance: 'vendor-suggested' },
   parameters: {
-    agingThresholdDays: { value: 14, provenance: 'customer' },
+    agingThresholdDays: { value: 14, provenance: 'customer-customized' },
     attentionHoursPerDay: {
       range: { low: '0.1', expected: '0.2', high: '0.4' },
-      provenance: 'customer',
+      provenance: 'customer-customized',
     },
   },
 };
@@ -64,6 +64,29 @@ describe('report escapes customer-controlled strings (regression: R-07)', () => 
     expect(rankedRow).toBeDefined();
     const unescapedPipes = (rankedRow as string).match(/(?<!\\)\|/g) ?? [];
     expect(unescapedPipes).toHaveLength(7);
+  });
+
+  it('renders context as explanatory only: escaped, versioned, and money-free (doc 14)', () => {
+    const csv = 'ID,Title,Status,Actor,Updated\n1,"Task","Wait | huh",legal person,2026-06-01';
+    const batch = importCsv({
+      batchId: 'b',
+      csvText: csv,
+      mapping,
+      importedAt: '2026-07-20T00:00:00Z',
+    });
+    const report = renderMarkdown(
+      buildReportModel(
+        runAnalysis({ runId: 'ctx', now: '2026-07-20T00:00:00Z', batch, assumptions }),
+      ),
+    );
+    expect(report).toContain('## Context');
+    expect(report).toContain('not priced, graded, or ranked');
+    expect(report).toContain('c6-wip-load@1.0.0');
+    // Hostile stage names are escaped inside the context statement too.
+    expect(report).toContain('pool is stage "Wait \\| huh"');
+    // The context section carries no currency and no confidence tier.
+    const contextSection = report.split('## Context')[1]?.split('##')[0] ?? '';
+    expect(contextSection).not.toMatch(/USD|Confidence/);
   });
 
   it('remains deterministic with escaping applied', () => {

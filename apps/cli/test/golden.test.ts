@@ -75,25 +75,55 @@ describe('golden datasets (NFR-1: the constitution)', () => {
     });
   }
 
-  it('demo-ops matches the Slice 1 hand-computed cost table (actors changed, numbers did not)', () => {
+  it('demo-ops matches the Slice 3 hand-computed multi-signal table (F2 rows unchanged, F3 added)', () => {
     const model = buildReportModel(goldenRun('demo-ops'));
     expect(
       model.ranked.map((r) => [
+        r.instance.frictionType,
         r.instance.location.stage.name,
         r.estimate.cost.expected,
         r.estimate.confidence.tier,
       ]),
     ).toEqual([
-      ['Working on it', '1842', 'C'],
-      ['Waiting for approval', '1320', 'B'],
-      ['Stuck', '546', 'B'],
+      ['overdue', 'Waiting for approval', '1624', 'A'],
+      ['aging', 'Waiting for approval', '1320', 'B'],
+      ['aging', 'Stuck', '546', 'B'],
+      ['overdue', 'Working on it', '342', 'A'],
+      ['overdue', 'Stuck', '280', 'A'],
     ]);
+
+    // Report-mode provenance policy (doc 03 P4 as amended): the F2 instance
+    // touching the vendor-suggested default rate (item 1007, missing actor)
+    // is UNPRICED with the offending ref named — no partial pricing.
+    const suppressed = model.unpriced.find((u) => u.instance.frictionType === 'aging');
+    expect(suppressed?.instance.location.stage.name).toBe('Working on it');
+    expect(suppressed?.reason).toContain('vendor-suggested');
+    expect(suppressed?.reason).toContain('defaultRate:missing-actor');
+    expect(model.run.pricingPolicy).toBe('report');
+
+    // F3 is the first snapshot detector to reach A (doc 12 §7): explicit
+    // customer commitments, distinct dues, customer-owned assumptions.
+    const overdueTop = model.ranked[0];
+    expect(overdueTop?.estimate.confidence).toEqual({ tier: 'A', reasons: [] });
+    // Every overdue term answers "overdue relative to what?" (doc 12 §8).
+    for (const term of overdueTop?.estimate.trace.terms ?? []) {
+      expect(term.kind).toBe('overdue-attention');
+      expect(term.kind === 'overdue-attention' && term.dueAt).toBeTruthy();
+    }
+    // Item 1009 (F2-unevaluable: bad lastUpdated) is priced by F3 — the
+    // detector complementarity the doc 12 design predicted.
+    const overdueWoi = model.ranked[3];
+    expect(overdueWoi?.instance.evidence.map((e) => e.workItemId)).toEqual(['1009']);
+
     // F1 must be visibly skipped without history — never silently absent.
     const run = model.run;
     expect(run.detectors.find((d) => d.signalId === 'f1-queue-wait')).toMatchObject({
       status: 'skipped',
       reason: expect.stringContaining('hasEventHistory'),
     });
+    // Context observation present, versioned, and outside the pricing pipeline.
+    expect(run.context[0]).toMatchObject({ signalId: 'c6-wip-load', signalVersion: '1.0.0' });
+    expect(run.pricing.some((p) => p.frictionInstanceId.startsWith('c6'))).toBe(false);
   });
 
   it('demo-flow matches the Slice 2 hand-computed multi-signal table', () => {
@@ -108,7 +138,6 @@ describe('golden datasets (NFR-1: the constitution)', () => {
     ).toEqual([
       ['queue-wait', 'Contract Review', '993', 'B'],
       ['queue-wait', 'Backlog', '751', 'A'],
-      ['aging', 'Working on it', '360', 'C'],
       ['aging', 'Contract Review', '180', 'B'],
     ]);
 
@@ -120,13 +149,17 @@ describe('golden datasets (NFR-1: the constitution)', () => {
     expect(contractReview?.estimate.cost).toEqual({ low: '496.5', expected: '993', high: '1986' });
     expect(contractReview?.estimate.confidence.reasons.join(' ')).toContain('open stage intervals');
 
-    // The unmapped actor's item is priced at the default rate, capped C, and pseudonymized.
-    const aging = model.ranked[2];
-    expect(aging?.estimate.trace.terms[0]).toMatchObject({
-      kind: 'aging-attention',
-      rateSource: 'defaultRate:unmapped-actor',
-    });
-    expect(aging?.instance.evidence[0]?.actor.kind).toBe('unknown');
+    // The unmapped actor's item would need the vendor-suggested default rate:
+    // under report-mode policy the aging instance is UNPRICED (no partial
+    // pricing), with the actor still pseudonymized in evidence.
+    const suppressedAging = model.unpriced.find((u) => u.instance.frictionType === 'aging');
+    expect(suppressedAging?.reason).toContain('defaultRate:unmapped-actor');
+    expect(suppressedAging?.instance.evidence[0]?.actor.kind).toBe('unknown');
+
+    // And the F3 friction stays unpriced for its own reason: missing assumption.
+    expect(model.unpriced).toHaveLength(2);
+    const unpricedOverdue = model.unpriced.find((u) => u.instance.frictionType === 'overdue');
+    expect(unpricedOverdue?.reason).toContain('overdueAttentionHoursPerDay');
   });
 });
 

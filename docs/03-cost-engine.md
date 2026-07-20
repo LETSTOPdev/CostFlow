@@ -52,8 +52,24 @@ because $150k was really $137k.
 ### P4 — Assumptions are customer-owned, first-class, and always visible.
 
 The engine brings formulas; the customer brings the numbers that make them theirs
-(rates, deal values, penalty terms). Defaults exist to avoid a cold start, but
-they are loudly labeled, and confidence is capped until the customer confirms them.
+(rates, deal values, penalty terms).
+
+> **Amended 2026-07-20** (implementation experience — doc 14 FS-3 applied to
+> pricing modes). The original clause "defaults exist to avoid a cold start,
+> loudly labeled, confidence capped" proved insufficient: a labeled vendor
+> number is still a vendor number, and labels do not survive forwarding.
+> Provenance is a ladder, not a boolean:
+> `vendor-suggested → customer-accepted → customer-customized →
+> customer-measured`. Every assumption carries its state. **Production
+> reports price exclusively on customer-owned states** (accepted /
+> customized / measured); an estimate that would touch any vendor-suggested
+> load-bearing input is reported as a detected, time-denominated friction
+> with the missing confirmation named — never partially priced. Vendor
+> suggestions retain two legitimate homes: **explicit simulation mode**
+> (prominently bannered, doc 07 N13 register, never the executive template)
+> and **onboarding suggestion UX**, where actively accepting a suggested
+> value converts its provenance to customer-accepted. The cold-start problem
+> is solved by suggestions at input time, not by vendor-priced reports.
 
 - **Why this is strategic, not just honest**: an executive cannot reject a number
   whose every input his own team supplied. Customer-owned assumptions convert

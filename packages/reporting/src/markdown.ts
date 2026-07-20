@@ -1,5 +1,6 @@
 import { formatWholeMoney } from '@costflow/cost-engine';
-import type { AgingTraceTerm, QueueWaitTraceTerm } from '@costflow/analysis';
+import { isTerminal } from '@costflow/domain';
+import type { AgingTraceTerm, OverdueTraceTerm, QueueWaitTraceTerm } from '@costflow/analysis';
 import type { RankedFriction, ReportModel } from './report';
 
 /**
@@ -8,6 +9,17 @@ import type { RankedFriction, ReportModel } from './report';
  * or inject content into the flagship artifact. Traces and run artifacts keep
  * raw truth; only display escapes.
  */
+const PROVENANCE_LABELS: Record<string, string> = {
+  'vendor-suggested': '**vendor-suggested (unconfirmed)**',
+  'customer-accepted': 'accepted by customer',
+  'customer-customized': 'customized by customer',
+  'customer-measured': 'measured by customer',
+};
+
+function provenanceLabel(provenance: string): string {
+  return PROVENANCE_LABELS[provenance] ?? provenance;
+}
+
 function esc(value: string): string {
   return value
     .replace(/\\/g, '\\\\')
@@ -41,6 +53,12 @@ export function renderMarkdown(model: ReportModel): string {
   lines.push('All figures are estimates with stated assumptions; every number below is');
   lines.push('traceable to its formula, inputs, and assumption provenance.');
   lines.push('');
+  if (run.pricingPolicy === 'simulation') {
+    lines.push('> **SIMULATION MODE** — this run prices vendor-suggested (unconfirmed)');
+    lines.push('> assumptions. Figures are conditional estimates for exploration and are');
+    lines.push('> NOT suitable for executive reporting.');
+    lines.push('');
+  }
 
   lines.push('## Data');
   lines.push('');
@@ -56,6 +74,13 @@ export function renderMarkdown(model: ReportModel): string {
   lines.push(
     `- Capability profile: event history ${capLabel(cap.hasEventHistory)} · last-updated dates ${capLabel(cap.hasLastUpdated)} · due dates ${capLabel(cap.hasDueDates)} · actors ${capLabel(cap.hasActors)}`,
   );
+  const inFlight = run.batch.items.filter((item) => !isTerminal(item.stage));
+  if (inFlight.length > 0) {
+    const withDue = inFlight.filter((item) => item.dueAt !== null).length;
+    lines.push(
+      `- Due-date coverage: ${withDue} of ${inFlight.length} in-flight items carry due dates`,
+    );
+  }
   if (run.batch.events.length > 0) {
     lines.push(`- Lifecycle events imported: ${run.batch.events.length}`);
   }
@@ -117,6 +142,19 @@ export function renderMarkdown(model: ReportModel): string {
     lines.push('');
   }
 
+  if (run.context.length > 0) {
+    lines.push('## Context');
+    lines.push('');
+    lines.push(
+      'Context signals describe conditions that explain frictions. They are not priced, graded, or ranked.',
+    );
+    lines.push('');
+    for (const c of run.context) {
+      lines.push(`- ${c.signalName} (\`${c.signalId}@${c.signalVersion}\`): ${esc(c.statement)}`);
+    }
+    lines.push('');
+  }
+
   for (const r of ranked) {
     renderDrilldown(lines, r, range);
   }
@@ -127,6 +165,8 @@ export function renderMarkdown(model: ReportModel): string {
     `Engine versions: analysis ${run.engineVersions.analysis} · signals ${Object.entries(
       run.engineVersions.signals,
     )
+      .map(([id, v]) => `${id}@${v}`)
+      .join(', ')} · context ${Object.entries(run.engineVersions.contextSignals)
       .map(([id, v]) => `${id}@${v}`)
       .join(', ')} · cost models ${Object.entries(run.engineVersions.costModels)
       .map(([id, v]) => `${id}@${v}`)
@@ -155,7 +195,18 @@ function renderDrilldown(
   lines.push('**What data went in?**');
   lines.push('');
 
-  if (r.instance.frictionType === 'aging') {
+  if (r.instance.frictionType === 'overdue') {
+    lines.push('| Item | Days overdue | Due date | Attention h/day | Rate | Subtotal |');
+    lines.push('|---|---|---|---|---|---|');
+    for (const term of r.estimate.trace.terms) {
+      if (term.kind !== 'overdue-attention') continue;
+      const t: OverdueTraceTerm = term;
+      const evidence = r.instance.evidence.find((e) => e.workItemId === t.workItemId);
+      lines.push(
+        `| ${esc(t.workItemId)} "${esc(evidence?.title ?? '')}" | ${t.overdueDays} | ${esc(t.dueAt)} | ${t.attentionHoursPerDay.low}–${t.attentionHoursPerDay.high} | ${t.hourlyRate}/h (${esc(t.rateSource)}) | ${range(t.subtotal)} |`,
+      );
+    }
+  } else if (r.instance.frictionType === 'aging') {
     lines.push('| Item | Days beyond threshold | Attention h/day | Rate | Subtotal |');
     lines.push('|---|---|---|---|---|');
     for (const term of r.estimate.trace.terms) {
@@ -185,9 +236,7 @@ function renderDrilldown(
   lines.push('**What was assumed?**');
   lines.push('');
   for (const a of r.estimate.trace.assumptionsUsed) {
-    lines.push(
-      `- \`${esc(a.ref)}\` = ${esc(a.value)} — ${a.provenance === 'customer' ? 'set by customer' : '**unconfirmed default**'}`,
-    );
+    lines.push(`- \`${esc(a.ref)}\` = ${esc(a.value)} — ${provenanceLabel(a.provenance)}`);
   }
   lines.push('');
   if (r.estimate.confidence.reasons.length === 0) {

@@ -1,17 +1,23 @@
 {
   "runId": "golden-demo-flow",
   "engineVersions": {
-    "analysis": "0.2.0",
+    "analysis": "0.4.0",
     "signals": {
       "f2-aging": "1.0.0",
-      "f1-queue-wait": "1.0.0"
+      "f1-queue-wait": "1.0.0",
+      "f3-overdue": "1.0.0"
+    },
+    "contextSignals": {
+      "c6-wip-load": "1.0.0"
     },
     "costModels": {
       "cm-aging-attention": "1.0.0",
+      "cm-overdue-attention": "1.0.0",
       "cm-queue-wait-attention": "1.0.0"
     }
   },
   "now": "2026-07-20T00:00:00Z",
+  "pricingPolicy": "report",
   "batch": {
     "id": "batch-golden-demo-flow",
     "provider": "csv",
@@ -228,27 +234,27 @@
       {
         "roleRef": "Legal",
         "hourlyRate": "120",
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       {
         "roleRef": "Finance",
         "hourlyRate": "95",
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       {
         "roleRef": "Procurement",
         "hourlyRate": "80",
-        "provenance": "customer"
+        "provenance": "customer-customized"
       }
     ],
     "defaultRate": {
       "hourlyRate": "75",
-      "provenance": "default"
+      "provenance": "vendor-suggested"
     },
     "parameters": {
       "agingThresholdDays": {
         "value": 14,
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       "attentionHoursPerDay": {
         "range": {
@@ -256,7 +262,7 @@
           "expected": "0.3",
           "high": "0.6"
         },
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       "queueWaitAttentionHoursPerDay": {
         "range": {
@@ -264,7 +270,7 @@
           "expected": "0.2",
           "high": "0.4"
         },
-        "provenance": "customer"
+        "provenance": "customer-customized"
       }
     }
   },
@@ -282,6 +288,13 @@
       "signalName": "Queue wait",
       "status": "ran",
       "instanceCount": 2
+    },
+    {
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "signalName": "Overdue exposure",
+      "status": "ran",
+      "instanceCount": 1
     }
   ],
   "frictions": [
@@ -444,14 +457,45 @@
           "openAtAnalysisTime": false
         }
       ]
+    },
+    {
+      "id": "f3-overdue:contract-review",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "Contract Review",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 5
+      },
+      "evidence": [
+        {
+          "workItemId": "2001",
+          "title": "Vendor agreement",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "dueAt": "2026-07-15",
+          "overdueDays": 5,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
     }
   ],
   "pricing": [
     {
       "frictionInstanceId": "f2-aging:working-on-it",
-      "status": "priced",
+      "status": "skipped",
       "costModelId": "cm-aging-attention",
-      "costModelVersion": "1.0.0"
+      "costModelVersion": "1.0.0",
+      "reason": "Rests on vendor-suggested assumption(s): defaultRate:unmapped-actor — confirm or customize them to price this friction, or run in simulation mode."
     },
     {
       "frictionInstanceId": "f2-aging:contract-review",
@@ -470,74 +514,16 @@
       "status": "priced",
       "costModelId": "cm-queue-wait-attention",
       "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:contract-review",
+      "status": "skipped",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "reason": "Missing assumption parameters.overdueAttentionHoursPerDay — add it to price overdue frictions."
     }
   ],
   "estimates": [
-    {
-      "frictionInstanceId": "f2-aging:working-on-it",
-      "costModelId": "cm-aging-attention",
-      "costModelVersion": "1.0.0",
-      "cost": {
-        "low": "180",
-        "expected": "360",
-        "high": "720"
-      },
-      "currency": "USD",
-      "confidence": {
-        "tier": "C",
-        "reasons": [
-          "C: Default hourly rate applied to unmapped (pseudonymized) actor(s).",
-          "B: Durations inferred from snapshot dates, not event history."
-        ]
-      },
-      "assumptionSetId": "demo-flow-assumptions",
-      "assumptionSetVersion": "1",
-      "trace": {
-        "claim": "Estimated attention cost of 1 item(s) aging beyond 14 days in stage \"Working on it\".",
-        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
-        "terms": [
-          {
-            "kind": "aging-attention",
-            "workItemId": "2003",
-            "excessDays": 16,
-            "attentionHoursPerDay": {
-              "low": "0.15",
-              "expected": "0.3",
-              "high": "0.6"
-            },
-            "hourlyRate": "75",
-            "rateSource": "defaultRate:unmapped-actor",
-            "subtotal": {
-              "low": "180",
-              "expected": "360",
-              "high": "720"
-            }
-          }
-        ],
-        "assumptionsUsed": [
-          {
-            "ref": "defaultRate:unmapped-actor",
-            "value": "75 USD/h",
-            "provenance": "default"
-          },
-          {
-            "ref": "parameters.agingThresholdDays",
-            "value": "14 days",
-            "provenance": "customer"
-          },
-          {
-            "ref": "parameters.attentionHoursPerDay",
-            "value": "0.15–0.6 h/day (expected 0.3)",
-            "provenance": "customer"
-          }
-        ],
-        "inputs": {
-          "workItemIds": [
-            "2003"
-          ]
-        }
-      }
-    },
     {
       "frictionInstanceId": "f2-aging:contract-review",
       "costModelId": "cm-aging-attention",
@@ -582,17 +568,17 @@
           {
             "ref": "parameters.agingThresholdDays",
             "value": "14 days",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "parameters.attentionHoursPerDay",
             "value": "0.15–0.6 h/day (expected 0.3)",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Legal",
             "value": "120 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           }
         ],
         "inputs": {
@@ -689,22 +675,22 @@
           {
             "ref": "parameters.queueWaitAttentionHoursPerDay",
             "value": "0.1–0.4 h/day (expected 0.2)",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Finance",
             "value": "95 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Legal",
             "value": "120 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Procurement",
             "value": "80 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           }
         ],
         "inputs": {
@@ -801,22 +787,22 @@
           {
             "ref": "parameters.queueWaitAttentionHoursPerDay",
             "value": "0.1–0.4 h/day (expected 0.2)",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Finance",
             "value": "95 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Legal",
             "value": "120 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Procurement",
             "value": "80 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           }
         ],
         "inputs": {
@@ -826,6 +812,22 @@
             "2001"
           ]
         }
+      }
+    }
+  ],
+  "context": [
+    {
+      "signalId": "c6-wip-load",
+      "signalVersion": "1.0.0",
+      "signalName": "Work-in-flight load",
+      "statement": "2 of 3 in-flight items (67%) sit in queue- or review-kind stages; the largest single pool is stage \"Contract Review\" (2 items).",
+      "facts": {
+        "inFlight": 3,
+        "queueKind": 0,
+        "reviewKind": 2,
+        "activeKind": 1,
+        "blockedKind": 0,
+        "waitingSharePercent": 67
       }
     }
   ]

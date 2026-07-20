@@ -12,8 +12,21 @@ export interface RangeSpec {
   readonly high: DecimalString;
 }
 
-/** Provenance drives confidence: defaults cap the tier until confirmed (doc 03 P4). */
-export type Provenance = 'default' | 'customer';
+/**
+ * Provenance is a ladder, not a boolean (doc 03 P4 as amended 2026-07-20):
+ *  - 'vendor-suggested'    — a value WE brought; never acceptable in report-mode pricing
+ *  - 'customer-accepted'   — the customer explicitly accepted a suggested value
+ *  - 'customer-customized' — the customer supplied their own value
+ *  - 'customer-measured'   — the value derives from the customer's measured data
+ * The states are recorded per assumption; pricing policy decides which states
+ * each mode admits (report: customer-owned only; simulation/dev: any).
+ */
+export type Provenance =
+  'vendor-suggested' | 'customer-accepted' | 'customer-customized' | 'customer-measured';
+
+export function isCustomerOwned(provenance: Provenance): boolean {
+  return provenance !== 'vendor-suggested';
+}
 
 export interface RateCardEntry {
   readonly roleRef: string;
@@ -48,6 +61,18 @@ export interface AssumptionSet {
      * visible reason (FR-13) — never a fabricated default.
      */
     readonly queueWaitAttentionHoursPerDay?:
+      | {
+          readonly range: RangeSpec;
+          readonly provenance: Provenance;
+        }
+      | undefined;
+    /**
+     * Chasing/escalation effort an overdue item consumes per day past due
+     * (doc 12 §3). Optional, same FR-13 semantics; deliberately separate from
+     * the aging parameter — breached commitments and stale cards are chased
+     * differently.
+     */
+    readonly overdueAttentionHoursPerDay?:
       | {
           readonly range: RangeSpec;
           readonly provenance: Provenance;

@@ -8,12 +8,12 @@ const assumptions: AssumptionSet = {
   version: '1',
   currency: 'USD',
   rates: [],
-  defaultRate: { hourlyRate: '75', provenance: 'default' },
+  defaultRate: { hourlyRate: '75', provenance: 'vendor-suggested' },
   parameters: {
-    agingThresholdDays: { value: 14, provenance: 'customer' },
+    agingThresholdDays: { value: 14, provenance: 'customer-customized' },
     attentionHoursPerDay: {
       range: { low: '0.1', expected: '0.2', high: '0.4' },
-      provenance: 'customer',
+      provenance: 'customer-customized',
     },
   },
 };

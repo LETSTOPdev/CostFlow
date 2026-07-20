@@ -11,6 +11,7 @@ Import batch `batch-golden-demo-ops` (provider: csv, mapping `monday-standard-bo
 
 - Rows: 10 total, 9 imported, 1 dropped
 - Capability profile: event history no · last-updated dates yes · due dates yes · actors yes
+- Due-date coverage: 7 of 8 in-flight items carry due dates
 - Unmapped actors pseudonymized (scope `costflow-golden`); raw identities are not retained
 
 ### Import diagnostics
@@ -22,40 +23,51 @@ Import batch `batch-golden-demo-ops` (provider: csv, mapping `monday-standard-bo
 
 - Aging / stagnation (`f2-aging@1.0.0`): ran — 3 finding(s)
 - Queue wait (`f1-queue-wait@1.0.0`): **skipped** — Requires hasEventHistory — not present in this import.
+- Overdue exposure (`f3-overdue@1.0.0`): ran — 3 finding(s)
 
 ## Ranked frictions
 
 | # | Friction | Where | Magnitude | Estimated cost | Confidence |
 |---|---|---|---|---|---|
-| 1 | aging | stage "Working on it" (active) | 72 item-days-beyond-threshold | 921 USD – 3,684 USD (expected ~1,842 USD) | C |
+| 1 | overdue | stage "Waiting for approval" (review) | 84 item-days-overdue | 812 USD – 3,248 USD (expected ~1,624 USD) | A |
 | 2 | aging | stage "Waiting for approval" (review) | 47 item-days-beyond-threshold | 660 USD – 2,640 USD (expected ~1,320 USD) | B |
 | 3 | aging | stage "Stuck" (blocked) | 26 item-days-beyond-threshold | 273 USD – 1,092 USD (expected ~546 USD) | B |
+| 4 | overdue | stage "Working on it" (active) | 19 item-days-overdue | 171 USD – 684 USD (expected ~342 USD) | A |
+| 5 | overdue | stage "Stuck" (blocked) | 20 item-days-overdue | 140 USD – 560 USD (expected ~280 USD) | A |
 
-## Drill-down #1: aging at stage "Working on it"
+## Unpriced frictions
 
-**What is this?** Estimated attention cost of 2 item(s) aging beyond 14 days in stage "Working on it".
+Detected but not priced — the magnitude is real; the missing input is named.
 
-**How was it computed?** `Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range`
-(cost model `cm-aging-attention@1.0.0`, assumption set `demo-ops-assumptions` v1)
+- aging at stage "Working on it" — 72 item-days-beyond-threshold. Not priced: Rests on vendor-suggested assumption(s): defaultRate:missing-actor — confirm or customize them to price this friction, or run in simulation mode.
+
+## Context
+
+Context signals describe conditions that explain frictions. They are not priced, graded, or ranked.
+
+- Work-in-flight load (`c6-wip-load@1.0.0`): 3 of 8 in-flight items (38%) sit in queue- or review-kind stages; the largest single pool is stage "Working on it" (4 items).
+
+## Drill-down #1: overdue at stage "Waiting for approval"
+
+**What is this?** Estimated chasing cost of 2 item(s) past their own due dates in stage "Waiting for approval".
+
+**How was it computed?** `Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range`
+(cost model `cm-overdue-attention@1.0.0`, assumption set `demo-ops-assumptions` v1)
 
 **What data went in?**
 
-| Item | Days beyond threshold | Attention h/day | Rate | Subtotal |
-|---|---|---|---|---|
-| 1005 "Annual audit prep" | 37 | 0.15–0.6 | 95/h (rates.Finance) | 527 USD – 2,109 USD (expected ~1,054 USD) |
-| 1007 "CRM cleanup" | 35 | 0.15–0.6 | 75/h (defaultRate:missing-actor) | 394 USD – 1,575 USD (expected ~788 USD) |
+| Item | Days overdue | Due date | Attention h/day | Rate | Subtotal |
+|---|---|---|---|---|---|
+| 1003 "Onboard new supplier" | 49 | 2026-06-01 | 0.1–0.4 | 80/h (rates.Procurement) | 392 USD – 1,568 USD (expected ~784 USD) |
+| 1001 "Renew vendor contract" | 35 | 2026-06-15 | 0.1–0.4 | 120/h (rates.Legal) | 420 USD – 1,680 USD (expected ~840 USD) |
 
 **What was assumed?**
 
-- `defaultRate:missing-actor` = 75 USD/h — **unconfirmed default**
-- `parameters.agingThresholdDays` = 14 days — set by customer
-- `parameters.attentionHoursPerDay` = 0.15–0.6 h/day (expected 0.3) — set by customer
-- `rates.Finance` = 95 USD/h — set by customer
+- `parameters.overdueAttentionHoursPerDay` = 0.1–0.4 h/day (expected 0.2) — customized by customer
+- `rates.Legal` = 120 USD/h — customized by customer
+- `rates.Procurement` = 80 USD/h — customized by customer
 
-**Confidence C**, limited by:
-
-- C: Default hourly rate applied to item(s) with no actor.
-- B: Durations inferred from snapshot dates, not event history.
+**Confidence A** — no binding constraints: fully observed data and customer-confirmed assumptions.
 
 ## Drill-down #2: aging at stage "Waiting for approval"
 
@@ -73,10 +85,10 @@ Import batch `batch-golden-demo-ops` (provider: csv, mapping `monday-standard-bo
 
 **What was assumed?**
 
-- `parameters.agingThresholdDays` = 14 days — set by customer
-- `parameters.attentionHoursPerDay` = 0.15–0.6 h/day (expected 0.3) — set by customer
-- `rates.Legal` = 120 USD/h — set by customer
-- `rates.Procurement` = 80 USD/h — set by customer
+- `parameters.agingThresholdDays` = 14 days — customized by customer
+- `parameters.attentionHoursPerDay` = 0.15–0.6 h/day (expected 0.3) — customized by customer
+- `rates.Legal` = 120 USD/h — customized by customer
+- `rates.Procurement` = 80 USD/h — customized by customer
 
 **Confidence B**, limited by:
 
@@ -97,14 +109,54 @@ Import batch `batch-golden-demo-ops` (provider: csv, mapping `monday-standard-bo
 
 **What was assumed?**
 
-- `parameters.agingThresholdDays` = 14 days — set by customer
-- `parameters.attentionHoursPerDay` = 0.15–0.6 h/day (expected 0.3) — set by customer
-- `rates.Marketing` = 70 USD/h — set by customer
+- `parameters.agingThresholdDays` = 14 days — customized by customer
+- `parameters.attentionHoursPerDay` = 0.15–0.6 h/day (expected 0.3) — customized by customer
+- `rates.Marketing` = 70 USD/h — customized by customer
 
 **Confidence B**, limited by:
 
 - B: Durations inferred from snapshot dates, not event history.
 
+## Drill-down #4: overdue at stage "Working on it"
+
+**What is this?** Estimated chasing cost of 1 item(s) past their own due dates in stage "Working on it".
+
+**How was it computed?** `Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range`
+(cost model `cm-overdue-attention@1.0.0`, assumption set `demo-ops-assumptions` v1)
+
+**What data went in?**
+
+| Item | Days overdue | Due date | Attention h/day | Rate | Subtotal |
+|---|---|---|---|---|---|
+| 1009 "Legacy migration" | 19 | 2026-07-01 | 0.1–0.4 | 90/h (rates.IT) | 171 USD – 684 USD (expected ~342 USD) |
+
+**What was assumed?**
+
+- `parameters.overdueAttentionHoursPerDay` = 0.1–0.4 h/day (expected 0.2) — customized by customer
+- `rates.IT` = 90 USD/h — customized by customer
+
+**Confidence A** — no binding constraints: fully observed data and customer-confirmed assumptions.
+
+## Drill-down #5: overdue at stage "Stuck"
+
+**What is this?** Estimated chasing cost of 1 item(s) past their own due dates in stage "Stuck".
+
+**How was it computed?** `Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range`
+(cost model `cm-overdue-attention@1.0.0`, assumption set `demo-ops-assumptions` v1)
+
+**What data went in?**
+
+| Item | Days overdue | Due date | Attention h/day | Rate | Subtotal |
+|---|---|---|---|---|---|
+| 1004 "Website copy refresh" | 20 | 2026-06-30 | 0.1–0.4 | 70/h (rates.Marketing) | 140 USD – 560 USD (expected ~280 USD) |
+
+**What was assumed?**
+
+- `parameters.overdueAttentionHoursPerDay` = 0.1–0.4 h/day (expected 0.2) — customized by customer
+- `rates.Marketing` = 70 USD/h — customized by customer
+
+**Confidence A** — no binding constraints: fully observed data and customer-confirmed assumptions.
+
 ---
 
-Engine versions: analysis 0.2.0 · signals f2-aging@1.0.0, f1-queue-wait@1.0.0 · cost models cm-aging-attention@1.0.0, cm-queue-wait-attention@1.0.0
+Engine versions: analysis 0.4.0 · signals f2-aging@1.0.0, f1-queue-wait@1.0.0, f3-overdue@1.0.0 · context c6-wip-load@1.0.0 · cost models cm-aging-attention@1.0.0, cm-overdue-attention@1.0.0, cm-queue-wait-attention@1.0.0

@@ -18,6 +18,23 @@ export interface ResolvedRate {
   readonly cap: ConfidenceCap | null;
 }
 
+/**
+ * Report-mode gate (doc 03 P4 as amended): rate refs whose resolved
+ * provenance is vendor-suggested, for the given actors. An instance touching
+ * any of these is unpriced in report mode — no partial pricing.
+ */
+export function vendorSuggestedRateRefs(
+  assumptions: AssumptionSet,
+  actors: readonly ActorRef[],
+): string[] {
+  const refs = new Set<string>();
+  for (const actor of actors) {
+    const resolved = resolveActorRate(assumptions, actor);
+    if (resolved.provenance === 'vendor-suggested') refs.add(resolved.source);
+  }
+  return [...refs].sort();
+}
+
 export function resolveActorRate(assumptions: AssumptionSet, actor: ActorRef): ResolvedRate {
   const defaultRate = (why: string, reason: string): ResolvedRate => ({
     hourlyRate: assumptions.defaultRate.hourlyRate,
@@ -35,8 +52,12 @@ export function resolveActorRate(assumptions: AssumptionSet, actor: ActorRef): R
           provenance: entry.provenance,
           source: `rates.${actor.roleRef}`,
           cap:
-            entry.provenance === 'default'
-              ? { tier: 'C', reason: 'Rate-card entry used is an unconfirmed default.' }
+            entry.provenance === 'vendor-suggested'
+              ? {
+                  tier: 'C',
+                  reason:
+                    'Rate-card entry used is a vendor suggestion the customer has not confirmed.',
+                }
               : null,
         };
       }

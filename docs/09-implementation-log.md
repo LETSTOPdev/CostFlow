@@ -496,3 +496,176 @@ tree. Preflight smoke-tested against synthetic golden fixtures only.
 **Status: waiting on the real partner dataset.** No partner data exists in
 the repo or this log. Session execution (passes 1–5, findings memo, final
 report) begins when files land in `partner-runs/<code>/raw/`.
+
+**Cycle-1 execution note (2026-07-20, values-free):** executed against the
+founder's own ClickUp workspace (cu01) via the official API. 79 items /
+7 lists; preflight 79/79 imported; F2 valid with an honest zero (workspace
+11 days old < 14d threshold); F1 skipped (event history plan-gated and
+aggregate-only); privacy 6 values / 0 occurrences; byte-identical
+reproducibility. Findings memo local to partner-runs/cu01/notes. Outcomes
+drove docs 12 (F3 design), 13 (prioritization), 14 (signal taxonomy).
+
+---
+
+## Slice 3 — F3a overdue detector + F6 as Context Signal (authorized 2026-07-20)
+
+Scope: doc 12 exactly (F3a only; F3b deferred pending the completedAt schema
+decision); F6 per doc 14 — context only: no cost, no confidence, no rank, no
+influence on other detectors' calculations.
+
+### Hand-computed golden expectations (frozen before code runs)
+
+**demo-ops** (`now = 2026-07-20T00:00:00Z`; adds
+`overdueAttentionHoursPerDay {0.1, 0.2, 0.4}` provenance=customer):
+
+F3 evidence (in-flight items past due; floor days):
+
+| Item | Stage | Due | Overdue days | Rate |
+|---|---|---|---|---|
+| 1003 | Waiting for approval (review) | 2026-06-01 | 49 | Procurement 80 |
+| 1001 | Waiting for approval (review) | 2026-06-15 | 35 | Legal 120 |
+| 1004 | Stuck (blocked) | 2026-06-30 | 20 | Marketing 70 |
+| 1009 | Working on it (active) | 2026-07-01 | 19 | IT 90 |
+| 1002/1005/1010 | due in future | | — | |
+| 1007 | no due date | | — | |
+| 1006 | done → excluded | | — | |
+
+Note 1009: F2 cannot evaluate it (bad lastUpdated) but F3 CAN (dueAt valid) —
+the detector complementarity doc 12 predicted, visible in one fixture.
+
+F3 estimates (expected = Σ days × 0.2 × rate; low ×0.1; high ×0.4):
+
+| Instance | Expected | Low | High | Confidence |
+|---|---|---|---|---|
+| F3 Waiting for approval (784+840) | 1624 | 812 | 3248 | **A** (distinct dues, customer assumptions) |
+| F3 Working on it (1009) | 342 | 171 | 684 | **A** |
+| F3 Stuck (1004) | 280 | 140 | 560 | **A** |
+
+Combined ranking: F2 WOI 1842 C > **F3 WFA 1624 A** > F2 WFA 1320 B >
+F2 Stuck 546 B > **F3 WOI 342 A** > **F3 Stuck 280 A**.
+Clustering cap must NOT fire (single-item cohorts and a 50% tie are not
+clusters — cap requires cohort ≥ 2 AND cohort > half the evidence; decision
+recorded here as version-bound semantics).
+
+Context (c6-wip-load): 8 in-flight; review 3, active 4, blocked 1, queue 0 →
+3/8 = 38% queue/review-kind; largest pool "Working on it" (4).
+Due-date coverage line: 7 of 8 in-flight items carry due dates.
+
+**demo-flow** (no overdue assumption added — exercises unpriced-by-missing-
+assumption): F3 detects 2001 (due 2026-07-15 → 5d overdue, Contract Review)
+→ appears under Unpriced frictions with the missing-assumption reason.
+Context: 3 in-flight; 2/3 = 67% queue/review; largest pool Contract Review (2).
+Coverage: 3 of 3. All existing F1/F2 rows byte-unchanged except run-schema
+additions (invariance of estimates asserted by test).
+
+### Version bumps
+`f3-overdue@1.0.0` (new), `cm-overdue-attention@1.0.0` (new),
+`c6-wip-load@1.0.0` (new, context), analysis 0.2.0→0.3.0 (run gains `context`
++ new signal), reporting 0.3.0→0.4.0 (Context section, coverage line, overdue
+drill-down). F1/F2 signals and models unchanged.
+
+### Completion record (2026-07-20)
+
+**Golden change justification (per tools/golden/README.md):** regenerated via
+`pnpm golden:update` once; outputs matched the hand-computed tables above on
+first generation, cell for cell (demo-ops: 6-row multi-signal ranking with
+three A-tier F3 instances; demo-flow: 4 rows byte-equivalent in content plus
+the unpriced-F3 entry and context/coverage additions). Run-schema additions
+(context, contextSignals, new signal version pins) are the documented reason
+run.json changed; F1/F2 estimate CONTENT is unchanged (asserted by tests).
+
+**Verification:** full `pnpm check` green — typecheck · lint · format ·
+depcruise (74 modules, 233 deps, 0 violations) · **114/114 tests** (19 added:
+8 detector, 6 model/registry incl. both new caps + A-tier + version-bound
+cluster semantics, 5 analysis/context incl. F2-invariance and context
+isolation; plus 2 golden/report assertions and 4 new @ts-expect-error
+compile guards).
+
+**cu01 re-run (values-free):** Run A (previously confirmed assumptions only):
+F3 detected 4 instances totaling **224 item-days-overdue — exactly the
+number predicted analytically during M1**; honestly unpriced (missing overdue
+assumption named); context: 61 of 65 in-flight (94%) in queue/review kinds,
+largest pool the queue-kind intake stage (38). Run B (labeled DEFAULT overdue
+assumption 0.15/0.3/0.6): priced ranking led by the intake queue instance
+(~2,700 USD expected, range 1,350–5,400), all C-tier with the binding
+constraint correctly = unconfirmed default. Both doc 12 data-quality caps
+fired on real data: dueBeforeCreated in all 4 instances (sprint-gate dates
+set after task creation), milestone-gate clustering in 1. Reproducibility
+byte-identical; privacy 6 values / 0 occurrences; partner-runs still
+invisible to git.
+
+**Doc 12/13/14 assumptions checked against reality:** none disproven. Two
+sharpened: (1) M1's "58% pooled" understated the kind-level truth — the
+context signal's by-kind computation shows 94%, strengthening the F6-as-
+context value claim; (2) dueBeforeCreated was designed as an edge case and
+turned out to be the NORM for gate-dated sprint tasks — the B cap does the
+work doc 12 hoped, but its ubiquity on sprint-style boards is a finding for
+the next partner conversation (UA-2 remains open).
+
+---
+
+## Slice 3b — Four-state provenance + report/simulation pricing policy (authorized 2026-07-20)
+
+Implements the decision review outcome: doc 03 P4's cold-start clause was the
+principle implementation proved insufficient (superseded by doc 14 FS-3).
+
+### Scope
+- `Provenance` becomes a four-state ladder: `vendor-suggested` →
+  `customer-accepted` → `customer-customized` → `customer-measured`.
+  Customer-owned = the latter three (`isCustomerOwned`).
+- Pricing policy on the analysis run: **report mode (default)** prices only
+  estimates whose load-bearing inputs are all customer-owned; an instance
+  touching any vendor-suggested input (parameters OR resolved rates, incl.
+  the default rate) is skipped with the offending refs named — NO partial
+  pricing. **Simulation mode** (`--simulation`) prices any provenance with
+  the vendor-suggested C-caps intact and a prominent report banner (doc 07
+  N13 register). Developer tooling unaffected; the cost engine stays pure —
+  policy lives in the analysis dispatch layer.
+- Doc 03 P4 amended (dated); confidence-cap and renderer provenance wording
+  updated to the four states.
+
+### Hand-computed golden expectations (frozen before code)
+
+Fixture provenance migration: `customer` → `customer-customized` (values were
+authored by the fixture "customer"); `default` → `vendor-suggested`. The
+fixtures' defaultRate is vendor-suggested → report mode now UNPRICES every
+instance that touches it:
+
+**demo-ops** (report mode): F2 "Working on it" (item 1007 missing actor →
+vendor-suggested default rate) is now UNPRICED with refs named. Ranking
+becomes 5 rows: F3 WFA 1624 A > F2 WFA 1320 B > F2 Stuck 546 B >
+F3 WOI 342 A > F3 Stuck 280 A. Unpriced: F2 WOI (72 item-days-beyond-
+threshold, vendor-suggested defaultRate:missing-actor).
+
+**demo-flow** (report mode): F2 "Working on it" (2003 unmapped actor →
+vendor-suggested default rate) UNPRICED. Ranking 3 rows: F1 CR 993 B >
+F1 Backlog 751 A > F2 CR 180 B. Unpriced (magnitude desc): F2 WOI 16
+item-days; F3 CR 5 item-days (missing overdue assumption).
+
+These goldens now permanently exercise the report-mode suppression path —
+the strictness is the point.
+
+### Version bumps
+analysis 0.3.0 → 0.4.0 (run gains `pricingPolicy`; report-mode dispatch);
+reporting 0.4.0 → 0.5.0 (simulation banner, provenance labels).
+
+### Completion record (2026-07-20)
+
+- Four-state `Provenance` + `isCustomerOwned` in domain; registry entries gain
+  `unconfirmedInputs(instance, assumptions)`; analysis dispatch gates pricing
+  in report mode (default) and records `pricingPolicy` in the artifact; CLI
+  `--simulation`; renderer provenance labels + simulation banner; doc 03 P4
+  amended (dated, with the reasoning).
+- Goldens regenerated once via `pnpm golden:update`; matched the frozen hand
+  tables exactly — demo-ops now 5 priced rows + the suppressed F2 instance
+  with refs named; demo-flow 3 rows + 2 unpriced. The goldens permanently
+  exercise the suppression path.
+- Full `pnpm check` green: **116/116 tests** (2 policy tests added: report-
+  suppression/simulation-pricing equivalence of detection, and
+  customer-accepted counting as customer-owned).
+- cu01 policy proof (values-free): v2 assumptions (vendor-suggested overdue
+  parameter) → report mode suppresses all 4 F3 instances with refs named;
+  `--simulation` prices them behind the banner at C. Detection identical in
+  both modes — policy gates pricing only.
+- Fixture/test provenance migrated (`customer`→`customer-customized`,
+  `default`→`vendor-suggested`); local cu01 configs migrated (not committed).

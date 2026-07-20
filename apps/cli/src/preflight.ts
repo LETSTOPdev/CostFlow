@@ -105,6 +105,11 @@ export function preflight(input: {
         'note: queueWaitAttentionHoursPerDay is absent — queue-wait frictions would be reported unpriced',
       );
     }
+    if (!assumptions.parameters.overdueAttentionHoursPerDay) {
+      lines.push(
+        'note: overdueAttentionHoursPerDay is absent — overdue frictions would be reported unpriced',
+      );
+    }
   }
 
   const header = (parse(csvText, { to_line: 1, trim: true, bom: true }) as string[][])[0] ?? [];

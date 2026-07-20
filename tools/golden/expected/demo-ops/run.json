@@ -1,17 +1,23 @@
 {
   "runId": "golden-demo-ops",
   "engineVersions": {
-    "analysis": "0.2.0",
+    "analysis": "0.4.0",
     "signals": {
       "f2-aging": "1.0.0",
-      "f1-queue-wait": "1.0.0"
+      "f1-queue-wait": "1.0.0",
+      "f3-overdue": "1.0.0"
+    },
+    "contextSignals": {
+      "c6-wip-load": "1.0.0"
     },
     "costModels": {
       "cm-aging-attention": "1.0.0",
+      "cm-overdue-attention": "1.0.0",
       "cm-queue-wait-attention": "1.0.0"
     }
   },
   "now": "2026-07-20T00:00:00Z",
+  "pricingPolicy": "report",
   "batch": {
     "id": "batch-golden-demo-ops",
     "provider": "csv",
@@ -197,37 +203,37 @@
       {
         "roleRef": "Legal",
         "hourlyRate": "120",
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       {
         "roleRef": "Finance",
         "hourlyRate": "95",
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       {
         "roleRef": "Procurement",
         "hourlyRate": "80",
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       {
         "roleRef": "Marketing",
         "hourlyRate": "70",
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       {
         "roleRef": "IT",
         "hourlyRate": "90",
-        "provenance": "customer"
+        "provenance": "customer-customized"
       }
     ],
     "defaultRate": {
       "hourlyRate": "75",
-      "provenance": "default"
+      "provenance": "vendor-suggested"
     },
     "parameters": {
       "agingThresholdDays": {
         "value": 14,
-        "provenance": "customer"
+        "provenance": "customer-customized"
       },
       "attentionHoursPerDay": {
         "range": {
@@ -235,7 +241,15 @@
           "expected": "0.3",
           "high": "0.6"
         },
-        "provenance": "customer"
+        "provenance": "customer-customized"
+      },
+      "overdueAttentionHoursPerDay": {
+        "range": {
+          "low": "0.1",
+          "expected": "0.2",
+          "high": "0.4"
+        },
+        "provenance": "customer-customized"
       }
     }
   },
@@ -254,6 +268,13 @@
       "status": "skipped",
       "reason": "Requires hasEventHistory — not present in this import.",
       "instanceCount": 0
+    },
+    {
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "signalName": "Overdue exposure",
+      "status": "ran",
+      "instanceCount": 3
     }
   ],
   "frictions": [
@@ -364,14 +385,117 @@
           "excessDays": 26
         }
       ]
+    },
+    {
+      "id": "f3-overdue:waiting-for-approval",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "Waiting for approval",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 84
+      },
+      "evidence": [
+        {
+          "workItemId": "1003",
+          "title": "Onboard new supplier",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Procurement"
+          },
+          "dueAt": "2026-06-01",
+          "overdueDays": 49,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        },
+        {
+          "workItemId": "1001",
+          "title": "Renew vendor contract",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "dueAt": "2026-06-15",
+          "overdueDays": 35,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
+    },
+    {
+      "id": "f3-overdue:stuck",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "Stuck",
+          "kind": "blocked"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 20
+      },
+      "evidence": [
+        {
+          "workItemId": "1004",
+          "title": "Website copy refresh",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Marketing"
+          },
+          "dueAt": "2026-06-30",
+          "overdueDays": 20,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
+    },
+    {
+      "id": "f3-overdue:working-on-it",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "Working on it",
+          "kind": "active"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 19
+      },
+      "evidence": [
+        {
+          "workItemId": "1009",
+          "title": "Legacy migration",
+          "actor": {
+            "kind": "role",
+            "roleRef": "IT"
+          },
+          "dueAt": "2026-07-01",
+          "overdueDays": 19,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
     }
   ],
   "pricing": [
     {
       "frictionInstanceId": "f2-aging:working-on-it",
-      "status": "priced",
+      "status": "skipped",
       "costModelId": "cm-aging-attention",
-      "costModelVersion": "1.0.0"
+      "costModelVersion": "1.0.0",
+      "reason": "Rests on vendor-suggested assumption(s): defaultRate:missing-actor — confirm or customize them to price this friction, or run in simulation mode."
     },
     {
       "frictionInstanceId": "f2-aging:waiting-for-approval",
@@ -384,97 +508,27 @@
       "status": "priced",
       "costModelId": "cm-aging-attention",
       "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:waiting-for-approval",
+      "status": "priced",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:stuck",
+      "status": "priced",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:working-on-it",
+      "status": "priced",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0"
     }
   ],
   "estimates": [
-    {
-      "frictionInstanceId": "f2-aging:working-on-it",
-      "costModelId": "cm-aging-attention",
-      "costModelVersion": "1.0.0",
-      "cost": {
-        "low": "921",
-        "expected": "1842",
-        "high": "3684"
-      },
-      "currency": "USD",
-      "confidence": {
-        "tier": "C",
-        "reasons": [
-          "C: Default hourly rate applied to item(s) with no actor.",
-          "B: Durations inferred from snapshot dates, not event history."
-        ]
-      },
-      "assumptionSetId": "demo-ops-assumptions",
-      "assumptionSetVersion": "1",
-      "trace": {
-        "claim": "Estimated attention cost of 2 item(s) aging beyond 14 days in stage \"Working on it\".",
-        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
-        "terms": [
-          {
-            "kind": "aging-attention",
-            "workItemId": "1005",
-            "excessDays": 37,
-            "attentionHoursPerDay": {
-              "low": "0.15",
-              "expected": "0.3",
-              "high": "0.6"
-            },
-            "hourlyRate": "95",
-            "rateSource": "rates.Finance",
-            "subtotal": {
-              "low": "527.25",
-              "expected": "1054.5",
-              "high": "2109"
-            }
-          },
-          {
-            "kind": "aging-attention",
-            "workItemId": "1007",
-            "excessDays": 35,
-            "attentionHoursPerDay": {
-              "low": "0.15",
-              "expected": "0.3",
-              "high": "0.6"
-            },
-            "hourlyRate": "75",
-            "rateSource": "defaultRate:missing-actor",
-            "subtotal": {
-              "low": "393.75",
-              "expected": "787.5",
-              "high": "1575"
-            }
-          }
-        ],
-        "assumptionsUsed": [
-          {
-            "ref": "defaultRate:missing-actor",
-            "value": "75 USD/h",
-            "provenance": "default"
-          },
-          {
-            "ref": "parameters.agingThresholdDays",
-            "value": "14 days",
-            "provenance": "customer"
-          },
-          {
-            "ref": "parameters.attentionHoursPerDay",
-            "value": "0.15–0.6 h/day (expected 0.3)",
-            "provenance": "customer"
-          },
-          {
-            "ref": "rates.Finance",
-            "value": "95 USD/h",
-            "provenance": "customer"
-          }
-        ],
-        "inputs": {
-          "workItemIds": [
-            "1005",
-            "1007"
-          ]
-        }
-      }
-    },
     {
       "frictionInstanceId": "f2-aging:waiting-for-approval",
       "costModelId": "cm-aging-attention",
@@ -536,22 +590,22 @@
           {
             "ref": "parameters.agingThresholdDays",
             "value": "14 days",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "parameters.attentionHoursPerDay",
             "value": "0.15–0.6 h/day (expected 0.3)",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Legal",
             "value": "120 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Procurement",
             "value": "80 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           }
         ],
         "inputs": {
@@ -606,17 +660,17 @@
           {
             "ref": "parameters.agingThresholdDays",
             "value": "14 days",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "parameters.attentionHoursPerDay",
             "value": "0.15–0.6 h/day (expected 0.3)",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           },
           {
             "ref": "rates.Marketing",
             "value": "70 USD/h",
-            "provenance": "customer"
+            "provenance": "customer-customized"
           }
         ],
         "inputs": {
@@ -624,6 +678,220 @@
             "1004"
           ]
         }
+      }
+    },
+    {
+      "frictionInstanceId": "f3-overdue:waiting-for-approval",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "812",
+        "expected": "1624",
+        "high": "3248"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "A",
+        "reasons": []
+      },
+      "assumptionSetId": "demo-ops-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated chasing cost of 2 item(s) past their own due dates in stage \"Waiting for approval\".",
+        "formula": "Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "overdue-attention",
+            "workItemId": "1003",
+            "overdueDays": 49,
+            "dueAt": "2026-06-01",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "80",
+            "rateSource": "rates.Procurement",
+            "subtotal": {
+              "low": "392",
+              "expected": "784",
+              "high": "1568"
+            }
+          },
+          {
+            "kind": "overdue-attention",
+            "workItemId": "1001",
+            "overdueDays": 35,
+            "dueAt": "2026-06-15",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "420",
+              "expected": "840",
+              "high": "1680"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.overdueAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Procurement",
+            "value": "80 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "1003",
+            "1001"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f3-overdue:stuck",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "140",
+        "expected": "280",
+        "high": "560"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "A",
+        "reasons": []
+      },
+      "assumptionSetId": "demo-ops-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated chasing cost of 1 item(s) past their own due dates in stage \"Stuck\".",
+        "formula": "Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "overdue-attention",
+            "workItemId": "1004",
+            "overdueDays": 20,
+            "dueAt": "2026-06-30",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "70",
+            "rateSource": "rates.Marketing",
+            "subtotal": {
+              "low": "140",
+              "expected": "280",
+              "high": "560"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.overdueAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Marketing",
+            "value": "70 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "1004"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f3-overdue:working-on-it",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "171",
+        "expected": "342",
+        "high": "684"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "A",
+        "reasons": []
+      },
+      "assumptionSetId": "demo-ops-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated chasing cost of 1 item(s) past their own due dates in stage \"Working on it\".",
+        "formula": "Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "overdue-attention",
+            "workItemId": "1009",
+            "overdueDays": 19,
+            "dueAt": "2026-07-01",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "90",
+            "rateSource": "rates.IT",
+            "subtotal": {
+              "low": "171",
+              "expected": "342",
+              "high": "684"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.overdueAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.IT",
+            "value": "90 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "1009"
+          ]
+        }
+      }
+    }
+  ],
+  "context": [
+    {
+      "signalId": "c6-wip-load",
+      "signalVersion": "1.0.0",
+      "signalName": "Work-in-flight load",
+      "statement": "3 of 8 in-flight items (38%) sit in queue- or review-kind stages; the largest single pool is stage \"Working on it\" (4 items).",
+      "facts": {
+        "inFlight": 8,
+        "queueKind": 0,
+        "reviewKind": 3,
+        "activeKind": 4,
+        "blockedKind": 1,
+        "waitingSharePercent": 38
       }
     }
   ]

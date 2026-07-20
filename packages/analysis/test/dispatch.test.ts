@@ -8,13 +8,13 @@ const assumptions: AssumptionSet = {
   id: 'a',
   version: '1',
   currency: 'USD',
-  rates: [{ roleRef: 'Ops', hourlyRate: '90', provenance: 'customer' }],
-  defaultRate: { hourlyRate: '75', provenance: 'default' },
+  rates: [{ roleRef: 'Ops', hourlyRate: '90', provenance: 'customer-customized' }],
+  defaultRate: { hourlyRate: '75', provenance: 'vendor-suggested' },
   parameters: {
-    agingThresholdDays: { value: 14, provenance: 'customer' },
+    agingThresholdDays: { value: 14, provenance: 'customer-customized' },
     attentionHoursPerDay: {
       range: { low: '0.1', expected: '0.2', high: '0.4' },
-      provenance: 'customer',
+      provenance: 'customer-customized',
     },
   },
 };
@@ -125,7 +125,7 @@ describe('analysis dispatch through the cost-model registry (R-11)', () => {
         ...assumptions.parameters,
         queueWaitAttentionHoursPerDay: {
           range: { low: '0.1', expected: '0.2', high: '0.4' },
-          provenance: 'customer',
+          provenance: 'customer-customized',
         },
       },
     };

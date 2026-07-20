@@ -34,6 +34,9 @@ Options:
   --now <iso>            Analysis time, ISO-8601 UTC (default: current time; analyze only)
   --run-id <id>          Run id (default: sha256 of inputs + now — deterministic)
   --out <dir>            Output directory for run.json + report.md (default: ./out)
+  --simulation           Price vendor-suggested assumptions too (clearly-bannered
+                         simulation register; default report mode prices only
+                         customer-owned assumptions)
   --quiet                Suppress report on stdout
 
 Status messages go to stderr; the report goes to stdout unless --quiet.
@@ -76,6 +79,7 @@ function run(): void {
       'run-id': { type: 'string' },
       out: { type: 'string' },
       quiet: { type: 'boolean' },
+      simulation: { type: 'boolean' },
     },
   });
 
@@ -146,7 +150,13 @@ function run(): void {
     importedAt: now,
     pseudonymization,
   });
-  const analysisRun = runAnalysis({ runId, now, batch, assumptions });
+  const analysisRun = runAnalysis({
+    runId,
+    now,
+    batch,
+    assumptions,
+    mode: values.simulation ? 'simulation' : 'report',
+  });
   const report = renderMarkdown(buildReportModel(analysisRun));
 
   const outDir = values.out ?? 'out';

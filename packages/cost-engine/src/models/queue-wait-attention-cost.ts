@@ -50,10 +50,10 @@ export function priceQueueWaitInstance(
       reason: `${context.eligibleItemsWithoutEvents} item(s) currently in queue/review stages have no event history — their wait is unobserved.`,
     });
   }
-  if (parameter.provenance === 'default') {
+  if (parameter.provenance === 'vendor-suggested') {
     caps.push({
       tier: 'C',
-      reason: 'Queue-wait attention-hours assumption is an unconfirmed default.',
+      reason: 'Queue-wait attention-hours assumption is vendor-suggested (unconfirmed).',
     });
   }
 

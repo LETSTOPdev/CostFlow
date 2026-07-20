@@ -28,6 +28,9 @@ documents. Read them in order:
 | [09-implementation-log.md](docs/09-implementation-log.md)                             | Running implementation log: M0 slice 1 checklist, decisions D-1…D-9, verification results                                       |
 | [10-engineering-review.md](docs/10-engineering-review.md)                             | Staff-engineer review of slice 1: verified defects R-01…R-20, decision verdicts, re-scoped next slices                          |
 | [11-partner-run-workflow.md](docs/11-partner-run-workflow.md)                         | Safe CLI workflow for real partner datasets: files, mapping, pseudonymization, validation, retention, deletion                  |
+| [12-overdue-detector.md](docs/12-overdue-detector.md)                                 | F3 overdue detector design (evidence-driven by M1): family split, algorithm, confidence, gaming analysis, recommendation        |
+| [13-detector-prioritization.md](docs/13-detector-prioritization.md)                   | Evidence-tagged ranking of all detector families: implementation priority vs long-term importance, launch-trio answer           |
+| [14-signal-taxonomy.md](docs/14-signal-taxonomy.md)                                   | Friction vs Context Signals: the four-part qualification test, per-family verdicts, migration criteria                          |
 
 ## The three non-negotiable decisions
 

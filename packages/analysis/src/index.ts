@@ -10,6 +10,7 @@ export type {
   TraceTerm,
   AgingTraceTerm,
   QueueWaitTraceTerm,
+  OverdueTraceTerm,
   Confidence,
 } from '@costflow/cost-engine';
 export type {
@@ -18,4 +19,7 @@ export type {
   AgingEvidence,
   QueueWaitInstance,
   QueueWaitEvidence,
+  OverdueInstance,
+  OverdueEvidence,
+  ContextObservation,
 } from '@costflow/friction';
