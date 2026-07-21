@@ -78,7 +78,29 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       return reply.code(403).send('Invalid CSRF token.');
     }
     clearSession(reply, auth.secureCookies === true);
-    return reply.redirect('/login');
+    reply.clearCookie('cf_oidc_state', {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: auth.secureCookies === true,
+    });
+    // Land on a neutral, auth-free confirmation page — NOT /login. In OIDC
+    // mode /login bounces straight to the IdP, whose still-live SSO session
+    // would silently re-authenticate the user, so "logout" appeared to do
+    // nothing and the session was never terminated (P4.2 defect 1).
+    return reply.redirect('/logged-out');
+  });
+
+  // Public, auth-free, OIDC-free post-logout landing.
+  app.get('/logged-out', async (_request, reply) => {
+    return reply
+      .type('text/html')
+      .send(
+        layout(
+          'Signed out',
+          '<h2>You have been signed out.</h2><p>Your CostFlow session has ended. <a href="/login">Sign in again</a>.</p>',
+        ),
+      );
   });
 
   const requireSession = (request: FastifyRequest, reply: FastifyReply): Session | null => {

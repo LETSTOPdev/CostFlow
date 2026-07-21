@@ -121,7 +121,7 @@ describe('sign-out (doc 09 P4.2 §6)', () => {
     const cookie = await signIn(t, 'out@b.example');
     const logout = await post(t, cookie, '/logout', {});
     expect(logout.statusCode).toBe(302);
-    expect(logout.headers['location']).toBe('/login');
+    expect(logout.headers['location']).toBe('/logged-out');
     const cleared = String(logout.headers['set-cookie']);
     expect(cleared).toContain('cf_session=');
     // The cleared cookie no longer authenticates: a protected page redirects.

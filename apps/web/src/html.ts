@@ -1,7 +1,12 @@
 /** Minimal server-rendered HTML shell (doc 09 P4.1 plan — no SPA build). */
 
 export function esc(value: string): string {
-  return value
+  // Defense in depth: a mistyped non-string (e.g. a Date leaking from the DB
+  // driver) must never crash the render layer with `replaceAll is not a
+  // function` (P4.2 defect 2). The root cause is fixed at the store boundary;
+  // this guarantees the page still renders even if one slips through.
+  const s = typeof value === 'string' ? value : String(value ?? '');
+  return s
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')

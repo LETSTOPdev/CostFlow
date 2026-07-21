@@ -14,6 +14,21 @@ import type {
 } from './contract';
 
 /**
+ * node-postgres parses `timestamptz`/`timestamp` columns into JS Date objects,
+ * but the Store contract (and MemoryStore) use ISO strings — an unconverted
+ * Date reaching the string-typed fields crashed the rendering layer in
+ * production (`value.replaceAll is not a function` on GET /runs, P4.2
+ * defect 2). Coerce every timestamp read to an ISO string at this boundary so
+ * the contract holds regardless of the driver's parser. Pass-through for
+ * values already strings keeps old rows rendering unchanged.
+ */
+export function toIso(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+/**
  * PostgreSQL Store (doc 09 P4.1 plan §1). Same contract and tenancy law as
  * MemoryStore; the shared contract test suite runs against this adapter
  * whenever COSTFLOW_TEST_DATABASE_URL is set (this machine has no Postgres —
@@ -78,7 +93,12 @@ export class PgStore implements Store {
     }>('select id, tenant_id, email, created_at from users where email = $1', [email]);
     const row = result.rows[0];
     return row
-      ? { id: row.id, tenantId: row.tenant_id, email: row.email, createdAt: row.created_at }
+      ? {
+          id: row.id,
+          tenantId: row.tenant_id,
+          email: row.email,
+          createdAt: toIso(row.created_at) as string,
+        }
       : null;
   }
 
@@ -90,7 +110,11 @@ export class PgStore implements Store {
     }>('select id, salt_ciphertext, created_at from tenants where id = $1', [tenantId]);
     const row = result.rows[0];
     return row
-      ? { id: row.id, saltCiphertext: row.salt_ciphertext, createdAt: row.created_at }
+      ? {
+          id: row.id,
+          saltCiphertext: row.salt_ciphertext,
+          createdAt: toIso(row.created_at) as string,
+        }
       : null;
   }
 
@@ -110,7 +134,7 @@ export class PgStore implements Store {
       actorRoleMap: (row['actor_role_map'] as WorkspaceRecord['actorRoleMap']) ?? null,
       assumptions: (row['assumptions'] as WorkspaceRecord['assumptions']) ?? null,
       onboarding: row['onboarding'] as WorkspaceRecord['onboarding'],
-      createdAt: row['created_at'] as string,
+      createdAt: toIso(row['created_at']) as string,
     };
   }
 
@@ -183,8 +207,8 @@ export class PgStore implements Store {
       errorClass: (row['error_class'] as JobRecord['errorClass']) ?? null,
       errorMessage: (row['error_message'] as string | null) ?? null,
       runId: (row['run_id'] as string | null) ?? null,
-      createdAt: row['created_at'] as string,
-      finishedAt: (row['finished_at'] as string | null) ?? null,
+      createdAt: toIso(row['created_at']) as string,
+      finishedAt: toIso(row['finished_at']),
     };
   }
 
@@ -261,7 +285,7 @@ export class PgStore implements Store {
       id: row['id'] as string,
       tenantId: row['tenant_id'] as string,
       workspaceId: row['workspace_id'] as string,
-      createdAt: row['created_at'] as string,
+      createdAt: toIso(row['created_at']) as string,
       runJson: row['run_json'] as string,
       reportMd: row['report_md'] as string,
       telemetryJsonl: row['telemetry_jsonl'] as string,

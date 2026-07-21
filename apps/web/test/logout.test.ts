@@ -98,7 +98,8 @@ describe('authenticated sign-out control (doc 09 P4.2 Gate 2 fix)', () => {
       payload: `csrf=${encodeURIComponent(token)}`,
     });
     expect(logout.statusCode).toBe(302);
-    expect(logout.headers['location']).toBe('/login');
+    // Lands on the neutral page, NOT /login (which would re-trigger OIDC).
+    expect(logout.headers['location']).toBe('/logged-out');
 
     // Session terminated: the cleared cookie no longer authenticates.
     const cleared = String(logout.headers['set-cookie']);
@@ -118,7 +119,7 @@ describe('authenticated sign-out control (doc 09 P4.2 Gate 2 fix)', () => {
     const protectedPage = await t.app.inject({ method: 'GET', url: '/connect' });
     expect(protectedPage.statusCode).toBe(302);
     expect(protectedPage.headers['location']).toBe('/login');
-    // POST /logout with no session simply redirects to /login (no crash, no 500).
+    // POST /logout with no session simply redirects to /logged-out (no crash).
     const logout = await t.app.inject({
       method: 'POST',
       url: '/logout',
@@ -126,7 +127,12 @@ describe('authenticated sign-out control (doc 09 P4.2 Gate 2 fix)', () => {
       payload: '',
     });
     expect(logout.statusCode).toBe(302);
-    expect(logout.headers['location']).toBe('/login');
+    expect(logout.headers['location']).toBe('/logged-out');
+    // The landing page is public, renders, and carries no logout control.
+    const landing = await t.app.inject({ method: 'GET', url: '/logged-out' });
+    expect(landing.statusCode).toBe(200);
+    expect(landing.body).toContain('signed out');
+    expect(landing.body).not.toContain('action="/logout"');
   });
 
   it('CSRF is still enforced — a forged/missing token cannot log a session out', async () => {
