@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CsvImportError, importCsv } from '@costflow/ingestion';
+import { ImportError, importCsv } from '@costflow/ingestion';
 import type { MappingTemplate } from '@costflow/ingestion';
 
 const mapping: MappingTemplate = {
@@ -58,7 +58,7 @@ describe('event-history import: strict validation, no silent repair', () => {
 
   it('rejects events referencing unknown work items', () => {
     const events = 'ID,From,To,At\nnope,,Backlog,2026-06-02T00:00:00Z';
-    expect(() => run(events)).toThrow(CsvImportError);
+    expect(() => run(events)).toThrow(ImportError);
     expect(() => run(events)).toThrow(/unknown work item/);
   });
 

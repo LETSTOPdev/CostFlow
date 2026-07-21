@@ -7,7 +7,7 @@ import type {
   WorkItem,
 } from '@costflow/domain';
 import { parseIsoUtc } from '@costflow/domain';
-import { CsvImportError } from '../csv/provider';
+import { ImportError } from '../../errors';
 import {
   buildCapability,
   orderAndValidateEvents,
@@ -82,7 +82,7 @@ function parseJson(text: string, label: string): unknown {
   try {
     return JSON.parse(text);
   } catch (error) {
-    throw new CsvImportError(`${label} is not valid JSON: ${(error as Error).message}`);
+    throw new ImportError(`${label} is not valid JSON: ${(error as Error).message}`);
   }
 }
 
@@ -90,14 +90,14 @@ export function transformJira(input: JiraTransformInput): ImportBatch {
   const { batchId, searchPages, supplementaryChangelogs, mapping, importedAt, pseudonymization } =
     input;
   if (searchPages.length === 0) {
-    throw new CsvImportError('Jira transform received no search pages.');
+    throw new ImportError('Jira transform received no search pages.');
   }
 
   const issues: JiraIssue[] = [];
   searchPages.forEach((page, index) => {
     const doc = parseJson(page, `Jira search page ${index}`) as { issues?: JiraIssue[] };
     if (!Array.isArray(doc.issues)) {
-      throw new CsvImportError(`Jira search page ${index} has no "issues" array.`);
+      throw new ImportError(`Jira search page ${index} has no "issues" array.`);
     }
     issues.push(...doc.issues);
   });
@@ -165,7 +165,7 @@ export function transformJira(input: JiraTransformInput): ImportBatch {
     const histories: JiraHistory[] = supplementary.length > 0 ? supplementary : [...embedded];
     const total = issue.changelog?.total ?? embedded.length;
     if (total > histories.length) {
-      throw new CsvImportError(
+      throw new ImportError(
         `Jira changelog for ${key} is truncated (${histories.length} of ${total} histories). ` +
           'Fetch the full changelog (supplementary pages) — history is never silently truncated.',
       );

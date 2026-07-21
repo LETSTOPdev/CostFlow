@@ -1,6 +1,6 @@
 import { parse } from 'csv-parse/sync';
 import type { AssumptionSet, ImportBatch, PseudonymizationContext } from '@costflow/domain';
-import { CsvImportError, importCsv } from '@costflow/ingestion';
+import { ImportError, importCsv } from '@costflow/ingestion';
 import type { MappingTemplate } from '@costflow/ingestion';
 
 /**
@@ -36,7 +36,7 @@ export function preflight(input: {
       pseudonymization,
     });
   } catch (error) {
-    if (error instanceof CsvImportError) {
+    if (error instanceof ImportError) {
       lines.push(`STRUCTURAL ERROR: ${error.message}`);
       lines.push('');
       lines.push('Preflight verdict: FAILED — fix the input before any analysis run.');

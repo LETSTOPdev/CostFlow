@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseIsoUtc } from '@costflow/domain';
-import { importCsv, transformJira } from '@costflow/ingestion';
+import { importCsv, transformAsana, transformJira, transformMonday } from '@costflow/ingestion';
 import type { ImportBatch } from '@costflow/domain';
 import { runAnalysis } from '@costflow/analysis';
 import { buildReportModel, renderMarkdown } from '@costflow/reporting';
@@ -11,7 +11,15 @@ import { CliError, readJsonFile, readTextFile } from './io';
 import { preflight } from './preflight';
 import { buildPseudonymizationContext } from './pseudonym';
 import { fetchJira } from './fetchers/jira';
-import { assumptionSetSchema, jiraMappingSchema, mappingTemplateSchema } from './schemas';
+import { fetchMonday } from './fetchers/monday';
+import { fetchAsana } from './fetchers/asana';
+import {
+  assumptionSetSchema,
+  asanaMappingSchema,
+  jiraMappingSchema,
+  mappingTemplateSchema,
+  mondayMappingSchema,
+} from './schemas';
 
 // The ONLY effectful edge in M0. Invalid or ambiguous input must fail loudly
 // with a non-zero exit (R-01/R-08): "no frictions detected" may only ever
@@ -19,9 +27,11 @@ import { assumptionSetSchema, jiraMappingSchema, mappingTemplateSchema } from '.
 
 const USAGE = `Usage:
   costflow analyze   --csv <file> --mapping <file> --assumptions <file> [options]
-  costflow analyze   --provider jira --raw <dir> --mapping <jira-mapping.json> --assumptions <file> [options]
+  costflow analyze   --provider jira|monday|asana --raw <dir> --mapping <file> --assumptions <file> [options]
   costflow preflight --csv <file> --mapping <file> [--assumptions <file>] [options]
   costflow fetch     --provider jira --site <url> --email <email> --token-file <file> --project <KEY> --out <dir>
+  costflow fetch     --provider monday --token-file <file> --project <board-id> --out <dir>
+  costflow fetch     --provider asana --token-file <file> --project <project-gid> --out <dir>
 
 analyze runs the full pipeline and writes artifacts. preflight runs ONLY the
 structural import validation and prints a values-free structure summary — no
@@ -69,6 +79,25 @@ function resolvePseudonymization(
   return buildPseudonymizationContext(values.org, salt);
 }
 
+/** Raw fetch output layout: prefer <dir>/raw, fall back to <dir> itself. */
+function listRawDir(rawOpt: string): { baseDir: string; fileNames: string[] } {
+  const rawDir = join(rawOpt, 'raw');
+  try {
+    return { baseDir: rawDir, fileNames: readdirSync(rawDir) };
+  } catch {
+    return { baseDir: rawOpt, fileNames: readdirSync(rawOpt) };
+  }
+}
+
+/** Numbered raw pages in numeric order (page 10 sorts after page 9, not after 1). */
+function readNumberedPages(baseDir: string, fileNames: string[], pattern: RegExp): string[] {
+  return fileNames
+    .map((f) => pattern.exec(f))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .sort((a, b) => Number(a[1]) - Number(b[1]))
+    .map((m) => readTextFile(join(baseDir, m[0]), m[0]));
+}
+
 function run(): void {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -95,23 +124,30 @@ function run(): void {
 
   const subcommand = positionals[0];
   if (subcommand === 'fetch') {
-    if (values.provider !== 'jira') {
-      throw new CliError('fetch currently supports --provider jira only.');
+    const provider = values.provider;
+    if (provider !== 'jira' && provider !== 'monday' && provider !== 'asana') {
+      throw new CliError('fetch supports --provider jira, monday, or asana.');
     }
-    if (!values.site || !values.email || !values['token-file'] || !values.project || !values.out) {
+    if (!values['token-file'] || !values.project || !values.out) {
       throw new CliError(USAGE);
     }
     const token = readTextFile(values['token-file'], 'token file').trim();
     if (token.length < 8) throw new CliError('The token file looks empty.');
-    void fetchJira(
-      {
-        site: values.site,
-        email: values.email,
-        token,
-        projectKey: values.project,
-      },
-      values.out,
-    ).catch((error: unknown) => {
+    const out = values.out;
+    const fetchPromise = (() => {
+      if (provider === 'jira') {
+        if (!values.site || !values.email) throw new CliError(USAGE);
+        return fetchJira(
+          { site: values.site, email: values.email, token, projectKey: values.project },
+          out,
+        );
+      }
+      if (provider === 'monday') {
+        return fetchMonday({ token, boardId: values.project }, out);
+      }
+      return fetchAsana({ token, projectGid: values.project }, out);
+    })();
+    void fetchPromise.catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
       console.error(error instanceof CliError ? message : `Error: ${message}`);
       process.exit(1);
@@ -152,6 +188,19 @@ function run(): void {
   const assumptions = readJsonFile(values.assumptions, 'assumption set', assumptionSetSchema);
   const now = values.now ?? new Date(Date.now()).toISOString();
 
+  /** Deterministic run id over raw pages + mapping + assumptions + scope + salt + now. */
+  const apiRunId = (pages: readonly string[], mapping: unknown): string =>
+    values['run-id'] ??
+    createHash('sha256')
+      .update(JSON.stringify(pages))
+      .update(JSON.stringify(mapping))
+      .update(JSON.stringify(assumptions))
+      .update(values.org ?? '')
+      .update(readTextFile(values['salt-file'] as string, 'salt file'))
+      .update(now)
+      .digest('hex')
+      .slice(0, 16);
+
   let batch: ImportBatch;
   let runId: string;
   if (provider === 'jira') {
@@ -159,28 +208,13 @@ function run(): void {
       throw new CliError('--provider jira requires --raw <dir> (fetched raw pages).');
     const jiraMapping = readJsonFile(values.mapping as string, 'Jira mapping', jiraMappingSchema);
     const pseudonymization = resolvePseudonymization(values, true);
-    const rawDir = join(values.raw, 'raw');
-    let fileNames: string[];
-    try {
-      fileNames = readdirSync(rawDir);
-    } catch {
-      fileNames = readdirSync(values.raw);
-    }
-    const baseDir = (() => {
-      try {
-        readdirSync(rawDir);
-        return rawDir;
-      } catch {
-        return values.raw as string;
-      }
-    })();
-    const searchFiles = fileNames.filter((f) => /^search-page-\d+\.json$/.test(f)).sort();
-    if (searchFiles.length === 0) {
+    const { baseDir, fileNames } = listRawDir(values.raw);
+    const searchPages = readNumberedPages(baseDir, fileNames, /^search-page-(\d+)\.json$/);
+    if (searchPages.length === 0) {
       throw new CliError(
         `No search-page-*.json files found in ${baseDir} — run costflow fetch first.`,
       );
     }
-    const searchPages = searchFiles.map((f) => readTextFile(join(baseDir, f), f));
     const supplementaryChangelogs: Record<string, string[]> = {};
     for (const f of fileNames.filter((n) => /^changelog-.+-\d+\.json$/.test(n)).sort()) {
       const match = /^changelog-(.+)-\d+\.json$/.exec(f);
@@ -188,22 +222,75 @@ function run(): void {
       const key = match[1] as string;
       (supplementaryChangelogs[key] ??= []).push(readTextFile(join(baseDir, f), f));
     }
-    runId =
-      values['run-id'] ??
-      createHash('sha256')
-        .update(searchPages.join('\u0000'))
-        .update(JSON.stringify(jiraMapping))
-        .update(JSON.stringify(assumptions))
-        .update(values.org ?? '')
-        .update(readTextFile(values['salt-file'] as string, 'salt file'))
-        .update(now)
-        .digest('hex')
-        .slice(0, 16);
+    runId = apiRunId(searchPages, jiraMapping);
     batch = transformJira({
       batchId: `batch-${runId}`,
       searchPages,
       supplementaryChangelogs,
       mapping: jiraMapping,
+      importedAt: now,
+      pseudonymization,
+    });
+  } else if (provider === 'monday') {
+    if (!values.raw)
+      throw new CliError('--provider monday requires --raw <dir> (fetched raw pages).');
+    const mondayMapping = readJsonFile(
+      values.mapping as string,
+      'monday mapping',
+      mondayMappingSchema,
+    );
+    const pseudonymization = resolvePseudonymization(values, true);
+    const { baseDir, fileNames } = listRawDir(values.raw);
+    const itemsPages = readNumberedPages(baseDir, fileNames, /^items-page-(\d+)\.json$/);
+    if (itemsPages.length === 0) {
+      throw new CliError(
+        `No items-page-*.json files found in ${baseDir} — run costflow fetch first.`,
+      );
+    }
+    const activityPages = readNumberedPages(baseDir, fileNames, /^activity-page-(\d+)\.json$/);
+    runId = apiRunId([...itemsPages, ...activityPages], mondayMapping);
+    batch = transformMonday({
+      batchId: `batch-${runId}`,
+      itemsPages,
+      activityPages: activityPages.length > 0 ? activityPages : undefined,
+      mapping: mondayMapping,
+      importedAt: now,
+      pseudonymization,
+    });
+  } else if (provider === 'asana') {
+    if (!values.raw)
+      throw new CliError('--provider asana requires --raw <dir> (fetched raw pages).');
+    const asanaMapping = readJsonFile(
+      values.mapping as string,
+      'Asana mapping',
+      asanaMappingSchema,
+    );
+    const pseudonymization = resolvePseudonymization(values, true);
+    const { baseDir, fileNames } = listRawDir(values.raw);
+    const taskPages = readNumberedPages(baseDir, fileNames, /^tasks-page-(\d+)\.json$/);
+    if (taskPages.length === 0) {
+      throw new CliError(
+        `No tasks-page-*.json files found in ${baseDir} — run costflow fetch first.`,
+      );
+    }
+    const sectionsDoc = readTextFile(join(baseDir, 'sections.json'), 'sections.json');
+    const storiesByTask: Record<string, string[]> = {};
+    for (const f of fileNames.filter((n) => /^stories-.+-\d+\.json$/.test(n)).sort()) {
+      const match = /^stories-(.+)-\d+\.json$/.exec(f);
+      if (!match) continue;
+      const gid = match[1] as string;
+      (storiesByTask[gid] ??= []).push(readTextFile(join(baseDir, f), f));
+    }
+    runId = apiRunId(
+      [...taskPages, sectionsDoc, ...Object.values(storiesByTask).flat()],
+      asanaMapping,
+    );
+    batch = transformAsana({
+      batchId: `batch-${runId}`,
+      taskPages,
+      storiesByTask,
+      sectionsDoc,
+      mapping: asanaMapping,
       importedAt: now,
       pseudonymization,
     });
@@ -244,7 +331,7 @@ function run(): void {
       pseudonymization,
     });
   } else {
-    throw new CliError(`Unknown provider "${provider}" — supported: csv, jira.`);
+    throw new CliError(`Unknown provider "${provider}" — supported: csv, jira, monday, asana.`);
   }
   const analysisRun = runAnalysis({
     runId,

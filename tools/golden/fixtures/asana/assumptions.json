@@ -1,0 +1,46 @@
+{
+  "id": "demo-asana-assumptions",
+  "version": "1",
+  "currency": "USD",
+  "rates": [
+    {
+      "roleRef": "Legal",
+      "hourlyRate": "110",
+      "provenance": "customer-customized"
+    }
+  ],
+  "defaultRate": {
+    "hourlyRate": "35",
+    "provenance": "customer-customized"
+  },
+  "parameters": {
+    "agingThresholdDays": {
+      "value": 14,
+      "provenance": "customer-customized"
+    },
+    "attentionHoursPerDay": {
+      "range": {
+        "low": "0.15",
+        "expected": "0.3",
+        "high": "0.6"
+      },
+      "provenance": "customer-customized"
+    },
+    "queueWaitAttentionHoursPerDay": {
+      "range": {
+        "low": "0.1",
+        "expected": "0.2",
+        "high": "0.4"
+      },
+      "provenance": "customer-customized"
+    },
+    "overdueAttentionHoursPerDay": {
+      "range": {
+        "low": "0.1",
+        "expected": "0.2",
+        "high": "0.4"
+      },
+      "provenance": "customer-accepted"
+    }
+  }
+}

@@ -761,3 +761,313 @@ Due coverage: 2 of 3. F2's only finding: OPS-3 (25d aging, 11 excess).
   tested. First real Jira workspace = fetcher shakedown + Cycle-2 wake.
 - Telemetry inserted as P3 in doc 15 per founder directive (derived-not-
   sprayed, versioned taxonomy, privacy-preserving, local-first/opt-in).
+
+## Phase 2 / P2 — Monday + Asana connectors: the SPI promise test (authorized 2026-07-21)
+
+Founder rule governing P2 (verbatim intent): the objective is NOT two more
+connectors — it is to prove the Provider SPI is complete. Monday and Asana
+are adversarial tests of the SPI. If either connector requires an SPI change,
+stop immediately and explain; either the SPI is genuinely incomplete and
+evolves for ALL providers, or the provider adapts to the SPI. No silent
+extension of the abstraction to satisfy one provider. Every pressure point is
+documented. P2 ends with a review answering one question: **"Did the Provider
+SPI survive contact with multiple providers unchanged?"** Then stop before P3.
+
+What "the SPI" is, precisely (so the verdict is checkable): (1) the two-half
+provider shape — pure transform in `packages/ingestion`, effectful fetcher in
+`apps/cli`, raw documents verbatim on disk between them; (2) the
+`ProviderDescriptor` type; (3) the shared canonical assembly contract —
+`resolveActorValue`, `orderAndValidateEvents(CanonicalEventInput[])`,
+`buildCapability`, `stageForStatus`; (4) the canonical `ImportBatch` domain
+model itself; (5) the conformance suite every provider must pass. Mapping
+TYPES are per-provider by design (JiraMapping ≠ MappingTemplate already in
+P1) — a new provider-specific mapping field is NOT an SPI change; a new field
+on ImportBatch/descriptor/canonical helpers IS.
+
+### Execution checklist
+
+- [x] **D-16 consolidation first** (so Monday/Asana join an already-shared
+      path): CSV provider imports `resolveActorValue`, `orderAndValidateEvents`,
+      `buildCapability` from canonical.ts; rename `CsvImportError` →
+      `ImportError` (all providers, all references, all tests); demo-ops and
+      demo-flow goldens must stay byte-identical; error-message equality
+      verified by the existing error-path tests continuing to pass unchanged
+      (any deliberate message change is listed here, not slipped through).
+- [x] `providers/monday/transform.ts` (pure) + `MONDAY_DESCRIPTOR`, rules
+      M1–M6 below; unit tests per rule.
+- [x] `providers/asana/transform.ts` (pure) + `ASANA_DESCRIPTOR`, rules
+      A1–A5 below; unit tests per rule.
+- [x] Fetchers: `fetchers/monday.ts` (GraphQL, POST-for-query — see pressure
+      point M5), `fetchers/asana.ts` (REST GET, offset pagination, stories +
+      sections to exhaustion); `costflow fetch`/`analyze --provider monday|asana`;
+      strict zod mapping schemas.
+- [x] Conformance suite green ×4 (csv, jira, monday, asana).
+- [x] Goldens `demo-monday` + `demo-asana` matching the hand tables below;
+      demo-ops/demo-flow/demo-jira byte-untouched.
+- [x] SPI survival review written below; stop before P3.
+
+### Derivation rules — Monday (M1–M6, frozen before code)
+
+- **M1 — status is a column, not a field.** Monday has no first-class status;
+  `MondayMapping.statusColumnId` designates which column is the status;
+  `statusMap` keys are that column's labels. Provider adapts to the SPI
+  (statusMap semantics unchanged).
+- **M2 — 17-digit activity timestamps.** `activity_logs[].created_at` is UNIX
+  time in 100-nanosecond units (17 digits). Deterministic conversion:
+  `ms = floor(n / 10^4)` → ISO-8601. Conversion happens inside the provider
+  transform; canonical validation still sees only ISO strings.
+- **M3 — multi-person people column.** The canonical domain model holds ONE
+  ActorRef per item; Monday people columns hold many. Rule: the first person
+  listed (source order) is the item's actor — deterministic, documented.
+  This is recorded as pressure on the DOMAIN MODEL's single-actor assumption,
+  surfaced honestly rather than silently widened (see pressure points).
+- **M4 — completeness is not attestable.** Jira's `changelog.total` lets J2
+  prove completeness; Monday's activity_logs API makes no per-item
+  completeness claim and plan-dependent retention truncates silently. J2 has
+  NO Monday analog. Resolution follows the provenance philosophy: the
+  customer attests. `MondayMapping.activityLogsComplete: boolean` — `true`
+  derives events (J1-style arrival: created_at + previous label of the first
+  status transition, else current status); `false` imports items only, adds a
+  file-level diagnostic, and F1 is honestly skipped (`hasEventHistory` false)
+  — the cu01 honest-zero pattern, not a fabricated history.
+- **M5 — GraphQL requires POST (fetcher edge, N5).** P1 wrote "read-only by
+  construction: GET requests only." Monday's API is POST-only even for
+  queries, so the HTTP verb was never the real invariant. Restated: read-only
+  = the query document contains no mutation. Enforced by static query-string
+  constants + a test asserting no mutation appears. Pressure point on the
+  FETCHER EDGE convention, not on the SPI.
+- **M6 — board-scoped history vs item-scoped history.** Jira embeds history
+  per issue; Monday's activity log is per-board, so entries can reference
+  items absent from the items snapshot (deleted/archived). Rule: entries for
+  item ids not present in the snapshot are excluded with a counted file-level
+  diagnostic (facts about out-of-snapshot items, same family as J3
+  dropped-take-events); entries for IMPORTED items still hard-error on
+  unmapped statuses via canonical validation.
+
+### Derivation rules — Asana (A1–A5, frozen before code)
+
+- **A1 — multi-homed tasks.** Asana tasks live in many projects/sections.
+  `AsanaMapping.projectGid` scopes the import; the membership whose
+  `project.gid` matches supplies the current section; tasks without such a
+  membership are dropped rows. The sections document
+  (`GET /projects/{gid}/sections`, fetched raw) is the authoritative set of
+  in-scope section gids.
+- **A2 — completion is orthogonal to section.** `completed` is a boolean and
+  completed tasks keep their section. `AsanaMapping.completedStatus` (must
+  be a `statusMap` key, hard error otherwise) is the stage completed tasks
+  land in; a completion event {from: current section, to: completedStatus,
+  at: completed_at} is derived. `completed: true` with null `completed_at`
+  is a hard error (malformed document, never guessed).
+- **A3 — story scoping.** `section_changed` stories whose sections are BOTH
+  outside the scoped set are foreign-project moves: excluded with a counted
+  per-row diagnostic. A story mixing one in-scope and one out-of-scope
+  section is a hard error (breaks the scoping model; never repaired).
+- **A4 — arrival derivation (J1 analog).** Arrival at task `created_at` into
+  the `old_section` of the first in-scope story, else the current section.
+  Known limitation, documented: a task added to the scoped project long after
+  creation overstates its first-section wait; detecting add-time reliably
+  needs story shapes we will only trust after live validation.
+- **A5 — pagination completeness IS attestable (J2 analog).** Asana responses
+  carry `next_page`; a document whose `next_page` is non-null and whose
+  continuation was not provided is a hard error in the transform. The fetcher
+  follows pagination to exhaustion. (Adversarial contrast with M4: Asana can
+  prove completeness, Monday cannot — the SPI accommodates both without
+  changing.)
+
+### Hand-computed golden expectations — demo-monday (frozen before code)
+
+Fixture: board 4412, 3 items; status column `status` labels Backlog(queue)/
+Working on it(active)/Waiting for review(review)/Done(done); people column
+`person`; date column `date4`; `activityLogsComplete: true`; now = importedAt
+= 2026-07-20T00:00:00Z. Assumptions: Founder 100 (customized); defaultRate 40
+(customized); aging 14d + 0.15/0.3/0.6 (customized); queueWait 0.1/0.2/0.4
+(customized); overdue 0.1/0.2/0.4 customer-accepted. Everything prices in
+report mode.
+
+Items: 101 "Website redesign brief" Backlog, Maya Founder→Founder, created
+06-05, updated 06-30, due 07-08, NO activity (arrival from current status).
+102 "Vendor contract renewal" Waiting for review, unmapped person→pseudonym
+(default 40), created 06-10, updated 07-16, due 07-14; activity Backlog→
+Working on it 06-18, →Waiting for review 07-06. 103 "Spring campaign wrap-up"
+Done, empty people→missing (default 40), created 06-01, updated 06-20, no
+due; activity Backlog→Working on it 06-08, →Done 06-20.
+
+Derived events (7): 101 arrival Backlog @06-05 (open queue wait 45d=1080h);
+102 arrival @06-10 (Backlog 8d=192h) + 2 transitions (review wait open
+14d=336h); 103 arrival @06-01 (Backlog 7d=168h) + 2 transitions (Done
+terminal — attribution ends).
+
+| Rank | Instance | Expected | Low | High | Conf |
+|---|---|---|---|---|---|
+| 1 | F1 queue-wait "Backlog" 1440h (45d×100 + 8d×40 + 7d×40 @0.2) | 1020 | 510 | 2040 | C (open B; unmapped C; missing C) |
+| 2 | F3 overdue "Backlog" (101: 12d×0.2×100) | 240 | 120 | 480 | A |
+| 3 | F2 aging "Backlog" (101: 20d−14=6 excess ×0.3×100) | 180 | 90 | 360 | B (snapshot) |
+| 4 | F1 queue-wait "Waiting for review" 336h (14d×0.2×40) | 112 | 56 | 224 | C (open B; unmapped C) |
+| 5 | F3 overdue "Waiting for review" (102: 6d×0.2×40) | 48 | 24 | 96 | C (unmapped) |
+
+Unpriced: none. Diagnostics: none. Context: 2 of 2 in-flight (100%)
+queue/review; largest pool tie of singletons → alphabetical "Backlog"
+(1 items). Due coverage 2 of 2. Counts 3/3/0.
+
+### Hand-computed golden expectations — demo-asana (frozen before code)
+
+Fixture: project 555, sections Intake(s1,queue)/Doing(s2,active)/Legal
+review(s3,review); completedStatus "Done"(done); now = importedAt =
+2026-07-20T00:00:00Z. Assumptions: Legal 110 (customized); defaultRate 35
+(customized); same parameter shape as monday (overdue customer-accepted).
+
+Tasks: 9001 "Draft NDA for new vendor" Legal review, Rina Legal→Legal,
+created 06-15, modified 07-14, due 07-12, stories s1→s2 06-22, s2→s3 07-04.
+9002 "Update onboarding checklist" Intake, unmapped assignee→pseudonym,
+created 06-08, modified 06-28, no due, no stories. 9003 "Ship pricing page
+update" memberships [project 555 section Doing; project 999 section x9],
+assignee null→missing, created 06-01, due 06-25, completed 07-02; stories
+s1→s2 06-05 (in-scope) + one foreign x8→x9 move 06-10 (A3: excluded, row-3
+diagnostic "1 section move(s) in other projects ignored").
+
+Derived events (7): 9001 arrival Intake @06-15 (7d=168h) + 2 transitions
+(Legal review open 16d=384h); 9002 arrival Intake @06-08 (open 42d=1008h);
+9003 arrival Intake @06-01 (4d=96h) + s1→s2 + completion Doing→Done @07-02
+(A2; stage Done excludes it from overdue despite due 06-25 — terminal).
+
+| Rank | Instance | Expected | Low | High | Conf |
+|---|---|---|---|---|---|
+| 1 | F1 queue-wait "Intake" 1272h (42d×35 + 7d×110 + 4d×35 @0.2) | 476 | 238 | 952 | C (open B; unmapped C; missing C) |
+| 2 | F1 queue-wait "Legal review" 384h (16d×0.2×110) | 352 | 176 | 704 | B (open) |
+| 3 | F3 overdue "Legal review" (9001: 8d×0.2×110) | 176 | 88 | 352 | A |
+| 4 | F2 aging "Intake" (9002: 22d−14=8 excess ×0.3×35) | 84 | 42 | 168 | C (snapshot B; unmapped C) |
+
+Unpriced: none. Context: 2 of 2 in-flight (100%) queue/review; pool tie →
+alphabetical "Intake" (1 items). Due coverage 1 of 2 (9003 done, excluded
+from in-flight). Counts 3/3/0. Report shows the Row 3 A3 diagnostic.
+
+### SPI pressure-point log (updated as encountered)
+
+- **PP-1 (M5)**: N5 "read-only = GET-only" was a provider-specific encoding of
+  the real invariant (no mutations). Fetcher-edge convention restated; SPI
+  untouched.
+- **PP-2 (M3)**: canonical WorkItem holds a single ActorRef; Monday people
+  columns hold many. Resolved provider-side by deterministic first-person
+  rule; the single-actor assumption is now a KNOWN simplification of the
+  domain model, to be revisited only if a real workspace shows material
+  cost attribution error — not silently widened in P2.
+- **PP-3 (M4 vs A5/J2)**: history-completeness attestation differs by
+  provider (Jira: payload-provable; Asana: payload-provable via next_page;
+  Monday: unprovable → customer attestation field). Resolved in
+  provider mappings; canonical model untouched.
+- **PP-4 (M6)**: board-scoped vs item-scoped history sources. Resolved
+  provider-side (excluded-with-diagnostic rule); canonical event validation
+  untouched.
+- **PP-5 (A1/A2)**: multi-homing and orthogonal completion are Asana-shape
+  facts absorbed entirely by AsanaMapping fields + derivation rules;
+  canonical StageRef/ImportBatch untouched.
+- (further entries added during implementation if encountered)
+
+### P2 completion record (2026-07-21)
+
+- **All hand-computed expectations for BOTH goldens matched on first
+  generation** — every rank, magnitude, cost range, and confidence tier, plus
+  the predicted Asana Row-3 foreign-move diagnostic and the monday 100%
+  waiting-share context line. demo-monday exercises M1 (status column), M2
+  (17-digit timestamps → exact ISO), M3 (first-person rule), J1-on-monday
+  (item 101's 45-day open Backlog wait from two facts), and a Done item's
+  closed queue interval still counting (103, 168h). demo-asana exercises A1
+  (multi-homed task scoped to project 555), A2 (completed task in Done via
+  completedStatus, completion event closing its Intake/Doing intervals, and
+  its stale due date correctly NOT surfacing as overdue), A3 (foreign move
+  excluded with a visible diagnostic), A4 (arrival from first in-scope
+  story), and A5 (next_page completeness law).
+- **D-16 closed**: the CSV provider now consumes `resolveActorValue`,
+  `orderAndValidateEvents`, and `buildCapability` from canonical.ts — one
+  implementation of actor/event/capability semantics for all four providers.
+  demo-ops and demo-flow stayed byte-identical through the consolidation
+  (verified via git diff — empty), and every pre-existing error-path test
+  passed unchanged. `CsvImportError` renamed to `ImportError` (neutral
+  `errors.ts`), all references and tests updated. ONE deliberate user-visible
+  message change, recorded here: the missing-pseudonymization-context error
+  now says "The data contains actor values…" (canonical wording) instead of
+  the CSV-specific "The file contains actor values…". No test asserted the
+  old wording; no other message changed.
+- Full `pnpm check` green: **183/183 tests** (41 added: 8 monday transform
+  units, 10 asana transform units, 6×2 conformance for the two new
+  providers, 7 fetcher pure helpers, 2×2 goldens) · 89 modules, 0 boundary
+  violations · demo-ops/demo-flow/demo-jira goldens byte-untouched.
+- CLI edge improvements while wiring: raw-page filename ordering is now
+  numeric (page-10 after page-9 — latent lexicographic bug that would have
+  bitten the first ≥10-page real workspace, jira included); the deterministic
+  run-id hash for API providers now feeds pages through JSON.stringify
+  (unambiguous page boundaries) via one shared `apiRunId` helper. Goldens
+  pin `--run-id`, so artifacts were unaffected.
+- Live validation deliberately pending (same posture as P1): monday/asana
+  HTTP paths and the exact GraphQL pagination shapes are built from the
+  documented APIs with synthetic API-shape fixtures; first real
+  board/project = fetcher shakedown. A3's treatment of NULL sections
+  (excluded as out-of-scope; mixed null/in-scope currently hard-errors) is
+  flagged as the most likely rule to need a documented amendment after
+  contact with a real Asana workspace.
+
+### SPI survival review — "Did the Provider SPI survive contact with multiple providers unchanged?"
+
+**Yes — with one honest asterisk, and it is not in the SPI.**
+
+Component-by-component verdict against the definition frozen at the top of
+this P2 entry:
+
+1. **Two-half provider shape (pure transform / effectful fetcher, raw
+   verbatim between them)** — survived unchanged. Both connectors fit it
+   exactly; neither needed the boundary moved.
+2. **ProviderDescriptor type** — survived unchanged. Zero edits to the type;
+   monday and asana are two new literals.
+3. **Canonical assembly contract** (`resolveActorValue`,
+   `orderAndValidateEvents(CanonicalEventInput[])`, `buildCapability`,
+   `stageForStatus`) — survived unchanged: no signature, semantic, or
+   message change was needed to accommodate either provider. The only edits
+   to canonical.ts were the planned ImportError rename and a comment. The
+   `ref`-labelled event-input design (P1) absorbed provider-specific error
+   labels ("item 102 activity 1", "task 9003 story 2") exactly as intended.
+4. **Canonical ImportBatch / domain model** — survived unchanged, but this
+   is where the real pressure landed, absorbed provider-side and documented
+   rather than silently widened:
+   - PP-2: monday people columns hold MANY persons; WorkItem holds one
+     ActorRef. Resolved by the deterministic first-person rule (M3). The
+     single-actor assumption is now a KNOWN simplification with a named
+     revisit trigger (material attribution error in a real workspace).
+   - PP-3: history-completeness attestation differs per provider (Jira
+     payload-provable via changelog.total; Asana payload-provable via
+     next_page; monday UNPROVABLE → customer attestation field M4). The
+     domain model never had a "history is complete" field — and still does
+     not need one, because the rule is enforceable at each transform.
+   - PP-5: Asana's multi-homing and orthogonal completion were absorbed
+     entirely by AsanaMapping fields (projectGid, completedStatus) and
+     derivation rules A1–A4.
+   - PP-4: monday's board-scoped activity log (entries for items outside
+     the snapshot) resolved by the M6 exclude-with-diagnostic rule.
+5. **Conformance suite** — survived unchanged and did its job: the same six
+   invariants now run against four providers with zero provider-specific
+   carve-outs.
+
+**The asterisk (PP-1):** the P1 completion record stated the fetcher edge is
+"read-only by construction: GET requests only." monday's GraphQL API is
+POST-only even for pure reads, so that formulation did not survive — it was
+a provider-specific encoding of the real invariant. Restated as a platform
+rule: **read-only = the request can express no mutation** (static query
+constants containing none, asserted by test, for GraphQL; GET for REST).
+This is a change to a documented edge CONVENTION, not to any SPI type,
+contract, or the canonical model — but under this review's own standard it
+is reported as the one thing contact with a second provider genuinely
+falsified.
+
+Also for the record: per-provider mapping TYPES gained fields
+(statusColumnId, activityLogsComplete, projectGid, completedStatus). Mapping
+types are per-provider by design (frozen definition above), so these are
+provider adaptations to the SPI — the direction the founder rule demands —
+not SPI evolution. No canonical field, no shared helper, and no descriptor
+changed to satisfy any single provider.
+
+**Doc 05 promise verdict** (P2 DoD): the "permanent integration contract"
+promise holds after four providers of three genuinely different shapes
+(files, item-scoped-history REST, board-scoped-history GraphQL,
+story-derived multi-homed REST). Capability profiles honestly differ per
+batch, not per marketing claim; every honest gap (monday completeness,
+asana late-add arrival overstatement) is a documented rule with a named
+revisit trigger, not a silent repair.

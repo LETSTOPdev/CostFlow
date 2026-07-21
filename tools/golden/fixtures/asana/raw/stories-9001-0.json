@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "gid": "st-1",
+      "created_at": "2026-06-22T00:00:00.000Z",
+      "resource_subtype": "section_changed",
+      "old_section": { "gid": "s1", "name": "Intake" },
+      "new_section": { "gid": "s2", "name": "Doing" }
+    },
+    {
+      "gid": "st-2",
+      "created_at": "2026-07-04T00:00:00.000Z",
+      "resource_subtype": "section_changed",
+      "old_section": { "gid": "s2", "name": "Doing" },
+      "new_section": { "gid": "s3", "name": "Legal review" }
+    }
+  ],
+  "next_page": null
+}

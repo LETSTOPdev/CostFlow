@@ -1,0 +1,34 @@
+{
+  "data": {
+    "boards": [
+      {
+        "activity_logs": [
+          {
+            "id": "act-4",
+            "event": "update_column_value",
+            "created_at": "17832960000000000",
+            "data": "{\"board_id\":4412,\"pulse_id\":102,\"column_id\":\"status\",\"value\":{\"label\":{\"text\":\"Waiting for review\"}},\"previous_value\":{\"label\":{\"text\":\"Working on it\"}}}"
+          },
+          {
+            "id": "act-3",
+            "event": "update_column_value",
+            "created_at": "17819136000000000",
+            "data": "{\"board_id\":4412,\"pulse_id\":103,\"column_id\":\"status\",\"value\":{\"label\":{\"text\":\"Done\"}},\"previous_value\":{\"label\":{\"text\":\"Working on it\"}}}"
+          },
+          {
+            "id": "act-2",
+            "event": "update_column_value",
+            "created_at": "17817408000000000",
+            "data": "{\"board_id\":4412,\"pulse_id\":102,\"column_id\":\"status\",\"value\":{\"label\":{\"text\":\"Working on it\"}},\"previous_value\":{\"label\":{\"text\":\"Backlog\"}}}"
+          },
+          {
+            "id": "act-1",
+            "event": "update_column_value",
+            "created_at": "17808768000000000",
+            "data": "{\"board_id\":4412,\"pulse_id\":103,\"column_id\":\"status\",\"value\":{\"label\":{\"text\":\"Working on it\"}},\"previous_value\":{\"label\":{\"text\":\"Backlog\"}}}"
+          }
+        ]
+      }
+    ]
+  }
+}

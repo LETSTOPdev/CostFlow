@@ -1,0 +1,817 @@
+{
+  "runId": "golden-demo-monday",
+  "engineVersions": {
+    "analysis": "0.4.0",
+    "signals": {
+      "f2-aging": "1.0.0",
+      "f1-queue-wait": "1.0.0",
+      "f3-overdue": "1.0.0"
+    },
+    "contextSignals": {
+      "c6-wip-load": "1.0.0"
+    },
+    "costModels": {
+      "cm-aging-attention": "1.0.0",
+      "cm-overdue-attention": "1.0.0",
+      "cm-queue-wait-attention": "1.0.0"
+    }
+  },
+  "now": "2026-07-20T00:00:00Z",
+  "pricingPolicy": "report",
+  "batch": {
+    "id": "batch-golden-demo-monday",
+    "provider": "monday",
+    "mappingTemplateId": "monday-ops-board",
+    "mappingTemplateVersion": "1",
+    "importedAt": "2026-07-20T00:00:00Z",
+    "counts": {
+      "totalRows": 3,
+      "imported": 3,
+      "dropped": 0
+    },
+    "diagnostics": [],
+    "capability": {
+      "hasEventHistory": true,
+      "hasDueDates": true,
+      "hasLastUpdated": true,
+      "hasActors": true
+    },
+    "pseudonymizationScope": "costflow-golden",
+    "items": [
+      {
+        "id": "101",
+        "sourceId": "101",
+        "title": "Website redesign brief",
+        "stage": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "actor": {
+          "kind": "role",
+          "roleRef": "Founder"
+        },
+        "createdAt": "2026-06-05T00:00:00Z",
+        "dueAt": "2026-07-08",
+        "lastUpdatedAt": "2026-06-30T00:00:00Z"
+      },
+      {
+        "id": "102",
+        "sourceId": "102",
+        "title": "Vendor contract renewal",
+        "stage": {
+          "name": "Waiting for review",
+          "kind": "review"
+        },
+        "actor": {
+          "kind": "unknown",
+          "pseudonym": "anon-52bd7d863c6f"
+        },
+        "createdAt": "2026-06-10T00:00:00Z",
+        "dueAt": "2026-07-14",
+        "lastUpdatedAt": "2026-07-16T00:00:00Z"
+      },
+      {
+        "id": "103",
+        "sourceId": "103",
+        "title": "Spring campaign wrap-up",
+        "stage": {
+          "name": "Done",
+          "kind": "done"
+        },
+        "actor": {
+          "kind": "missing"
+        },
+        "createdAt": "2026-06-01T00:00:00Z",
+        "dueAt": null,
+        "lastUpdatedAt": "2026-06-20T00:00:00Z"
+      }
+    ],
+    "events": [
+      {
+        "workItemId": "101",
+        "from": null,
+        "to": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "at": "2026-06-05T00:00:00Z"
+      },
+      {
+        "workItemId": "102",
+        "from": null,
+        "to": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "at": "2026-06-10T00:00:00Z"
+      },
+      {
+        "workItemId": "102",
+        "from": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "to": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "at": "2026-06-18T00:00:00.000Z"
+      },
+      {
+        "workItemId": "102",
+        "from": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "to": {
+          "name": "Waiting for review",
+          "kind": "review"
+        },
+        "at": "2026-07-06T00:00:00.000Z"
+      },
+      {
+        "workItemId": "103",
+        "from": null,
+        "to": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "at": "2026-06-01T00:00:00Z"
+      },
+      {
+        "workItemId": "103",
+        "from": {
+          "name": "Backlog",
+          "kind": "queue"
+        },
+        "to": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "at": "2026-06-08T00:00:00.000Z"
+      },
+      {
+        "workItemId": "103",
+        "from": {
+          "name": "Working on it",
+          "kind": "active"
+        },
+        "to": {
+          "name": "Done",
+          "kind": "done"
+        },
+        "at": "2026-06-20T00:00:00.000Z"
+      }
+    ]
+  },
+  "assumptions": {
+    "id": "demo-monday-assumptions",
+    "version": "1",
+    "currency": "USD",
+    "rates": [
+      {
+        "roleRef": "Founder",
+        "hourlyRate": "100",
+        "provenance": "customer-customized"
+      }
+    ],
+    "defaultRate": {
+      "hourlyRate": "40",
+      "provenance": "customer-customized"
+    },
+    "parameters": {
+      "agingThresholdDays": {
+        "value": 14,
+        "provenance": "customer-customized"
+      },
+      "attentionHoursPerDay": {
+        "range": {
+          "low": "0.15",
+          "expected": "0.3",
+          "high": "0.6"
+        },
+        "provenance": "customer-customized"
+      },
+      "queueWaitAttentionHoursPerDay": {
+        "range": {
+          "low": "0.1",
+          "expected": "0.2",
+          "high": "0.4"
+        },
+        "provenance": "customer-customized"
+      },
+      "overdueAttentionHoursPerDay": {
+        "range": {
+          "low": "0.1",
+          "expected": "0.2",
+          "high": "0.4"
+        },
+        "provenance": "customer-accepted"
+      }
+    }
+  },
+  "detectors": [
+    {
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "signalName": "Aging / stagnation",
+      "status": "ran",
+      "instanceCount": 1
+    },
+    {
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "signalName": "Queue wait",
+      "status": "ran",
+      "instanceCount": 2
+    },
+    {
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "signalName": "Overdue exposure",
+      "status": "ran",
+      "instanceCount": 2
+    }
+  ],
+  "frictions": [
+    {
+      "id": "f2-aging:backlog",
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "frictionType": "aging",
+      "location": {
+        "stage": {
+          "name": "Backlog",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-beyond-threshold",
+        "value": 6
+      },
+      "evidence": [
+        {
+          "workItemId": "101",
+          "title": "Website redesign brief",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Founder"
+          },
+          "lastUpdatedAt": "2026-06-30T00:00:00Z",
+          "agingDays": 20,
+          "excessDays": 6
+        }
+      ]
+    },
+    {
+      "id": "f1-queue-wait:backlog",
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "frictionType": "queue-wait",
+      "location": {
+        "stage": {
+          "name": "Backlog",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-hours-waiting",
+        "value": 1440
+      },
+      "evidence": [
+        {
+          "workItemId": "101",
+          "title": "Website redesign brief",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Founder"
+          },
+          "waitHours": 1080,
+          "visits": 1,
+          "openAtAnalysisTime": true
+        },
+        {
+          "workItemId": "102",
+          "title": "Vendor contract renewal",
+          "actor": {
+            "kind": "unknown",
+            "pseudonym": "anon-52bd7d863c6f"
+          },
+          "waitHours": 192,
+          "visits": 1,
+          "openAtAnalysisTime": false
+        },
+        {
+          "workItemId": "103",
+          "title": "Spring campaign wrap-up",
+          "actor": {
+            "kind": "missing"
+          },
+          "waitHours": 168,
+          "visits": 1,
+          "openAtAnalysisTime": false
+        }
+      ]
+    },
+    {
+      "id": "f1-queue-wait:waiting-for-review",
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "frictionType": "queue-wait",
+      "location": {
+        "stage": {
+          "name": "Waiting for review",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-hours-waiting",
+        "value": 336
+      },
+      "evidence": [
+        {
+          "workItemId": "102",
+          "title": "Vendor contract renewal",
+          "actor": {
+            "kind": "unknown",
+            "pseudonym": "anon-52bd7d863c6f"
+          },
+          "waitHours": 336,
+          "visits": 1,
+          "openAtAnalysisTime": true
+        }
+      ]
+    },
+    {
+      "id": "f3-overdue:backlog",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "Backlog",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 12
+      },
+      "evidence": [
+        {
+          "workItemId": "101",
+          "title": "Website redesign brief",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Founder"
+          },
+          "dueAt": "2026-07-08",
+          "overdueDays": 12,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
+    },
+    {
+      "id": "f3-overdue:waiting-for-review",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "Waiting for review",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 6
+      },
+      "evidence": [
+        {
+          "workItemId": "102",
+          "title": "Vendor contract renewal",
+          "actor": {
+            "kind": "unknown",
+            "pseudonym": "anon-52bd7d863c6f"
+          },
+          "dueAt": "2026-07-14",
+          "overdueDays": 6,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "frictionInstanceId": "f2-aging:backlog",
+      "status": "priced",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:backlog",
+      "status": "priced",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:waiting-for-review",
+      "status": "priced",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:backlog",
+      "status": "priced",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:waiting-for-review",
+      "status": "priced",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0"
+    }
+  ],
+  "estimates": [
+    {
+      "frictionInstanceId": "f2-aging:backlog",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "90",
+        "expected": "180",
+        "high": "360"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "B",
+        "reasons": [
+          "B: Durations inferred from snapshot dates, not event history."
+        ]
+      },
+      "assumptionSetId": "demo-monday-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated attention cost of 1 item(s) aging beyond 14 days in stage \"Backlog\".",
+        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "aging-attention",
+            "workItemId": "101",
+            "excessDays": 6,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "100",
+            "rateSource": "rates.Founder",
+            "subtotal": {
+              "low": "90",
+              "expected": "180",
+              "high": "360"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.agingThresholdDays",
+            "value": "14 days",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "parameters.attentionHoursPerDay",
+            "value": "0.15–0.6 h/day (expected 0.3)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Founder",
+            "value": "100 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "101"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:backlog",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "510",
+        "expected": "1020",
+        "high": "2040"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "C",
+        "reasons": [
+          "C: Default hourly rate applied to item(s) with no actor.",
+          "C: Default hourly rate applied to unmapped (pseudonymized) actor(s).",
+          "B: Includes open stage intervals measured to the analysis time."
+        ]
+      },
+      "assumptionSetId": "demo-monday-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated follow-up cost of 3 item(s) waiting in stage \"Backlog\", observed from event history.",
+        "formula": "Σ over items: waitDays × queueWaitAttentionHoursPerDay × hourlyRate(role); waitDays = observed waitHours ÷ 24; low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "101",
+            "waitHours": 1080,
+            "waitDays": "45",
+            "visits": 1,
+            "openAtAnalysisTime": true,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "100",
+            "rateSource": "rates.Founder",
+            "subtotal": {
+              "low": "450",
+              "expected": "900",
+              "high": "1800"
+            }
+          },
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "102",
+            "waitHours": 192,
+            "waitDays": "8",
+            "visits": 1,
+            "openAtAnalysisTime": false,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "40",
+            "rateSource": "defaultRate:unmapped-actor",
+            "subtotal": {
+              "low": "32",
+              "expected": "64",
+              "high": "128"
+            }
+          },
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "103",
+            "waitHours": 168,
+            "waitDays": "7",
+            "visits": 1,
+            "openAtAnalysisTime": false,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "40",
+            "rateSource": "defaultRate:missing-actor",
+            "subtotal": {
+              "low": "28",
+              "expected": "56",
+              "high": "112"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "defaultRate:missing-actor",
+            "value": "40 USD/h",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "defaultRate:unmapped-actor",
+            "value": "40 USD/h",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "parameters.queueWaitAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Founder",
+            "value": "100 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "101",
+            "102",
+            "103"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:waiting-for-review",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "56",
+        "expected": "112",
+        "high": "224"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "C",
+        "reasons": [
+          "C: Default hourly rate applied to unmapped (pseudonymized) actor(s).",
+          "B: Includes open stage intervals measured to the analysis time."
+        ]
+      },
+      "assumptionSetId": "demo-monday-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated follow-up cost of 1 item(s) waiting in stage \"Waiting for review\", observed from event history.",
+        "formula": "Σ over items: waitDays × queueWaitAttentionHoursPerDay × hourlyRate(role); waitDays = observed waitHours ÷ 24; low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "102",
+            "waitHours": 336,
+            "waitDays": "14",
+            "visits": 1,
+            "openAtAnalysisTime": true,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "40",
+            "rateSource": "defaultRate:unmapped-actor",
+            "subtotal": {
+              "low": "56",
+              "expected": "112",
+              "high": "224"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "defaultRate:unmapped-actor",
+            "value": "40 USD/h",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "parameters.queueWaitAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "102"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f3-overdue:backlog",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "120",
+        "expected": "240",
+        "high": "480"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "A",
+        "reasons": []
+      },
+      "assumptionSetId": "demo-monday-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated chasing cost of 1 item(s) past their own due dates in stage \"Backlog\".",
+        "formula": "Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "overdue-attention",
+            "workItemId": "101",
+            "overdueDays": 12,
+            "dueAt": "2026-07-08",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "100",
+            "rateSource": "rates.Founder",
+            "subtotal": {
+              "low": "120",
+              "expected": "240",
+              "high": "480"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.overdueAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-accepted"
+          },
+          {
+            "ref": "rates.Founder",
+            "value": "100 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "101"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f3-overdue:waiting-for-review",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "24",
+        "expected": "48",
+        "high": "96"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "C",
+        "reasons": [
+          "C: Default hourly rate applied to unmapped (pseudonymized) actor(s)."
+        ]
+      },
+      "assumptionSetId": "demo-monday-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated chasing cost of 1 item(s) past their own due dates in stage \"Waiting for review\".",
+        "formula": "Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "overdue-attention",
+            "workItemId": "102",
+            "overdueDays": 6,
+            "dueAt": "2026-07-14",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "40",
+            "rateSource": "defaultRate:unmapped-actor",
+            "subtotal": {
+              "low": "24",
+              "expected": "48",
+              "high": "96"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "defaultRate:unmapped-actor",
+            "value": "40 USD/h",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "parameters.overdueAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-accepted"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "102"
+          ]
+        }
+      }
+    }
+  ],
+  "context": [
+    {
+      "signalId": "c6-wip-load",
+      "signalVersion": "1.0.0",
+      "signalName": "Work-in-flight load",
+      "statement": "2 of 2 in-flight items (100%) sit in queue- or review-kind stages; the largest single pool is stage \"Backlog\" (1 items).",
+      "facts": {
+        "inFlight": 2,
+        "queueKind": 1,
+        "reviewKind": 1,
+        "activeKind": 0,
+        "blockedKind": 0,
+        "waitingSharePercent": 100
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "data": [
+    { "gid": "s1", "name": "Intake" },
+    { "gid": "s2", "name": "Doing" },
+    { "gid": "s3", "name": "Legal review" }
+  ],
+  "next_page": null
+}

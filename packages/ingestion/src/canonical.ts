@@ -9,13 +9,13 @@ import type {
   WorkItemEvent,
 } from '@costflow/domain';
 import { parseIsoUtc } from '@costflow/domain';
-import { CsvImportError } from './providers/csv/provider';
+import { ImportError } from './errors';
 
 /**
- * Shared canonical assembly for API providers (doc 15 P1). Semantics are
- * intentionally identical to the CSV provider's; the CSV implementation
- * stays untouched in P1 to keep goldens byte-stable (debt D-16 — consolidate
- * in P2 when Monday becomes the second consumer).
+ * Shared canonical assembly for ALL providers (doc 15 P1/P2). Since the P2
+ * consolidation (D-16 closed) the CSV provider consumes these helpers too —
+ * one implementation of actor resolution, strict event validation, and
+ * capability assembly, exercised by every connector's conformance run.
  */
 
 /** R-20: mapped → role; unmapped → pseudonym (context required); empty → missing. */
@@ -28,7 +28,7 @@ export function resolveActorValue(
   const roleRef = actorRoleMap?.[rawValue];
   if (roleRef !== undefined) return { kind: 'role', roleRef };
   if (!pseudonymization) {
-    throw new CsvImportError(
+    throw new ImportError(
       'The data contains actor values that are not in actorRoleMap, and no pseudonymization ' +
         'context was provided. Supply one (CLI: --org and --salt-file) or complete the mapping.',
     );
@@ -63,7 +63,7 @@ export function orderAndValidateEvents(
   const fail = (problems: string[], kind: string): never => {
     const shown = problems.slice(0, 5);
     const suffix = problems.length > 5 ? ` (and ${problems.length - 5} more)` : '';
-    throw new CsvImportError(`Event history is invalid — ${kind}: ${shown.join('; ')}${suffix}.`);
+    throw new ImportError(`Event history is invalid — ${kind}: ${shown.join('; ')}${suffix}.`);
   };
 
   const unknownItems: string[] = [];

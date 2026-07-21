@@ -4,11 +4,17 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { importCsv, transformJira } from '@costflow/ingestion';
+import { importCsv, transformAsana, transformJira, transformMonday } from '@costflow/ingestion';
 import { runAnalysis } from '@costflow/analysis';
 import { buildReportModel, renderMarkdown } from '@costflow/reporting';
 import { buildPseudonymizationContext } from '../src/pseudonym';
-import { assumptionSetSchema, jiraMappingSchema, mappingTemplateSchema } from '../src/schemas';
+import {
+  assumptionSetSchema,
+  asanaMappingSchema,
+  jiraMappingSchema,
+  mappingTemplateSchema,
+  mondayMappingSchema,
+} from '../src/schemas';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const FIXTURES = join(ROOT, 'tools/golden/fixtures');
@@ -221,6 +227,144 @@ describe('golden dataset: demo-jira (provider SPI v2, doc 15 P1)', () => {
     expect(overdueReview?.estimate.confidence).toEqual({ tier: 'A', reasons: [] });
     expect(model.unpriced).toHaveLength(0);
     expect(model.run.batch.provider).toBe('jira');
+  });
+});
+
+describe('golden dataset: demo-monday (P2: the SPI promise test, first half)', () => {
+  function mondayGoldenRun() {
+    const dir = join(FIXTURES, 'monday');
+    return runAnalysis({
+      runId: 'golden-demo-monday',
+      now: NOW,
+      batch: transformMonday({
+        batchId: 'batch-golden-demo-monday',
+        itemsPages: [readFileSync(join(dir, 'raw', 'items-page-0.json'), 'utf8')],
+        activityPages: [readFileSync(join(dir, 'raw', 'activity-page-0.json'), 'utf8')],
+        mapping: mondayMappingSchema.parse(
+          JSON.parse(readFileSync(join(dir, 'mapping.json'), 'utf8')),
+        ),
+        importedAt: NOW,
+        pseudonymization: pseudonymization(),
+      }),
+      assumptions: assumptionSetSchema.parse(
+        JSON.parse(readFileSync(join(dir, 'assumptions.json'), 'utf8')),
+      ),
+    });
+  }
+
+  it('reproduces the frozen artifacts byte-exactly and deterministically', () => {
+    const artifact = JSON.stringify(mondayGoldenRun(), null, 2) + '\n';
+    expect(artifact).toBe(readFileSync(join(EXPECTED, 'demo-monday', 'run.json'), 'utf8'));
+    const report = renderMarkdown(buildReportModel(mondayGoldenRun()));
+    expect(report).toBe(readFileSync(join(EXPECTED, 'demo-monday', 'report.md'), 'utf8'));
+    expect(JSON.stringify(mondayGoldenRun())).toBe(JSON.stringify(mondayGoldenRun()));
+  });
+
+  it('matches the P2 hand-computed table (M1/M2/M3 + J1 arrival on real-shape data)', () => {
+    const model = buildReportModel(mondayGoldenRun());
+    expect(
+      model.ranked.map((r) => [
+        r.instance.frictionType,
+        r.instance.location.stage.name,
+        r.estimate.cost.expected,
+        r.estimate.confidence.tier,
+      ]),
+    ).toEqual([
+      ['queue-wait', 'Backlog', '1020', 'C'],
+      ['overdue', 'Backlog', '240', 'A'],
+      ['aging', 'Backlog', '180', 'B'],
+      ['queue-wait', 'Waiting for review', '112', 'C'],
+      ['overdue', 'Waiting for review', '48', 'C'],
+    ]);
+    // J1 on monday: item 101 never transitioned — its 45-day open Backlog
+    // wait derives from created_at + current status (two facts).
+    expect(model.ranked[0]?.instance.evidence[0]).toMatchObject({
+      workItemId: '101',
+      waitHours: 1080,
+      openAtAnalysisTime: true,
+    });
+    // M2: activity timestamps (17-digit) landed as exact ISO instants, and
+    // the Done item's closed Backlog interval (168h) still counts.
+    const backlog = model.ranked[0]?.instance;
+    if (backlog?.frictionType !== 'queue-wait') throw new Error('expected queue-wait first');
+    expect(backlog.evidence.map((e) => [e.workItemId, e.waitHours])).toEqual([
+      ['101', 1080],
+      ['102', 192],
+      ['103', 168],
+    ]);
+    expect(model.unpriced).toHaveLength(0);
+    expect(model.run.batch.provider).toBe('monday');
+  });
+});
+
+describe('golden dataset: demo-asana (P2: the SPI promise test, second half)', () => {
+  function asanaGoldenRun() {
+    const dir = join(FIXTURES, 'asana');
+    return runAnalysis({
+      runId: 'golden-demo-asana',
+      now: NOW,
+      batch: transformAsana({
+        batchId: 'batch-golden-demo-asana',
+        taskPages: [readFileSync(join(dir, 'raw', 'tasks-page-0.json'), 'utf8')],
+        storiesByTask: {
+          '9001': [readFileSync(join(dir, 'raw', 'stories-9001-0.json'), 'utf8')],
+          '9002': [readFileSync(join(dir, 'raw', 'stories-9002-0.json'), 'utf8')],
+          '9003': [readFileSync(join(dir, 'raw', 'stories-9003-0.json'), 'utf8')],
+        },
+        sectionsDoc: readFileSync(join(dir, 'raw', 'sections.json'), 'utf8'),
+        mapping: asanaMappingSchema.parse(
+          JSON.parse(readFileSync(join(dir, 'mapping.json'), 'utf8')),
+        ),
+        importedAt: NOW,
+        pseudonymization: pseudonymization(),
+      }),
+      assumptions: assumptionSetSchema.parse(
+        JSON.parse(readFileSync(join(dir, 'assumptions.json'), 'utf8')),
+      ),
+    });
+  }
+
+  it('reproduces the frozen artifacts byte-exactly and deterministically', () => {
+    const artifact = JSON.stringify(asanaGoldenRun(), null, 2) + '\n';
+    expect(artifact).toBe(readFileSync(join(EXPECTED, 'demo-asana', 'run.json'), 'utf8'));
+    const report = renderMarkdown(buildReportModel(asanaGoldenRun()));
+    expect(report).toBe(readFileSync(join(EXPECTED, 'demo-asana', 'report.md'), 'utf8'));
+    expect(JSON.stringify(asanaGoldenRun())).toBe(JSON.stringify(asanaGoldenRun()));
+  });
+
+  it('matches the P2 hand-computed table (A1/A2/A3 scoping + completion semantics)', () => {
+    const model = buildReportModel(asanaGoldenRun());
+    expect(
+      model.ranked.map((r) => [
+        r.instance.frictionType,
+        r.instance.location.stage.name,
+        r.estimate.cost.expected,
+        r.estimate.confidence.tier,
+      ]),
+    ).toEqual([
+      ['queue-wait', 'Intake', '476', 'C'],
+      ['queue-wait', 'Legal review', '352', 'B'],
+      ['overdue', 'Legal review', '176', 'A'],
+      ['aging', 'Intake', '84', 'C'],
+    ]);
+    // A2: the completed task sits in Done (terminal), so its overdue due date
+    // (2026-06-25) does NOT surface — only the in-flight breach prices.
+    const overdue = model.ranked[2];
+    expect(overdue?.instance.evidence.map((e) => e.workItemId)).toEqual(['9001']);
+    // A2 completion event closed 9003's intervals: 96h Intake, nothing open.
+    const intake = model.ranked[0]?.instance;
+    if (intake?.frictionType !== 'queue-wait') throw new Error('expected queue-wait first');
+    expect(intake.evidence.map((e) => [e.workItemId, e.waitHours])).toEqual([
+      ['9002', 1008],
+      ['9001', 168],
+      ['9003', 96],
+    ]);
+    // A3: the foreign-project move is visible as a diagnostic, not an event.
+    expect(model.run.batch.diagnostics.map((d) => d.message).join(' ')).toContain(
+      'section move(s) in other projects ignored',
+    );
+    expect(model.unpriced).toHaveLength(0);
+    expect(model.run.batch.provider).toBe('asana');
   });
 });
 

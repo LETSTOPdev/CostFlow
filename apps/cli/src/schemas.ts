@@ -1,7 +1,12 @@
 import { z } from 'zod';
 import type { AssumptionSet } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
-import type { JiraMapping, MappingTemplate } from '@costflow/ingestion';
+import type {
+  AsanaMapping,
+  JiraMapping,
+  MappingTemplate,
+  MondayMapping,
+} from '@costflow/ingestion';
 
 // Edge validation only (A2, D-3): domain types stay dependency-free; these
 // schemas are bound to them via `satisfies`, so drift is a compile error.
@@ -94,3 +99,30 @@ export const jiraMappingSchema = z
     actorRoleMap: z.record(z.string(), z.string().min(1)).optional(),
   })
   .strict() satisfies z.ZodType<JiraMapping, z.ZodTypeDef, unknown>;
+
+export const mondayMappingSchema = z
+  .object({
+    id: z.string().min(1),
+    version: z.string().min(1),
+    statusColumnId: z.string().min(1),
+    statusMap: z.record(z.string(), stageKind),
+    peopleColumnId: z.string().min(1).optional(),
+    dueDateColumnId: z.string().min(1).optional(),
+    activityLogsComplete: z.boolean(),
+    actorRoleMap: z.record(z.string(), z.string().min(1)).optional(),
+  })
+  .strict() satisfies z.ZodType<MondayMapping, z.ZodTypeDef, unknown>;
+
+export const asanaMappingSchema = z
+  .object({
+    id: z.string().min(1),
+    version: z.string().min(1),
+    projectGid: z.string().min(1),
+    statusMap: z.record(z.string(), stageKind),
+    completedStatus: z.string().min(1),
+    actorRoleMap: z.record(z.string(), z.string().min(1)).optional(),
+  })
+  .strict()
+  .refine((m) => m.statusMap[m.completedStatus] !== undefined, {
+    message: 'completedStatus must be a statusMap key',
+  }) satisfies z.ZodType<AsanaMapping, z.ZodTypeDef, unknown>;

@@ -1,0 +1,17 @@
+{
+  "id": "monday-ops-board",
+  "version": "1",
+  "statusColumnId": "status",
+  "statusMap": {
+    "Backlog": "queue",
+    "Working on it": "active",
+    "Waiting for review": "review",
+    "Done": "done"
+  },
+  "peopleColumnId": "person",
+  "dueDateColumnId": "date4",
+  "activityLogsComplete": true,
+  "actorRoleMap": {
+    "Maya Founder": "Founder"
+  }
+}

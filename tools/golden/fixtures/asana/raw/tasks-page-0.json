@@ -1,0 +1,57 @@
+{
+  "data": [
+    {
+      "gid": "9001",
+      "name": "Draft NDA for new vendor",
+      "created_at": "2026-06-15T00:00:00.000Z",
+      "modified_at": "2026-07-14T00:00:00.000Z",
+      "due_on": "2026-07-12",
+      "completed": false,
+      "completed_at": null,
+      "assignee": { "name": "Rina Legal" },
+      "memberships": [
+        {
+          "project": { "gid": "555" },
+          "section": { "gid": "s3", "name": "Legal review" }
+        }
+      ]
+    },
+    {
+      "gid": "9002",
+      "name": "Update onboarding checklist",
+      "created_at": "2026-06-08T00:00:00.000Z",
+      "modified_at": "2026-06-28T00:00:00.000Z",
+      "due_on": null,
+      "completed": false,
+      "completed_at": null,
+      "assignee": { "name": "Tomer Helper" },
+      "memberships": [
+        {
+          "project": { "gid": "555" },
+          "section": { "gid": "s1", "name": "Intake" }
+        }
+      ]
+    },
+    {
+      "gid": "9003",
+      "name": "Ship pricing page update",
+      "created_at": "2026-06-01T00:00:00.000Z",
+      "modified_at": "2026-07-02T00:00:00.000Z",
+      "due_on": "2026-06-25",
+      "completed": true,
+      "completed_at": "2026-07-02T00:00:00.000Z",
+      "assignee": null,
+      "memberships": [
+        {
+          "project": { "gid": "555" },
+          "section": { "gid": "s2", "name": "Doing" }
+        },
+        {
+          "project": { "gid": "999" },
+          "section": { "gid": "x9", "name": "Random" }
+        }
+      ]
+    }
+  ],
+  "next_page": null
+}

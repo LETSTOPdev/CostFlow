@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PseudonymizationContext } from '@costflow/domain';
-import { CsvImportError, importCsv } from '@costflow/ingestion';
+import { ImportError, importCsv } from '@costflow/ingestion';
 import type { MappingTemplate } from '@costflow/ingestion';
 
 const mapping: MappingTemplate = {
@@ -91,7 +91,7 @@ describe('csv provider (extract → map → land)', () => {
 
   it('rejects duplicate mapped headers instead of silently reading last-wins (regression: R-04)', () => {
     const csv = 'ID,Status,Status,Title,Actor,Updated\n1,Open,Done,A,known person,2026-06-01';
-    expect(() => run(csv)).toThrow(CsvImportError);
+    expect(() => run(csv)).toThrow(ImportError);
     expect(() => run(csv)).toThrow(/duplicate mapped column/i);
   });
 

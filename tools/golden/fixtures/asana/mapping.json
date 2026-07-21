@@ -1,0 +1,15 @@
+{
+  "id": "asana-legal-project",
+  "version": "1",
+  "projectGid": "555",
+  "statusMap": {
+    "Intake": "queue",
+    "Doing": "active",
+    "Legal review": "review",
+    "Done": "done"
+  },
+  "completedStatus": "Done",
+  "actorRoleMap": {
+    "Rina Legal": "Legal"
+  }
+}
