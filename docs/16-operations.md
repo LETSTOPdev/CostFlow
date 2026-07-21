@@ -151,15 +151,18 @@ the raw token.
 | Criterion | Status |
 |---|---|
 | Postgres contract suite, zero skips | ✅ PASSED on real Railway Postgres — see §11 (1 file, 10 tests, 0 skipped, 386ms) |
-| Live OIDC flow succeeds | Adapter + Auth0 config ready; live run pending (browser agent) |
-| Invited-testers-only restriction | Pending (browser agent) |
-| Deployed E2E Jira journey | Deploy kit ready; run pending on app.fbx1.com (browser agent) |
-| Logs & telemetry privacy audit | Pending (browser agent) |
+| Live OIDC flow succeeds | ✅ sign-in / callback / session / sign-back-in PASSED on the deployment |
+| Invited-testers-only restriction | ✅ PASSED (non-invited emails rejected) |
+| Logout SSO termination | ⚠️ DEFERRED — known non-blocking defect **D-19** (§11 Gate 2); Gate 2 left OPEN |
+| Deployed E2E Jira journey | ✅ PASSED on https://app.fbx1.com — see §11 Gate 3 |
+| Logs & telemetry privacy audit | ✅ PASSED (no credentials/titles/actor values/emails/customer vocabulary/assumption values) |
 | CLI / engine / goldens byte-identical | ✅ verified (git diff empty; full suite green) |
 
-**P4.2 is NOT complete**: it is marked complete only after the live Auth0
-flow (incl. invited-testers-only), the deployed Jira E2E, and the privacy
-audit all pass and their evidence is recorded here and in doc 09.
+**P4.2 is CONDITIONALLY COMPLETE (2026-07-22)** with exactly one deferred
+non-blocking defect: **D-19 — logout SSO termination** (Gate 2 stays OPEN).
+Gates 1 and 3 passed on real infrastructure. **Logout must be resolved
+before production hardening / broad customer launch** — see §11 Gate 2 and
+doc 09 for the full defect record and the FOLLOW-UP-LOGOUT item.
 
 ## 11. Live acceptance evidence
 
@@ -191,14 +194,44 @@ Local-agent corroboration (this repo, HEAD ef86159): full local gate green
 no test DB is bound locally); goldens, engine packages, and telemetry
 `derive.ts` byte-identical to the pre-web baseline `e3c86e6`.
 
-### Gate 2 — live Auth0 flow + invited-testers-only
+### Gate 2 — live Auth0 flow + invited-testers-only (NOT PASSED — deferred defect D-19)
 
-Pending (browser agent). Record here: sign-in, callback, session, logout,
-sign-back-in outcomes; confirmation that non-invited emails are rejected.
+Sign-in, authorization-code callback, session establishment,
+invited-testers-only gating (non-invited emails rejected), and sign-back-in
+all succeeded on the deployment. **Logout SSO termination is a known
+non-blocking defect (D-19)** and Gate 2 is deliberately left OPEN.
 
-### Gate 3 — deployed Jira E2E + privacy audit
+Defect summary (full record in doc 09 §"Deferred defect D-19"):
 
-Pending (browser agent). Record here: the 10-step journey on
-https://app.fbx1.com; persisted run available after a new session; log +
-telemetry privacy audit (no credentials, titles, actor values, emails,
-customer vocabulary, or assumption values).
+- App-side `POST /logout` validates session + CSRF, clears cookies, and
+  returns **302** to Auth0 `/oidc/logout` with `client_id` + encoded
+  `post_logout_redirect_uri`. Production diagnostic (`logout-attempt`, commit
+  `2fb63ef`) confirmed on a real request:
+  `session_present:true, csrf_present:true, csrf_match:true, status:302`.
+  Faithful cookie-jar regression suite passes.
+- Auth0 `/oidc/logout` works when reached directly (returns to
+  `/logged-out`).
+- Browser-visible behavior is unreliable; the one reproducible 503 occurred
+  only inside a Claude-controlled/debugged browser (automation artifact).
+- **No confirmed data loss, security leakage, or corruption.** Residual risk:
+  the Auth0 tenant SSO session may not always terminate in-browser, enabling
+  a silent re-auth on a protected route.
+- **FOLLOW-UP-LOGOUT (blocks broad launch):** retest in a fully independent
+  browser; if the failure is proven to occur *after* CSRF validation,
+  evaluate `id_token_hint` on `/oidc/logout`. Not implemented now; CSRF not
+  weakened. The sanitized `logout-attempt` diagnostic is intentionally
+  retained as the instrument for this follow-up.
+
+### Gate 3 — deployed Jira E2E + privacy audit (✅ PASSED 2026-07-22)
+
+Independent-browser acceptance run on https://app.fbx1.com. All steps
+passed: Jira import (real projects) · status→stage-kind mapping · actor→role
+mapping (pseudonymization) · assumption accept/customize (provenance) ·
+analysis run (job succeeded) · report generation · Runs page (`GET /runs`
+200) · run persistence across a fresh session. Privacy audit: no
+credentials, tokens, titles, actor values, emails, customer vocabulary, or
+assumption values in logs or telemetry.
+
+Deployment evidence (sanitized): `main` lineage `00d41a0 → 8a183d3 →
+a363e7a → 2fb63ef` served on Railway; `/healthz` 200 and `/readyz` 200
+stable. Railway deployment UUIDs (e.g. `c3250dcc`) are not git commits.

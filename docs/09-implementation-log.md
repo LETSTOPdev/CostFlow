@@ -1566,8 +1566,97 @@ pass with evidence here and in docs/16 §11.
   behavior proven identical by the byte-identical goldens.)
 
 **Gate 2 — live Auth0 sign-in/callback/session/logout/sign-back-in +
-invited-testers-only restriction: PENDING (browser agent).**
+invited-testers-only restriction: NOT PASSED (one deferred non-blocking
+defect — see below).** Sign-in, authorization-code callback, session
+establishment, invited-testers-only gating, and sign-back-in were all
+exercised successfully on the deployment (the Gate 3 journey depends on
+them). The single unresolved leg is **logout SSO termination** in a real
+browser — classified 2026-07-22 as a known non-blocking defect (D-19).
+Gate 2 is deliberately left OPEN until that defect is resolved; P4.2 is
+marked **conditionally complete** on the strength of Gates 1 and 3 with
+D-19 explicitly deferred.
 
 **Gate 3 — real Jira E2E on https://app.fbx1.com (persisted run available
-after a new session) + logs/telemetry privacy audit: PENDING (browser
-agent).**
+after a new session) + logs/telemetry privacy audit: ✅ PASSED
+(2026-07-22, independent-browser acceptance run).** Every step of the
+first-report journey succeeded on the live deployment:
+
+| Step | Result |
+|---|---|
+| Jira import (real projects) | ✅ passed |
+| Status → stage-kind mapping | ✅ passed |
+| Actor → role mapping (pseudonymization) | ✅ passed |
+| Assumption accept/customize (provenance) | ✅ passed |
+| Analysis run (job succeeds) | ✅ passed |
+| Report generation | ✅ passed |
+| Runs page (`GET /runs`, 200) | ✅ passed |
+| Run persistence across a fresh session | ✅ passed |
+| Logs/telemetry privacy audit | ✅ passed — no credentials, tokens, titles, actor values, emails, customer vocabulary, or assumption values observed |
+
+### Deferred defect D-19 — logout SSO termination (known, non-blocking) {#d-19}
+
+Classified 2026-07-22 as a **known non-blocking defect**; investigation is
+**stopped** here by directive and is not to be resumed without explicit
+instruction.
+
+- **App-side behavior is correct and proven.** `POST /logout` validates the
+  session and the per-session CSRF token, clears the session + OIDC-state
+  cookies, and returns **HTTP 302** to Auth0's RP-initiated end-session
+  endpoint (`/oidc/logout`) with `client_id` + encoded
+  `post_logout_redirect_uri`. The production sanitized diagnostic
+  (`logout-attempt`, commit `2fb63ef`) captured on a real request read
+  `mode: oidc, session_present: true, csrf_present: true, csrf_match: true,
+  status: 302` — the server accepts the form and redirects correctly. The
+  faithful rendered-form cookie-jar regression suite
+  (`apps/web/test/logout-repro.test.ts`) reproduces this exactly and passes.
+- **Auth0 endpoint works when reached directly** — `/oidc/logout` returns to
+  `https://app.fbx1.com/logged-out` as configured (Allowed Logout URLs set).
+- **The failure is browser-visible only and unreliable.** A manually driven
+  browser intermittently returned to an authenticated state after logout; the
+  one reproducible HTTP-503 was observed exclusively inside a
+  Claude-controlled/debugged browser session (the "Claude started debugging
+  this browser" banner was visible), i.e. an automation-layer artifact, not a
+  server defect. It could not be reproduced from a faithful cookie jar.
+- **Impact assessment.** No confirmed data loss, no security leakage, no data
+  corruption. The app-side session IS invalidated on logout (cookie cleared,
+  protected routes redirect to `/login`); the residual risk is that the Auth0
+  tenant SSO session may not always terminate in the browser, allowing a
+  silent re-auth on a protected route.
+- **Follow-up (must precede production hardening / broad customer launch):**
+  reproduce in a fully independent browser (Safari / mobile / a separate
+  Chrome profile with no automation), then — if the failure is proven to
+  occur *after* CSRF validation — evaluate retaining the `id_token` at the
+  callback and passing it as `id_token_hint` to `/oidc/logout`. **Not
+  implemented now; CSRF must not be weakened.** Tracked as **FOLLOW-UP-LOGOUT**.
+- **Diagnostics retained intentionally.** The `logout-attempt` line
+  (`mode, session_present, csrf_present, csrf_match` — booleans/enums only,
+  never raw tokens/session values/ID tokens) is safe by construction and is
+  the exact instrument the follow-up needs, so it is kept in place rather
+  than removed.
+
+### P4.2 completion record (2026-07-22) — conditionally complete
+
+P4.2 is marked **conditionally complete with one deferred non-blocking
+defect (D-19, logout SSO termination)**. Gate 1 (Postgres, zero-skip) and
+Gate 3 (deployed Jira E2E + privacy audit) PASSED on real infrastructure;
+Gate 2 is left OPEN for the logout leg only. Broad customer launch remains
+blocked on D-19.
+
+Deployment evidence (sanitized — service/variable names only, no secret
+value exposed):
+
+- **Commit lineage on `main`:** `00d41a0` (restore logout + Jira Cloud
+  search) → `8a183d3` (terminate OIDC logout + normalize pg timestamps) →
+  `a363e7a` (RP-initiated Auth0 SSO logout) → `2fb63ef` (sanitized logout
+  diagnostics). The deployment serves this lineage on Railway
+  (GitHub-connected auto-deploy).
+- **Health/readiness on the deployment:** `/healthz` → 200 and `/readyz` →
+  200, stable across repeated samples.
+- **Jira Cloud fix confirmed in production** (search migrated to
+  `/rest/api/3/search/jql` with `nextPageToken`); `GET /runs` renders (pg
+  `timestamptz` normalized).
+- Railway deployment identifiers are platform UUIDs (e.g. `c3250dcc`), not
+  git commits — do not conflate them with commit SHAs.
+
+Engine/CLI/goldens remain byte-identical to the pre-web baseline `e3c86e6`
+throughout P4.2 (no analysis surface changed).
