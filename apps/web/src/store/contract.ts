@@ -141,4 +141,7 @@ export interface Store {
 
   /** Startup recovery (plan §3): jobs left 'running' by a crash → failed/interrupted. */
   markInterruptedJobs(nowIso: string): Promise<number>;
+
+  /** Readiness probe (P4.2 §4): resolves iff the backing store is reachable. */
+  ping(): Promise<void>;
 }

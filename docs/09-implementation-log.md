@@ -1423,3 +1423,114 @@ directive); the web edge duplicates two small effectful helpers from the
 CLI edge (HMAC pseudonymization, telemetry file sink) because pure packages
 may not hold crypto/fs and apps may not import apps — noted as D-17,
 revisit only if a third edge appears.
+
+## Phase 2 / P4.2 — Production hardening (authorized 2026-07-21)
+
+Objective: prove the P4.1 journey against real production infrastructure —
+Railway (app + managed Postgres), Auth0 (managed OIDC), deployed to
+app.fbx1.com for invited internal testers only. Honest split recorded up
+front: the CODE hardening + deploy kit + runbooks are built and verified
+locally in this repo; the LIVE criteria (zero-skip Postgres contract run on
+the managed DB, live Auth0 flow, deployed E2E Jira journey) execute on the
+founder's Railway/Auth0/DNS/Jira accounts and are NOT claimed as done by me
+— they are handed over as a precise, ordered checklist. No deployment,
+credential, or live run is fabricated or simulated.
+
+### Concise plan
+
+1. **Config + startup validation** (`config.ts`): one typed loader; in
+   production (COSTFLOW_ENV=production) it REQUIRES oidc auth, DATABASE_URL
+   (memory store forbidden), 32-byte session + credential keys, and forces
+   secureCookies + trustProxy on; every failure is a named refuse-to-boot.
+2. **Security headers + CSP** (`security.ts`): CSP (default-src none;
+   script-src none; style-src self+inline for the one static stylesheet;
+   form-action self; frame-ancestors none), nosniff, frame DENY,
+   Referrer-Policy no-referrer, COOP, Permissions-Policy, HSTS in production.
+3. **Secure cookies + trusted proxy**: session + OIDC-state cookies gain
+   Secure in production; Fastify trustProxy so X-Forwarded-* from Railway's
+   edge is honored (correct redirect URIs, client ip).
+4. **Health + readiness**: `/healthz` liveness (process only, public),
+   `/readyz` readiness (store.ping → 200/503) for the platform's checks.
+5. **Sanitized operational logging**: default request logging disabled; one
+   onResponse line of {method, path (no query), status, durationMs} via an
+   injectable sink — never bodies, headers, tokens, emails, or customer
+   vocabulary. Redaction asserted by test.
+6. **Sign-out**: POST /logout (CSRF) clears the session — completes the
+   sign-out / sign-back-in leg of the live journey.
+7. **Deploy kit**: Dockerfile (non-root, prod deps, tsx entry),
+   .dockerignore, railway.json (build + healthcheck path + release command
+   that runs the Postgres contract suite then migrates), `test:pg` script
+   (runs the store-contract suite against COSTFLOW_TEST_DATABASE_URL with
+   ZERO skips — the zero-skip criterion runs here, on the managed DB).
+8. **Runbooks** (docs/16-operations.md): migrations, backup, restore,
+   credential rotation (session/credential keys + Auth0 secret + Jira token
+   re-encryption implication), rollback.
+
+### Live execution checklist (founder-run; requires accounts)
+
+Recorded in docs/16 §Deploy. In order: create Railway project + Postgres;
+set secrets (SESSION/CREDENTIAL keys, DATABASE_URL from the plugin, Auth0
+issuer/clientId/secret, redirect URI, COSTFLOW_ENV=production,
+COSTFLOW_AUTH=oidc); create Auth0 Regular Web App (callback
+https://app.fbx1.com/auth/callback), restrict to invited testers via an
+Auth0 connection/allowlist; point app.fbx1.com DNS at Railway; deploy (release
+command runs test:pg with zero skips + migrate); complete one real Jira
+journey incl. sign-out/back-in/persisted-run; confirm telemetry stayed local
+and logs carry no credentials/PII. Not public — testers only.
+
+### P4.2A record (2026-07-21) — Production Hardening Preparation (code + kit done; P4.2 NOT complete)
+
+P4.2 stays OPEN until all three live acceptance gates pass on real
+infrastructure and their evidence is recorded here and in docs/16:
+(1) Railway Postgres contract suite green with ZERO skips;
+(2) live Auth0 sign-in → callback → session → logout → sign-back-in;
+(3) full Jira journey on https://app.fbx1.com with the persisted run
+available after a new session. This P4.2A slice is the locally-verifiable
+preparation only.
+
+Founder decisions: Railway (app + managed Postgres), Auth0 (OIDC), zero-skip
+Postgres contract run executed against the managed DB at deploy time.
+
+Built and verified locally (this repo):
+- **config.ts** — one typed startup loader; production refuses dev auth,
+  memory store, and missing DATABASE_URL, and forces secureCookies +
+  trustProxy; every failure a named refuse-to-boot. Unit-tested.
+- **security.ts** — strict CSP (script-src none), nosniff, frame DENY,
+  Referrer-Policy, COOP, Permissions-Policy, production-only HSTS; `/healthz`
+  liveness and `/readyz` readiness (store.ping → 200/503); one sanitized
+  request-log line {method, path (no query), status, durationMs} via an
+  injectable sink — never bodies/headers/tokens/emails/customer vocabulary.
+- **Secure cookies + trusted proxy** — session + OIDC-state cookies gain
+  Secure in production; Fastify trustProxy honors Railway's X-Forwarded-*.
+- **Sign-out** — POST /logout (CSRF-checked) clears the session; the
+  sign-out/sign-back-in leg is testable end to end.
+- **store.ping()** on both adapters; **migrate.ts** release entry (idempotent
+  `if not exists`).
+- **Deploy kit** — Dockerfile (non-root, prod), .dockerignore, railway.json
+  (healthcheck /healthz), `pnpm test:pg` (fails fast unless
+  COSTFLOW_TEST_DATABASE_URL is set, then runs the store-contract suite with
+  ZERO skips against real Postgres), web `start`/`migrate` scripts.
+- **docs/16-operations.md** — env vars, deploy, migrations, backup, restore,
+  credential rotation, rollback, observability/privacy posture, the live E2E
+  checklist, and an honest success-criteria ledger.
+
+Verification: full `pnpm check` green — **239 tests + 1 skipped** (26 added
+for P4.2: headers/CSP, health/readiness, secure-cookie flags, sanitized-log
+redaction, sign-out + logout-CSRF, startup validation) · 123 modules, 0
+boundary violations · CLI, engine packages, telemetry core, and ALL goldens
+byte-identical since the P4.1 commit (git diff empty). Real boot smoke test
+(dev/memory): /healthz 200 with the full header set, /readyz ready, / →
+/login, sanitized logs confirmed.
+
+**Founder-gated (cannot be done from the dev environment; NOT claimed done —
+run per docs/16):** provision Railway + Postgres; set Auth0 app + secrets
+(testers-only); point app.fbx1.com DNS; deploy (release: `test:pg` zero-skip
+on a disposable DB, then `migrate`); complete the live Auth0 flow + one real
+Jira journey incl. sign-out/back-in/persisted-run; confirm logs/telemetry
+carry no credentials or customer vocabulary. Per project discipline, no
+deployment, live flow, or zero-skip DB result is fabricated or simulated —
+the three live success criteria remain open until the founder runs them.
+
+Debt **D-18**: credential-key rotation currently requires tenant reconnect
+(no bulk re-encryption job yet); design recorded in docs/16 §6, to build
+before the first external customer.

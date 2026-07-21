@@ -6,11 +6,18 @@ import type { AssumptionSet, Provenance, RangeSpec, StageKind } from '@costflow/
 import { STAGE_KINDS } from '@costflow/domain';
 import { observeJiraSearchPages } from '@costflow/ingestion';
 import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assumptions';
-import { registerAuthRoutes, sessionFrom, type AuthConfig, type Session } from './auth';
+import {
+  clearSession,
+  registerAuthRoutes,
+  sessionFrom,
+  type AuthConfig,
+  type Session,
+} from './auth';
 import { decryptSecret, encryptSecret } from './crypto';
 import { esc, layout, STEPS_NAV } from './html';
 import { executeJob } from './jobs';
 import { GatewayError, type JiraGateway } from './jira-gateway';
+import { registerSecurity } from './security';
 import {
   onboardingRank,
   type OnboardingState,
@@ -35,6 +42,11 @@ export interface ServerDeps {
   readonly jobNowFn?: () => string;
   /** Await job completion inside POST /runs (tests + small workspaces). */
   readonly awaitJobs?: boolean;
+  /** Production posture: strict HSTS + Fastify trustProxy for the edge. */
+  readonly production?: boolean;
+  readonly trustProxy?: boolean;
+  /** Injected structured log sink (tests capture it); defaults to stdout JSON. */
+  readonly logSink?: (line: Record<string, unknown>) => void;
 }
 
 const PROVENANCE_LABEL: Record<Provenance, string> = {
@@ -48,11 +60,26 @@ const DECIMAL = /^\d+(\.\d+)?$/;
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const { store, gateway, auth, telemetry } = deps;
-  const app = Fastify();
+  const app = Fastify({ trustProxy: deps.trustProxy === true });
   void app.register(fastifyCookie);
   void app.register(fastifyFormbody);
 
+  registerSecurity(app, {
+    production: deps.production === true,
+    store,
+    ...(deps.logSink ? { logSink: deps.logSink } : {}),
+  });
+
   registerAuthRoutes(app, auth, store, (ok) => telemetry(webEvent('tm-web-signin', { ok })));
+
+  app.post('/logout', async (request, reply) => {
+    const session = sessionFrom(request, auth.sessionKey);
+    if (session && (request.body as { csrf?: string })?.csrf !== session.csrf) {
+      return reply.code(403).send('Invalid CSRF token.');
+    }
+    clearSession(reply, auth.secureCookies === true);
+    return reply.redirect('/login');
+  });
 
   const requireSession = (request: FastifyRequest, reply: FastifyReply): Session | null => {
     const session = sessionFrom(request, auth.sessionKey);
@@ -161,7 +188,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
                  )
                  .join('')}</ul>`
          }
-         <p><a href="/connect">Connection</a> · <a href="/scope">Scope</a> · <a href="/mapping/statuses">Statuses</a> · <a href="/mapping/actors">Roles</a> · <a href="/assumptions">Assumptions</a></p>`,
+         <p><a href="/connect">Connection</a> · <a href="/scope">Scope</a> · <a href="/mapping/statuses">Statuses</a> · <a href="/mapping/actors">Roles</a> · <a href="/assumptions">Assumptions</a></p>
+         <form method="post" action="/logout">${csrfField(session)}<button type="submit">Sign out</button></form>`,
       ),
     );
   });

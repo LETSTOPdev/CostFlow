@@ -153,6 +153,10 @@ export class MemoryStore implements Store {
     return true;
   }
 
+  async ping(): Promise<void> {
+    // In-memory store is always reachable.
+  }
+
   async markInterruptedJobs(nowIso: string): Promise<number> {
     let count = 0;
     for (const [id, job] of this.jobs) {

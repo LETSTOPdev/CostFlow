@@ -23,6 +23,8 @@ export interface AuthConfig {
   readonly mode: 'dev' | 'oidc';
   readonly sessionKey: Buffer;
   readonly credentialKey: Buffer;
+  /** Set the Secure attribute on session/state cookies (production/HTTPS). */
+  readonly secureCookies?: boolean;
   readonly oidc?: {
     readonly issuer: string;
     readonly clientId: string;
@@ -38,12 +40,22 @@ export function sessionFrom(request: FastifyRequest, key: Buffer): Session | nul
   return verifyValue<Session>(raw, key);
 }
 
-export function setSession(reply: FastifyReply, session: Session, key: Buffer): void {
+export function setSession(
+  reply: FastifyReply,
+  session: Session,
+  key: Buffer,
+  secure = false,
+): void {
   reply.setCookie(SESSION_COOKIE, signValue(session, key), {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
+    secure,
   });
+}
+
+export function clearSession(reply: FastifyReply, secure = false): void {
+  reply.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, sameSite: 'lax', secure });
 }
 
 /** Finds or creates the user + tenant (first sign-in provisions the tenant + encrypted salt). */
@@ -91,7 +103,7 @@ export function registerAuthRoutes(
         return reply.code(400).send('Email required.');
       }
       const session = await signInByEmail(store, config.credentialKey, email);
-      setSession(reply, session, config.sessionKey);
+      setSession(reply, session, config.sessionKey, config.secureCookies === true);
       onSignIn(true);
       return reply.redirect('/');
     });
@@ -118,6 +130,7 @@ export function registerAuthRoutes(
       path: '/',
       httpOnly: true,
       sameSite: 'lax',
+      secure: config.secureCookies === true,
     });
     const url =
       `${discovery.authorization_endpoint}?response_type=code` +
@@ -168,7 +181,7 @@ export function registerAuthRoutes(
       return reply.code(502).send('Identity provider returned no email.');
     }
     const session = await signInByEmail(store, config.credentialKey, email);
-    setSession(reply, session, config.sessionKey);
+    setSession(reply, session, config.sessionKey, config.secureCookies === true);
     onSignIn(true);
     return reply.redirect('/');
   });

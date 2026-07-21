@@ -293,6 +293,10 @@ export class PgStore implements Store {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async ping(): Promise<void> {
+    await this.pool.query('select 1');
+  }
+
   async markInterruptedJobs(nowIso: string): Promise<number> {
     const result = await this.pool.query(
       `update jobs set status = 'failed', error_class = 'unexpected',

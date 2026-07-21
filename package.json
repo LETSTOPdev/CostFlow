@@ -14,6 +14,7 @@
     "format:check": "prettier --check .",
     "depcruise": "depcruise packages apps --config .dependency-cruiser.cjs",
     "test": "vitest run",
+    "test:pg": "node -e \"if(!process.env.COSTFLOW_TEST_DATABASE_URL){console.error('COSTFLOW_TEST_DATABASE_URL is required for the zero-skip Postgres contract run');process.exit(1)}\" && vitest run apps/web/test/store-contract.test.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test",
     "costflow": "tsx apps/cli/src/main.ts",
     "golden:update": "pnpm golden:update:demo-ops && pnpm golden:update:demo-flow && pnpm golden:update:demo-jira && pnpm golden:update:demo-monday && pnpm golden:update:demo-asana",

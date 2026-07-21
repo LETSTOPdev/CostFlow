@@ -46,22 +46,25 @@ export interface TestApp {
   store: MemoryStore;
   gateway: StubJiraGateway;
   events: TelemetryEvent[];
+  logs: Record<string, unknown>[];
 }
 
 export function makeApp(overrides: Partial<ServerDeps> = {}): TestApp {
   const store = new MemoryStore();
   const gateway = new StubJiraGateway();
   const events: TelemetryEvent[] = [];
+  const logs: Record<string, unknown>[] = [];
   const app = buildServer({
     store,
     gateway,
     auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
     telemetry: (event) => events.push(event),
+    logSink: (line) => logs.push(line),
     jobNowFn: () => NOW,
     awaitJobs: true,
     ...overrides,
   });
-  return { app, store, gateway, events };
+  return { app, store, gateway, events, logs };
 }
 
 export function cookieOf(response: { headers: Record<string, unknown> }, name: string): string {
