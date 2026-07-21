@@ -120,6 +120,14 @@ export const TELEMETRY_TAXONOMY: readonly TelemetryEventMeta[] = [
     kind: 'interaction',
     description: 'Report page viewed; flags the first view of a run.',
   },
+  // P4.3 data lifecycle (FR-22): permanent deletion. Scope enum + cascade
+  // count only — never an identity, workspace name, or customer id.
+  {
+    event: 'tm-web-data-deleted',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Permanent deletion completed: scope (workspace|org) and cascaded run count.',
+  },
 ];
 
 /** One JSONL line per event, fixed envelope key order — byte-deterministic. */

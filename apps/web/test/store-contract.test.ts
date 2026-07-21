@@ -120,6 +120,105 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       expect(await store.markRunViewed(tenant.id, 'run-v', '2026-07-21T03:00:00Z')).toBe(false);
       expect(await store.markRunViewed(tenant.id, 'missing', '2026-07-21T03:00:00Z')).toBe(false);
     });
+
+    // FR-22 / NFR-6 — deletion cascade (P4.3).
+
+    async function seedWorkspaceWithRun(
+      store: Store,
+      email: string,
+      runId: string,
+    ): Promise<{ tenantId: string; workspaceId: string }> {
+      const { tenant } = await store.createTenantWithUser(email, 's');
+      const workspace = await store.createWorkspace(tenant.id, {
+        provider: 'jira',
+        site: `https://${runId}.example`,
+        email,
+        tokenCiphertext: 'tok',
+      });
+      const job = await store.createJob(tenant.id, workspace.id);
+      await store.updateJob(tenant.id, job.id, {
+        status: 'succeeded',
+        runId,
+        finishedAt: '2026-07-21T00:00:00Z',
+      });
+      await store.createRun({
+        id: runId,
+        tenantId: tenant.id,
+        workspaceId: workspace.id,
+        createdAt: '2026-07-21T00:00:00Z',
+        runJson: '{}',
+        reportMd: '# r',
+        telemetryJsonl: '',
+      });
+      return { tenantId: tenant.id, workspaceId: workspace.id };
+    }
+
+    it('deleteWorkspace cascades to its jobs and runs, tenant-scoped', async () => {
+      const store = await makeStore();
+      const { tenantId, workspaceId } = await seedWorkspaceWithRun(store, 'del@y.example', 'run-d');
+      // A foreign tenant cannot delete it and nothing is removed.
+      const other = (await store.createTenantWithUser('foreign@y.example', 's')).tenant;
+      expect(await store.deleteWorkspace(other.id, workspaceId)).toBeNull();
+      expect(await store.getWorkspace(tenantId, workspaceId)).not.toBeNull();
+
+      const summary = await store.deleteWorkspace(tenantId, workspaceId);
+      expect(summary).toEqual({ workspaces: 1, jobs: 1, runs: 1 });
+      // Workspace, its jobs, and its runs are gone.
+      expect(await store.getWorkspace(tenantId, workspaceId)).toBeNull();
+      expect(await store.listJobsForWorkspace(tenantId, workspaceId)).toHaveLength(0);
+      expect(await store.getRun(tenantId, 'run-d')).toBeNull();
+      expect(await store.listRuns(tenantId)).toHaveLength(0);
+      // The tenant and its user survive (workspace-scoped erasure only).
+      expect(await store.getTenant(tenantId)).not.toBeNull();
+      expect(await store.findUserByEmail('del@y.example')).not.toBeNull();
+      // Idempotent: deleting again is a no-op null.
+      expect(await store.deleteWorkspace(tenantId, workspaceId)).toBeNull();
+    });
+
+    it('deleteWorkspace does not touch a sibling workspace in the same tenant', async () => {
+      const store = await makeStore();
+      const { tenant } = await store.createTenantWithUser('multi@y.example', 's');
+      const keep = await store.createWorkspace(tenant.id, {
+        provider: 'jira',
+        site: 'https://keep.example',
+        email: 'multi@y.example',
+        tokenCiphertext: 'tok',
+      });
+      const drop = await store.createWorkspace(tenant.id, {
+        provider: 'jira',
+        site: 'https://drop.example',
+        email: 'multi@y.example',
+        tokenCiphertext: 'tok',
+      });
+      await store.deleteWorkspace(tenant.id, drop.id);
+      expect(await store.getWorkspace(tenant.id, keep.id)).not.toBeNull();
+      expect(await store.getWorkspace(tenant.id, drop.id)).toBeNull();
+    });
+
+    it('deleteTenantData erases everything for the tenant and only that tenant', async () => {
+      const store = await makeStore();
+      const a = await seedWorkspaceWithRun(store, 'erase@y.example', 'run-a');
+      const b = await seedWorkspaceWithRun(store, 'survivor@y.example', 'run-b');
+
+      const summary = await store.deleteTenantData(a.tenantId);
+      expect(summary).toEqual({ workspaces: 1, jobs: 1, runs: 1 });
+      // Tenant A: tenant row, user, workspace, jobs, runs all gone.
+      expect(await store.getTenant(a.tenantId)).toBeNull();
+      expect(await store.findUserByEmail('erase@y.example')).toBeNull();
+      expect(await store.getWorkspace(a.tenantId, a.workspaceId)).toBeNull();
+      expect(await store.listRuns(a.tenantId)).toHaveLength(0);
+      expect(await store.listJobsForWorkspace(a.tenantId, a.workspaceId)).toHaveLength(0);
+      // Tenant B is untouched.
+      expect(await store.getTenant(b.tenantId)).not.toBeNull();
+      expect(await store.findUserByEmail('survivor@y.example')).not.toBeNull();
+      expect(await store.getRun(b.tenantId, 'run-b')).not.toBeNull();
+      // Idempotent: erasing an absent tenant yields zeros.
+      expect(await store.deleteTenantData(a.tenantId)).toEqual({
+        workspaces: 0,
+        jobs: 0,
+        runs: 0,
+      });
+    });
   });
 }
 

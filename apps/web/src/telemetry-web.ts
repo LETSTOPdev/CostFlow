@@ -18,7 +18,8 @@ export type WebTelemetryEventName =
   | 'tm-web-actors-mapped'
   | 'tm-web-assumptions-confirmed'
   | 'tm-web-run'
-  | 'tm-web-report-viewed';
+  | 'tm-web-report-viewed'
+  | 'tm-web-data-deleted';
 
 export function webEvent(
   event: WebTelemetryEventName,

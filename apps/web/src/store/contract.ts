@@ -102,6 +102,17 @@ export interface RunRecord {
   readonly telemetryJsonl: string;
 }
 
+/**
+ * Cascade counts returned by a deletion (FR-22 / NFR-6). Counts only — never
+ * identities — so a caller (and telemetry) can report the blast radius of an
+ * erasure without touching customer data.
+ */
+export interface DeletionSummary {
+  readonly workspaces: number;
+  readonly jobs: number;
+  readonly runs: number;
+}
+
 export interface Store {
   createTenantWithUser(
     email: string,
@@ -138,6 +149,23 @@ export interface Store {
   listRuns(tenantId: string): Promise<RunRecord[]>;
   /** Records a report view; resolves true iff this was the first view (funnel telemetry). */
   markRunViewed(tenantId: string, runId: string, nowIso: string): Promise<boolean>;
+
+  /**
+   * FR-22: permanently delete one workspace and everything derived from it
+   * (its jobs and runs), in a single atomic step, tenant-scoped. Resolves the
+   * cascade counts, or null if the workspace does not belong to the tenant —
+   * a foreign id deletes nothing (tenancy law). Runs are append-only during
+   * normal operation; explicit erasure is the ONLY path that removes them.
+   */
+  deleteWorkspace(tenantId: string, workspaceId: string): Promise<DeletionSummary | null>;
+
+  /**
+   * FR-22 / NFR-6 (GDPR erasure): permanently delete ALL of a tenant's data —
+   * runs, jobs, workspaces, users, and the tenant row itself — atomically.
+   * Resolves the cascade counts (idempotent: an already-absent tenant yields
+   * zeros). Only ever the caller's own tenant, scoped by the session.
+   */
+  deleteTenantData(tenantId: string): Promise<DeletionSummary>;
 
   /** Startup recovery (plan §3): jobs left 'running' by a crash → failed/interrupted. */
   markInterruptedJobs(nowIso: string): Promise<number>;

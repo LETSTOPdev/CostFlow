@@ -235,3 +235,53 @@ assumption values in logs or telemetry.
 Deployment evidence (sanitized): `main` lineage `00d41a0 → 8a183d3 →
 a363e7a → 2fb63ef` served on Railway; `/healthz` 200 and `/readyz` 200
 stable. Railway deployment UUIDs (e.g. `c3250dcc`) are not git commits.
+
+## 12. Data lifecycle & deletion (FR-22 / NFR-6, GDPR erasure) — P4.3
+
+Customers own their data and can erase it permanently at any time. Deletion
+is exposed in-app under **Settings → Data & privacy** (reachable from the
+authenticated header on every page, at any onboarding stage):
+
+- **Delete a workspace** — `POST /workspaces/:workspaceId/delete`. Removes the
+  workspace and every run and job derived from it, atomically, tenant-scoped.
+  Requires the per-session CSRF token and the typed confirmation `DELETE`.
+- **Delete the whole organization** — `POST /account/delete`. Permanently
+  erases all workspaces, runs, jobs, the user, and the tenant row itself,
+  atomically. Requires CSRF + the typed confirmation `DELETE ALL DATA`, then
+  clears the session and lands on `/logged-out`.
+
+Mechanics and guarantees:
+
+- **Cascade is enforced two ways.** `schema.sql` declares `on delete cascade`
+  on every tenant/workspace foreign key (fresh installs). The `PgStore` delete
+  methods ALSO delete child rows explicitly, child-first, inside one
+  transaction — so erasure holds on the already-deployed production database
+  whose FK constraints predate P4.3. A partial failure rolls back whole.
+- **Tenant-scoped.** Every delete takes `tenantId` first; a foreign id deletes
+  nothing (returns not-found). Proven by the store contract suite on both
+  adapters.
+- **Append-only preserved.** Runs are never mutated; explicit erasure is the
+  only path that removes them.
+- **Telemetry:** `tm-web-data-deleted {scope, cascadedRuns}` — enum + count
+  only; no identity, workspace name, project key, or site.
+- **No backup retention beyond the DB.** CostFlow keeps no separate copy of
+  customer runs; deletion in Postgres is the erasure. (If managed Railway
+  Postgres backups are enabled operationally, their retention window is the
+  one place an erased row can still exist — document and bound that window
+  before broad customer launch, per NFR-6.)
+
+Operator note: there is no admin-side bulk-delete tool yet; erasure is
+self-service per the routes above. A support-initiated erasure runs the same
+`deleteTenantData` path against the tenant id.
+
+## 13. Attribution integrity (FR-17) — the reporting-layer choke point
+
+No screen, export, or API response ever ranks or scores an individual;
+attribution is to process / stage / role / work-type only. Individual
+identities are pseudonymized at ingestion (NFR-5). The reporting layer adds a
+structural guard (`apps/web/src/attribution.ts`) on `GET /reports/:runId`: if
+a raw observed-actor identity ever reached the rendered report bytes, the
+response is **withheld (HTTP 500)** rather than emitted, an
+`attribution-guard-blocked {surface, leaked:<count>}` line is logged (count
+only, never the value), and the view is not recorded. This is enforcement,
+not UI convention (doc 06 §15).

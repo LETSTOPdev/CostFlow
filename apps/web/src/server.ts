@@ -6,6 +6,7 @@ import type { AssumptionSet, Provenance, RangeSpec, StageKind } from '@costflow/
 import { STAGE_KINDS } from '@costflow/domain';
 import { observeJiraSearchPages } from '@costflow/ingestion';
 import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assumptions';
+import { findIndividualAttribution } from './attribution';
 import {
   clearSession,
   oidcLogoutUrl,
@@ -926,13 +927,137 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const runId = (request.params as { runId: string }).runId;
     const run = await store.getRun(session.tenantId, runId);
     if (!run) return reply.code(404).send('Not found.');
+    const html = await marked.parse(run.reportMd);
+    // FR-17 attribution guard — the single reporting-layer choke point. A
+    // correct report is pseudonymized at ingestion and never names a person;
+    // if a raw individual identity nonetheless reached the rendered output,
+    // withhold the whole response rather than emit it. Fail closed, log a
+    // count only (never the leaking value), and do NOT count it as a view.
+    const workspace = await store.getWorkspace(session.tenantId, run.workspaceId);
+    const leaked = findIndividualAttribution(html, workspace?.observedActors ?? []);
+    if (leaked.length > 0) {
+      logLine({
+        level: 'error',
+        msg: 'attribution-guard-blocked',
+        surface: 'report',
+        leaked: leaked.length,
+      });
+      return reply
+        .code(500)
+        .type('text/html')
+        .send(
+          page(
+            session,
+            'Report withheld',
+            `<p class="error">This report was withheld: it would attribute cost to a named individual, which CostFlow never does. Nothing was changed. Please contact support.</p>`,
+          ),
+        );
+    }
     const nowIso = new Date(Date.now()).toISOString();
     const firstView = await store.markRunViewed(session.tenantId, runId, nowIso);
     telemetry(webEvent('tm-web-report-viewed', { firstView }));
-    const html = await marked.parse(run.reportMd);
     return reply
       .type('text/html')
       .send(page(session, `Report ${run.id}`, `<article>${html}</article>`));
+  });
+
+  // ---------- settings: data & privacy (FR-22 deletion, P4.3) ----------
+
+  const DELETE_WORKSPACE_PHRASE = 'DELETE';
+  const DELETE_ACCOUNT_PHRASE = 'DELETE ALL DATA';
+
+  app.get('/settings', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    const workspaces = await store.listWorkspaces(session.tenantId);
+    const workspaceCards = workspaces
+      .map(
+        (w) =>
+          `<div class="danger">
+             <h3>${esc(w.projectName ?? 'Unconfigured workspace')} (${esc(w.projectKey ?? w.provider)})</h3>
+             <p class="note">Jira site ${esc(w.site)} · deletes this workspace and every run and job derived from it. This cannot be undone.</p>
+             <form method="post" action="/workspaces/${esc(w.id)}/delete">${csrfField(session)}
+               <label>Type <strong>${DELETE_WORKSPACE_PHRASE}</strong> to confirm <input name="confirm" autocomplete="off" required></label>
+               <button type="submit">Delete this workspace's data</button>
+             </form>
+           </div>`,
+      )
+      .join('');
+    return reply.type('text/html').send(
+      page(
+        session,
+        'Settings',
+        `<h2>Data &amp; privacy</h2>
+         <p class="note">You control your data. Deleting is permanent and cascades to every
+         derived analysis (GDPR erasure). CostFlow keeps no copy.</p>
+         ${workspaces.length === 0 ? '<p class="note">No workspaces connected.</p>' : workspaceCards}
+         <div class="danger">
+           <h3>Delete everything</h3>
+           <p class="note">Permanently erase your entire organization: all workspaces, runs, jobs,
+           your account, and the organization itself. You will be signed out. This cannot be undone.</p>
+           <form method="post" action="/account/delete">${csrfField(session)}
+             <label>Type <strong>${DELETE_ACCOUNT_PHRASE}</strong> to confirm <input name="confirm" autocomplete="off" required></label>
+             <button type="submit">Delete my entire organization</button>
+           </form>
+         </div>`,
+      ),
+    );
+  });
+
+  app.post('/workspaces/:workspaceId/delete', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const workspaceId = (request.params as { workspaceId: string }).workspaceId;
+    const confirm = ((request.body as { confirm?: string }).confirm ?? '').trim();
+    if (confirm !== DELETE_WORKSPACE_PHRASE) {
+      return reply
+        .code(400)
+        .type('text/html')
+        .send(
+          page(
+            session,
+            'Settings',
+            `<p class="error">Deletion not confirmed — nothing was deleted. Type ${DELETE_WORKSPACE_PHRASE} exactly. <a href="/settings">Back</a></p>`,
+          ),
+        );
+    }
+    const summary = await store.deleteWorkspace(session.tenantId, workspaceId);
+    if (!summary) return reply.code(404).send('Not found.');
+    telemetry(webEvent('tm-web-data-deleted', { scope: 'workspace', cascadedRuns: summary.runs }));
+    return reply.redirect('/settings');
+  });
+
+  app.post('/account/delete', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const confirm = ((request.body as { confirm?: string }).confirm ?? '').trim();
+    if (confirm !== DELETE_ACCOUNT_PHRASE) {
+      return reply
+        .code(400)
+        .type('text/html')
+        .send(
+          page(
+            session,
+            'Settings',
+            `<p class="error">Deletion not confirmed — nothing was deleted. Type ${esc(DELETE_ACCOUNT_PHRASE)} exactly. <a href="/settings">Back</a></p>`,
+          ),
+        );
+    }
+    const summary = await store.deleteTenantData(session.tenantId);
+    telemetry(webEvent('tm-web-data-deleted', { scope: 'org', cascadedRuns: summary.runs }));
+    // The tenant and user rows are gone; the signed session cookie now points
+    // at nothing. Clear it so no dangling session survives, then land on the
+    // public post-logout page (local session only — no IdP round-trip here).
+    clearSession(reply, auth.secureCookies === true);
+    reply.clearCookie('cf_oidc_state', {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: auth.secureCookies === true,
+    });
+    return reply.redirect('/logged-out');
   });
 
   return app;

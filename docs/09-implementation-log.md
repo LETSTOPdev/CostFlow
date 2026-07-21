@@ -1660,3 +1660,93 @@ value exposed):
 
 Engine/CLI/goldens remain byte-identical to the pre-web baseline `e3c86e6`
 throughout P4.2 (no analysis surface changed).
+
+## Phase 2 / P4.3 — Data lifecycle & attribution integrity (authorized 2026-07-22)
+
+Authorized scope (the two named-but-unfinished P4 self-serve-spine DoD items,
+doc 15 §P4: "FR-17 attribution guard enforced at the API layer; deletion
+cascade works end-to-end"). Both are launch-blockers and pure spine/API work;
+the engine, detectors, pricing, simulations, and goldens are untouched. No AI
+behavior anywhere in this slice; deterministic throughout.
+
+### What shipped
+
+1. **FR-22 / NFR-6 — deletion cascade (GDPR erasure).** Two contract methods,
+   contract-first, on BOTH store adapters and covered by the shared contract
+   suite (memory always; Postgres when `COSTFLOW_TEST_DATABASE_URL` is set):
+   - `deleteWorkspace(tenantId, workspaceId)` — permanently deletes one
+     workspace and everything derived from it (its jobs and runs) atomically,
+     tenant-scoped; a foreign id deletes nothing and resolves `null`
+     (tenancy law). Returns a `DeletionSummary {workspaces, jobs, runs}`.
+   - `deleteTenantData(tenantId)` — permanently erases ALL of a tenant's data
+     (runs, jobs, workspaces, users, and the tenant row) atomically;
+     idempotent (absent tenant → zeros).
+   - Postgres does explicit ordered child-first deletes inside one
+     transaction, so erasure holds on the ALREADY-DEPLOYED database whose FKs
+     predate this slice. `schema.sql` additionally gains `on delete cascade`
+     on every tenant/workspace FK for fresh installs — belt-and-suspenders;
+     neither mechanism is relied on alone. Runs stay append-only in normal
+     operation — explicit erasure is the only path that removes them.
+2. **FR-17 — attribution guard (the single reporting-layer choke point,
+   doc 06 §15).** New pure module `apps/web/src/attribution.ts`
+   (`findIndividualAttribution` / `assertNoIndividualAttribution`,
+   `AttributionGuardError` carrying a COUNT only). Wired into
+   `GET /reports/:runId`: a correct report is pseudonymized at ingestion and
+   never names a person; if a raw observed-actor identity nonetheless reached
+   the rendered bytes, the whole response is **withheld (HTTP 500)**, a
+   sanitized `attribution-guard-blocked {surface, leaked:<count>}` line is
+   logged (never the value), and the view is NOT counted. Deterministic exact
+   match — no heuristics, no AI.
+3. **CSRF-protected delete flow with typed confirmation.** New `/settings`
+   ("Data & privacy") page, reachable from the authenticated header on every
+   page regardless of onboarding state (you can always delete). Two routes:
+   `POST /workspaces/:workspaceId/delete` (type `DELETE`) and
+   `POST /account/delete` (type `DELETE ALL DATA`). Both check the per-session
+   CSRF token and the exact confirmation phrase; a mismatch deletes nothing
+   (400). Org erasure additionally clears the session + OIDC-state cookies and
+   lands on the public `/logged-out` (local session only — no IdP round-trip,
+   logout/D-19 untouched).
+4. **Telemetry (additive, same envelope/privacy law).** `tm-web-data-deleted`
+   `{scope: 'workspace'|'org', cascadedRuns: <count>}` — enum + count only,
+   registered in the taxonomy; never an identity, workspace name, project key,
+   or site.
+
+### Proofs (all in the suite)
+
+- **Store contract (both adapters):** workspace delete cascades to its
+  jobs+runs and is tenant-scoped (foreign tenant → `null`, nothing removed),
+  leaves siblings and the tenant/user intact, and is idempotent; tenant
+  erasure removes every tenant row and ONLY that tenant's (a second tenant is
+  untouched), returns the cascade counts, and is idempotent.
+- **FR-17 route (fail-closed):** a run whose report would name a raw actor is
+  withheld (500, leaking body never emitted), logs a count only, records no
+  view; a clean pseudonymized report renders 200 and records the view. Pure
+  unit tests cover leak detection, empty-value skipping, and count-only errors.
+- **Delete flow (routes):** end-to-end workspace delete → report 404, tenant
+  survives, `tm-web-data-deleted {scope:'workspace', cascadedRuns:1}` with no
+  customer vocabulary in the event; typed-confirmation required (wrong phrase →
+  400, nothing deleted); CSRF required (bad token → 403, nothing deleted);
+  cross-tenant delete refused (404, victim data intact); org erasure removes
+  every row, clears the session cookie, lands on `/logged-out`, and a replayed
+  old cookie sees no data.
+
+### Invariants held
+
+- Engine, detectors, cost-engine, analysis, reporting, telemetry `derive.ts`,
+  and ALL goldens byte-identical to `e3c86e6` (git diff empty on those trees).
+  Telemetry change is additive (one registry entry) — the P3/P4.1 pattern.
+- Existing APIs preserved; the only additions are the four new routes and two
+  new store methods. Runs remain append-only (deletion ≠ mutation).
+- Privacy: no identity, name, project key, site, or token in any log, error,
+  or telemetry event added by this slice (asserted).
+- Logout/D-19 not touched; P4.2's deferred defect is unchanged.
+
+### Honest limits, named
+
+- The Postgres cascade is proven by the shared contract suite; this machine
+  has no local Postgres, so the live Pg run is executed at deploy time with a
+  bound `COSTFLOW_TEST_DATABASE_URL` (same honesty posture as P4.1/P4.2 — not
+  fabricated here).
+- `deleteWorkspace` operates on an explicit workspace id (multi-workspace
+  ready) though the onboarding UI is still sole-workspace; `/settings` lists
+  every workspace the tenant owns.

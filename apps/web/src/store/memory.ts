@@ -1,5 +1,6 @@
 import { newId } from '../crypto';
 import type {
+  DeletionSummary,
   JobRecord,
   RunRecord,
   Store,
@@ -151,6 +152,58 @@ export class MemoryStore implements Store {
     if (!this.runs.has(key) || this.runViews.has(key)) return false;
     this.runViews.set(key, nowIso);
     return true;
+  }
+
+  async deleteWorkspace(tenantId: string, workspaceId: string): Promise<DeletionSummary | null> {
+    const workspace = this.workspaces.get(workspaceId);
+    if (!workspace || workspace.tenantId !== tenantId) return null;
+    let jobs = 0;
+    for (const [id, job] of this.jobs) {
+      if (job.tenantId === tenantId && job.workspaceId === workspaceId) {
+        this.jobs.delete(id);
+        jobs += 1;
+      }
+    }
+    let runs = 0;
+    for (const [key, run] of this.runs) {
+      if (run.tenantId === tenantId && run.workspaceId === workspaceId) {
+        this.runs.delete(key);
+        this.runViews.delete(key);
+        runs += 1;
+      }
+    }
+    this.workspaces.delete(workspaceId);
+    return { workspaces: 1, jobs, runs };
+  }
+
+  async deleteTenantData(tenantId: string): Promise<DeletionSummary> {
+    let workspaces = 0;
+    for (const [id, workspace] of this.workspaces) {
+      if (workspace.tenantId === tenantId) {
+        this.workspaces.delete(id);
+        workspaces += 1;
+      }
+    }
+    let jobs = 0;
+    for (const [id, job] of this.jobs) {
+      if (job.tenantId === tenantId) {
+        this.jobs.delete(id);
+        jobs += 1;
+      }
+    }
+    let runs = 0;
+    for (const [key, run] of this.runs) {
+      if (run.tenantId === tenantId) {
+        this.runs.delete(key);
+        this.runViews.delete(key);
+        runs += 1;
+      }
+    }
+    for (const [id, user] of this.users) {
+      if (user.tenantId === tenantId) this.users.delete(id);
+    }
+    this.tenants.delete(tenantId);
+    return { workspaces, jobs, runs };
   }
 
   async ping(): Promise<void> {

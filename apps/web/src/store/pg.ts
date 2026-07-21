@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { newId } from '../crypto';
 import type {
+  DeletionSummary,
   JobRecord,
   RunRecord,
   Store,
@@ -315,6 +316,70 @@ export class PgStore implements Store {
       [tenantId, runId, nowIso],
     );
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async deleteWorkspace(tenantId: string, workspaceId: string): Promise<DeletionSummary | null> {
+    // One transaction; explicit ordered deletes (child rows first) so the
+    // cascade holds regardless of the FK on-delete rule on an already-deployed
+    // database. Tenant-scoped throughout; a foreign id deletes nothing.
+    const client = await this.pool.connect();
+    try {
+      await client.query('begin');
+      const exists = await client.query(
+        'select 1 from workspaces where tenant_id = $1 and id = $2',
+        [tenantId, workspaceId],
+      );
+      if (exists.rowCount === 0) {
+        await client.query('rollback');
+        return null;
+      }
+      const runs = await client.query(
+        'delete from runs where tenant_id = $1 and workspace_id = $2',
+        [tenantId, workspaceId],
+      );
+      const jobs = await client.query(
+        'delete from jobs where tenant_id = $1 and workspace_id = $2',
+        [tenantId, workspaceId],
+      );
+      await client.query('delete from workspaces where tenant_id = $1 and id = $2', [
+        tenantId,
+        workspaceId,
+      ]);
+      await client.query('commit');
+      return { workspaces: 1, jobs: jobs.rowCount ?? 0, runs: runs.rowCount ?? 0 };
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async deleteTenantData(tenantId: string): Promise<DeletionSummary> {
+    // GDPR erasure: every tenant-owned row plus the tenant itself, atomically,
+    // child tables before parents. Idempotent — an absent tenant yields zeros.
+    const client = await this.pool.connect();
+    try {
+      await client.query('begin');
+      const runs = await client.query('delete from runs where tenant_id = $1', [tenantId]);
+      const jobs = await client.query('delete from jobs where tenant_id = $1', [tenantId]);
+      const workspaces = await client.query('delete from workspaces where tenant_id = $1', [
+        tenantId,
+      ]);
+      await client.query('delete from users where tenant_id = $1', [tenantId]);
+      await client.query('delete from tenants where id = $1', [tenantId]);
+      await client.query('commit');
+      return {
+        workspaces: workspaces.rowCount ?? 0,
+        jobs: jobs.rowCount ?? 0,
+        runs: runs.rowCount ?? 0,
+      };
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async ping(): Promise<void> {
