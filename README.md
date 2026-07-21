@@ -1,18 +1,19 @@
 # CostFlow — Product Foundation
 
-**Status: M0 in progress.** The first vertical slice is implemented (CSV → canonical →
-F2 aging detector → cost model → formula trace → ranked CLI report, golden-tested).
-See [docs/09-implementation-log.md](docs/09-implementation-log.md). M1+ is not authorized.
+**Status: Phase 1 complete (M0 + M1 cycle 1, commit 4bc828f).** Detectors F1/F2/F3a,
+context signal c6, provenance-gated pricing policy, CLI pipeline, partner toolkit —
+all golden-tested and validated against one real workspace. Detector catalog frozen;
+Phase 2 (productization) planned in [docs/15](docs/15-productization-roadmap.md),
+awaiting approval. See [docs/09-implementation-log.md](docs/09-implementation-log.md).
 
 Quick start: `pnpm install && pnpm check`, then
-`pnpm costflow analyze --csv tools/golden/fixtures/demo-ops.csv --mapping tools/golden/fixtures/mapping.json --assumptions tools/golden/fixtures/assumptions.json`
+`pnpm costflow analyze --csv tools/golden/fixtures/demo-ops.csv --mapping tools/golden/fixtures/mapping.json --assumptions tools/golden/fixtures/assumptions.json --org demo --salt-file tools/golden/fixtures/salt.txt`
 
 CostFlow is a Business Friction Intelligence platform: it translates organizational
 friction (delays, rework, handoffs, blockers) into financial impact, so executives can
 prioritize work based on money instead of urgency.
 
-This repository currently contains only the product and architecture foundation
-documents. Read them in order:
+Foundation and design documents, in reading order:
 
 | Doc                                                                                   | Contents                                                                                                                        |
 | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -31,6 +32,7 @@ documents. Read them in order:
 | [12-overdue-detector.md](docs/12-overdue-detector.md)                                 | F3 overdue detector design (evidence-driven by M1): family split, algorithm, confidence, gaming analysis, recommendation        |
 | [13-detector-prioritization.md](docs/13-detector-prioritization.md)                   | Evidence-tagged ranking of all detector families: implementation priority vs long-term importance, launch-trio answer           |
 | [14-signal-taxonomy.md](docs/14-signal-taxonomy.md)                                   | Friction vs Context Signals: the four-part qualification test, per-family verdicts, migration criteria                          |
+| [15-productization-roadmap.md](docs/15-productization-roadmap.md)                     | Phase 2 plan: provider SPI v2, connector sequencing, self-serve spine, reporting UX, scenario engine                            |
 
 ## The three non-negotiable decisions
 

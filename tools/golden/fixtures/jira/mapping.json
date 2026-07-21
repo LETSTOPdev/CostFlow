@@ -1,0 +1,14 @@
+{
+  "id": "jira-ops-project",
+  "version": "1",
+  "statusMap": {
+    "To Do": "queue",
+    "In Progress": "active",
+    "Review": "review",
+    "Done": "done"
+  },
+  "actorRoleMap": {
+    "Noa Legal": "Legal",
+    "Dan Ops": "Ops"
+  }
+}

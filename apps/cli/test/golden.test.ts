@@ -4,11 +4,11 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { importCsv } from '@costflow/ingestion';
+import { importCsv, transformJira } from '@costflow/ingestion';
 import { runAnalysis } from '@costflow/analysis';
 import { buildReportModel, renderMarkdown } from '@costflow/reporting';
 import { buildPseudonymizationContext } from '../src/pseudonym';
-import { assumptionSetSchema, mappingTemplateSchema } from '../src/schemas';
+import { assumptionSetSchema, jiraMappingSchema, mappingTemplateSchema } from '../src/schemas';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const FIXTURES = join(ROOT, 'tools/golden/fixtures');
@@ -160,6 +160,67 @@ describe('golden datasets (NFR-1: the constitution)', () => {
     expect(model.unpriced).toHaveLength(2);
     const unpricedOverdue = model.unpriced.find((u) => u.instance.frictionType === 'overdue');
     expect(unpricedOverdue?.reason).toContain('overdueAttentionHoursPerDay');
+  });
+});
+
+describe('golden dataset: demo-jira (provider SPI v2, doc 15 P1)', () => {
+  function jiraGoldenRun() {
+    const dir = join(FIXTURES, 'jira');
+    return runAnalysis({
+      runId: 'golden-demo-jira',
+      now: NOW,
+      batch: transformJira({
+        batchId: 'batch-golden-demo-jira',
+        searchPages: [readFileSync(join(dir, 'raw', 'search-page-0.json'), 'utf8')],
+        mapping: jiraMappingSchema.parse(
+          JSON.parse(readFileSync(join(dir, 'mapping.json'), 'utf8')),
+        ),
+        importedAt: NOW,
+        pseudonymization: pseudonymization(),
+      }),
+      assumptions: assumptionSetSchema.parse(
+        JSON.parse(readFileSync(join(dir, 'assumptions.json'), 'utf8')),
+      ),
+    });
+  }
+
+  it('reproduces the frozen artifacts byte-exactly and deterministically', () => {
+    const artifact = JSON.stringify(jiraGoldenRun(), null, 2) + '\n';
+    expect(artifact).toBe(readFileSync(join(EXPECTED, 'demo-jira', 'run.json'), 'utf8'));
+    const report = renderMarkdown(buildReportModel(jiraGoldenRun()));
+    expect(report).toBe(readFileSync(join(EXPECTED, 'demo-jira', 'report.md'), 'utf8'));
+    expect(JSON.stringify(jiraGoldenRun())).toBe(JSON.stringify(jiraGoldenRun()));
+  });
+
+  it('matches the P1 hand-computed table: F1 finally priced on connector-derived events', () => {
+    const model = buildReportModel(jiraGoldenRun());
+    expect(
+      model.ranked.map((r) => [
+        r.instance.frictionType,
+        r.instance.location.stage.name,
+        r.estimate.cost.expected,
+        r.estimate.confidence.tier,
+      ]),
+    ).toEqual([
+      ['queue-wait', 'To Do', '1062', 'C'],
+      ['overdue', 'To Do', '342', 'A'],
+      ['aging', 'To Do', '297', 'B'],
+      ['queue-wait', 'Review', '288', 'B'],
+      ['overdue', 'Review', '240', 'A'],
+    ]);
+    // J1 arrival derivation feeds F1: OPS-3 never transitioned, yet its
+    // 49-day open queue wait is observed (created + current status facts).
+    const queueTop = model.ranked[0];
+    expect(queueTop?.instance.evidence[0]).toMatchObject({
+      workItemId: 'OPS-3',
+      waitHours: 1176,
+      openAtAnalysisTime: true,
+    });
+    // customer-accepted provenance prices in report mode at full confidence.
+    const overdueReview = model.ranked[4];
+    expect(overdueReview?.estimate.confidence).toEqual({ tier: 'A', reasons: [] });
+    expect(model.unpriced).toHaveLength(0);
+    expect(model.run.batch.provider).toBe('jira');
   });
 });
 

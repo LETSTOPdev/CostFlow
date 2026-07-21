@@ -1,5 +1,12 @@
 # 08 — Implementation Roadmap (Phase 1 Plan)
 
+> **Superseded in part (2026-07-20):** Phase 1 (M0 + M1 cycle 1) is complete
+> through commit 4bc828f. Phase-2 sequencing now lives in
+> [15-productization-roadmap.md](15-productization-roadmap.md) (founder
+> directive: productization before further detector families). The stack
+> decisions (§4), standards (§6–§13), and deferral tripwires (§15) of this
+> document remain in force.
+
 **Status: plan only. No code, scaffolding, APIs, database, or UI exist yet.
 Every decision here is subordinate to the principles in docs 00–07; where this
 document is silent, those documents govern.**

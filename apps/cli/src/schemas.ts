@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { AssumptionSet } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
-import type { MappingTemplate } from '@costflow/ingestion';
+import type { JiraMapping, MappingTemplate } from '@costflow/ingestion';
 
 // Edge validation only (A2, D-3): domain types stay dependency-free; these
 // schemas are bound to them via `satisfies`, so drift is a compile error.
@@ -85,3 +85,12 @@ export const assumptionSetSchema = z
       .strict(),
   })
   .strict() satisfies z.ZodType<AssumptionSet, z.ZodTypeDef, unknown>;
+
+export const jiraMappingSchema = z
+  .object({
+    id: z.string().min(1),
+    version: z.string().min(1),
+    statusMap: z.record(z.string(), stageKind),
+    actorRoleMap: z.record(z.string(), z.string().min(1)).optional(),
+  })
+  .strict() satisfies z.ZodType<JiraMapping, z.ZodTypeDef, unknown>;

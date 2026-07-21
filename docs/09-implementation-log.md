@@ -669,3 +669,95 @@ reporting 0.4.0 → 0.5.0 (simulation banner, provenance labels).
   both modes — policy gates pricing only.
 - Fixture/test provenance migrated (`customer`→`customer-customized`,
   `default`→`vendor-suggested`); local cu01 configs migrated (not committed).
+
+---
+
+## Phase 2 / P1 — Provider SPI v2 + Jira connector (authorized 2026-07-20)
+
+Doc 15 approved with the Telemetry milestone inserted as P3. P1 scope per
+doc 15; detector families remain frozen.
+
+### Execution checklist
+
+- [x] `spi.ts`: ProviderDescriptor (id, auth requirements, deliverable
+      capabilities), registry of descriptors (csv, jira). Types only — no
+      plugins, no runtime loading.
+- [x] `canonical.ts` (shared, pure): actor resolution + event ordering/strict
+      validation + capability/batch assembly for API providers. **Deliberate
+      P1 debt (D-16): the CSV provider keeps its own identical-semantics
+      implementation untouched (zero golden risk); consolidation is scheduled
+      for P2 when Monday forces the second consumer, with message-equality
+      tests.**
+- [x] `providers/jira/transform.ts` (pure): Jira search-page JSON (+
+      supplementary changelog pages) + JiraMapping {statusMap, actorRoleMap}
+      → ImportBatch with items AND events. Rules:
+      J1 arrival derivation — Jira changelogs record transitions only; the
+        initial status interval is derived from two facts: item created
+        timestamp + the from-status of the first transition (or current
+        status if no transitions). Deterministic, documented, NOT fabrication.
+      J2 truncation is a hard error — if changelog.total exceeds supplied
+        histories and no supplementary pages cover the gap, refuse (no silent
+        truncation of history).
+      J3 dropped issues (unmapped current status) take their events with them;
+        any transition referencing an unmapped status is a hard error (same
+        asymmetry as csv D-13).
+- [x] Conformance suite (`spi-conformance.ts` helper): determinism, id
+      uniqueness, capability honesty, count coherence, event ordering/refs,
+      no raw actor values, scope recording — run against BOTH csv and jira.
+- [x] Edge: `fetchers/jira.ts` (paginated search + changelog top-ups, token
+      via file, raw pages to disk + manifest) + `costflow fetch --provider
+      jira`; `costflow analyze --provider jira --raw <dir>`. Pure URL/page
+      helpers unit-tested; HTTP not exercised in tests (no credentials).
+- [x] Golden `demo-jira` (hand-computed below) + goldens for csv/flow
+      byte-untouched.
+
+### Hand-computed golden expectations — demo-jira (frozen before code)
+
+Fixture: 3 issues, project OPS; statuses To Do(queue)/In Progress(active)/
+Review(review)/Done(done); now = importedAt = 2026-07-20T00:00:00Z.
+Assumptions all customer-owned: Legal 120, Ops 90 (customized); defaultRate
+30 (customized); aging 14d + attention 0.15/0.3/0.6 (customized); queueWait
+0.1/0.2/0.4 (customized); **overdue 0.1/0.2/0.4 customer-ACCEPTED** — first
+golden exercise of the accepted state; everything prices in report mode.
+
+Derived events (J1): OPS-1 arrival To Do @created 06-20, →In Progress 06-25,
+→Review 07-08 (open to now: 12d). OPS-2 arrival To Do @06-22, →In Progress
+07-02 (active, open). OPS-3 arrival To Do @06-01, no transitions (open queue
+wait 49d). Actors: OPS-1 mapped Legal; OPS-2 UNMAPPED (pseudonym + default
+rate 30); OPS-3 mapped Ops.
+
+| Rank | Instance | Expected | Low | High | Conf |
+|---|---|---|---|---|---|
+| 1 | F1 queue-wait "To Do" (49d×90 + 10d×30 + 5d×120 @0.2) | 1062 | 531 | 2124 | C (default rate, unmapped actor; open intervals B) |
+| 2 | F3 overdue "To Do" (OPS-3: 19d×0.2×90) | 342 | 171 | 684 | A |
+| 3 | F2 aging "To Do" (OPS-3: 11 excess ×0.3×90) | 297 | 148.5 | 594 | B (snapshot) |
+| 4 | F1 queue-wait "Review" (OPS-1: 12d×0.2×120) | 288 | 144 | 576 | B (open interval) |
+| 5 | F3 overdue "Review" (OPS-1: 10d×0.2×120) | 240 | 120 | 480 | A |
+
+Magnitudes: F1 To Do 1536 item-hours (1176+240+120); F1 Review 288h.
+Unpriced: none. Context: 2 of 3 in-flight (67%) queue/review; largest pool
+tie of three singleton stages → alphabetical first "In Progress" (1 items).
+Due coverage: 2 of 3. F2's only finding: OPS-3 (25d aging, 11 excess).
+
+
+### P1 completion record (2026-07-20)
+
+- **All hand-computed demo-jira expectations matched on first generation** —
+  every rank, magnitude (1536h/288h), cost, and confidence tier, including
+  the J1-derived 49-day open queue wait on the never-transitioned issue and
+  the customer-accepted overdue assumption pricing at A in report mode.
+  **F1 queue-wait priced real-shape connector events for the first time.**
+- Full `pnpm check` green: **142/142 tests** (26 added: 8 J1/J2/J3 transform
+  units, 6×2 SPI conformance across csv+jira, 4 fetcher pure helpers, 2
+  demo-jira goldens) · 81 modules, 0 boundary violations · demo-ops/demo-flow
+  goldens byte-untouched (verified via git diff — empty).
+- Debt recorded **D-16**: CSV provider keeps its own identical-semantics
+  actor/event logic (untouched in P1 for golden stability); consolidation
+  scheduled for P2 when Monday makes `canonical.ts` the required shared path.
+  Also noted: the shared error class is still NAMED CsvImportError while now
+  serving all providers — rename to ImportError in the P2 consolidation.
+- Live validation deliberately pending: the fetcher's HTTP path is untested
+  against a real Jira site (no credentials exist); pure helpers are unit-
+  tested. First real Jira workspace = fetcher shakedown + Cycle-2 wake.
+- Telemetry inserted as P3 in doc 15 per founder directive (derived-not-
+  sprayed, versioned taxonomy, privacy-preserving, local-first/opt-in).
