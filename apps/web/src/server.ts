@@ -75,7 +75,19 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   app.post('/logout', async (request, reply) => {
     const session = sessionFrom(request, auth.sessionKey);
-    if (session && (request.body as { csrf?: string })?.csrf !== session.csrf) {
+    const bodyCsrf = (request.body as { csrf?: string })?.csrf;
+    // Sanitized structured diagnostics (booleans only — never raw token or
+    // session values) so a production logout failure is diagnosable: is the
+    // session cookie present, is a csrf field present, does it match?
+    logLine({
+      level: 'info',
+      msg: 'logout-attempt',
+      mode: auth.mode,
+      session_present: session !== null,
+      csrf_present: bodyCsrf !== undefined,
+      csrf_match: session ? bodyCsrf === session.csrf : null,
+    });
+    if (session && bodyCsrf !== session.csrf) {
       return reply.code(403).send('Invalid CSRF token.');
     }
     // Invalidate the local CostFlow session FIRST — always, before any
