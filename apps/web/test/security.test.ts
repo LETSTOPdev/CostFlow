@@ -98,7 +98,12 @@ describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', 
 
   it('a rejected connection stores nothing and reports the error class', async () => {
     const t = makeApp();
-    t.gateway.failListWith = new GatewayError('auth-error', 'Jira rejected the credentials (401).');
+    t.gateway.failListWith = new GatewayError(
+      'auth-error',
+      'list-projects',
+      'Jira rejected the credentials (401).',
+      401,
+    );
     const cookie = await signIn(t, 'r@b.example');
     const response = await post(t, cookie, '/connect', {
       site: 'https://r.atlassian.net',

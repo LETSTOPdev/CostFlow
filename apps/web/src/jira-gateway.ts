@@ -2,6 +2,7 @@ import {
   issuesNeedingChangelogTopUp,
   jiraChangelogUrl,
   jiraProjectsUrl,
+  jiraSearchNextPageToken,
   jiraSearchUrl,
 } from '@costflow/ingestion';
 
@@ -28,10 +29,21 @@ export interface JiraFetchResult {
   readonly supplementaryChangelogs: Record<string, string[]>;
 }
 
+/**
+ * Sanitized gateway failure (P4.2 defect 2 diagnostics). Carries the STAGE
+ * that failed (`list-projects` | `search` | `changelog`) and, when the server
+ * answered, the HTTP status — but never the URL, credentials, or any customer
+ * data. This is what lets a live retest identify the failing stage/status
+ * from a screenshot without leaking secrets.
+ */
+export type JiraStage = 'list-projects' | 'search' | 'changelog';
+
 export class GatewayError extends Error {
   constructor(
     readonly errorClass: 'auth-error' | 'fetch-error',
+    readonly stage: JiraStage,
     message: string,
+    readonly status?: number,
   ) {
     super(message);
     this.name = 'GatewayError';
@@ -48,7 +60,11 @@ const PAGE_SIZE = 100;
 export class HttpJiraGateway implements JiraGateway {
   constructor(private fetchFn: typeof fetch = fetch) {}
 
-  private async getJson(connection: JiraConnection, url: string): Promise<string> {
+  private async getJson(
+    connection: JiraConnection,
+    url: string,
+    stage: JiraStage,
+  ): Promise<string> {
     const authHeader = `Basic ${Buffer.from(`${connection.email}:${connection.token}`).toString('base64')}`;
     let response: Response;
     try {
@@ -57,13 +73,23 @@ export class HttpJiraGateway implements JiraGateway {
       });
     } catch {
       // Never echo the underlying error — it can embed the request (plan §2).
-      throw new GatewayError('fetch-error', 'Could not reach the Jira site.');
+      throw new GatewayError('fetch-error', stage, `Could not reach Jira (${stage}).`);
     }
     if (response.status === 401 || response.status === 403) {
-      throw new GatewayError('auth-error', `Jira rejected the credentials (${response.status}).`);
+      throw new GatewayError(
+        'auth-error',
+        stage,
+        `Jira rejected the credentials at ${stage} (HTTP ${response.status}).`,
+        response.status,
+      );
     }
     if (!response.ok) {
-      throw new GatewayError('fetch-error', `Jira request failed (${response.status}).`);
+      throw new GatewayError(
+        'fetch-error',
+        stage,
+        `Jira request failed at ${stage} (HTTP ${response.status}).`,
+        response.status,
+      );
     }
     return response.text();
   }
@@ -75,6 +101,7 @@ export class HttpJiraGateway implements JiraGateway {
       const text = await this.getJson(
         connection,
         jiraProjectsUrl(connection.site, startAt, PAGE_SIZE),
+        'list-projects',
       );
       const doc = JSON.parse(text) as {
         values?: { key?: string; name?: string }[];
@@ -93,17 +120,17 @@ export class HttpJiraGateway implements JiraGateway {
 
   async fetchAll(connection: JiraConnection, projectKey: string): Promise<JiraFetchResult> {
     const searchPages: string[] = [];
-    let startAt = 0;
+    let pageToken: string | undefined;
     for (;;) {
       const text = await this.getJson(
         connection,
-        jiraSearchUrl(connection.site, projectKey, startAt, PAGE_SIZE),
+        jiraSearchUrl(connection.site, projectKey, pageToken, PAGE_SIZE),
+        'search',
       );
       searchPages.push(text);
-      const doc = JSON.parse(text) as { issues?: unknown[]; total?: number };
-      const fetched = startAt + (doc.issues?.length ?? 0);
-      if ((doc.issues?.length ?? 0) === 0 || fetched >= (doc.total ?? fetched)) break;
-      startAt = fetched;
+      const next = jiraSearchNextPageToken(text);
+      if (next === null) break;
+      pageToken = next;
     }
 
     const supplementaryChangelogs: Record<string, string[]> = {};
@@ -117,6 +144,7 @@ export class HttpJiraGateway implements JiraGateway {
         const text = await this.getJson(
           connection,
           jiraChangelogUrl(connection.site, key, clStart, PAGE_SIZE),
+          'changelog',
         );
         (supplementaryChangelogs[key] ??= []).push(text);
         const doc = JSON.parse(text) as { values?: unknown[]; total?: number; isLast?: boolean };

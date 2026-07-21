@@ -41,7 +41,9 @@ describe('job lifecycle, failure, and retry (doc 09 P4.1 plan §3/§7)', () => {
     const cookie = await onboardToReady(t, 'jobs@acme.example');
     t.gateway.failFetchWith = new GatewayError(
       'auth-error',
+      'search',
       'Jira rejected the credentials (401).',
+      401,
     );
 
     const failedRun = await post(t, cookie, '/runs', {});

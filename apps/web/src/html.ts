@@ -9,7 +9,18 @@ export function esc(value: string): string {
     .replaceAll("'", '&#39;');
 }
 
-export function layout(title: string, body: string): string {
+/**
+ * Page shell. When `csrf` is provided (authenticated pages), the shared
+ * header carries a CSRF-protected sign-out form so logout is reachable from
+ * every authenticated page. Public pages omit it (no session, no token).
+ */
+export function layout(title: string, body: string, csrf?: string): string {
+  const signOut =
+    csrf === undefined
+      ? ''
+      : ` · <form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
+          csrf,
+        )}"><button type="submit">Sign out</button></form>`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -27,10 +38,13 @@ export function layout(title: string, body: string): string {
   .note { color: #555; font-size: 0.9rem; }
   .steps { color: #555; font-size: 0.85rem; margin-bottom: 1rem; }
   button { margin-top: 0.75rem; }
+  nav { display: flex; gap: 0.5rem; align-items: baseline; }
+  .signout { display: inline; margin: 0; }
+  .signout button { margin: 0; background: none; border: none; color: #0645ad; cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
 </style>
 </head>
 <body>
-<header><h1>CostFlow</h1><nav><a href="/">Home</a> · <a href="/runs">Runs</a></nav></header>
+<header><h1>CostFlow</h1><nav><a href="/">Home</a> · <a href="/runs">Runs</a>${signOut}</nav></header>
 ${body}
 </body>
 </html>`;

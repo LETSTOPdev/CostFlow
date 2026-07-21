@@ -150,7 +150,55 @@ the raw token.
 
 | Criterion | Status |
 |---|---|
-| Postgres contract suite, zero skips | Harness ready (`pnpm test:pg`); RUN pending on a real DB (founder) |
-| Live OIDC flow succeeds | Adapter + Auth0 config ready; live run pending (founder) |
-| Deployed E2E Jira journey | Deploy kit ready; run pending on app.fbx1.com (founder) |
+| Postgres contract suite, zero skips | ✅ PASSED on real Railway Postgres — see §11 (1 file, 10 tests, 0 skipped, 386ms) |
+| Live OIDC flow succeeds | Adapter + Auth0 config ready; live run pending (browser agent) |
+| Invited-testers-only restriction | Pending (browser agent) |
+| Deployed E2E Jira journey | Deploy kit ready; run pending on app.fbx1.com (browser agent) |
+| Logs & telemetry privacy audit | Pending (browser agent) |
 | CLI / engine / goldens byte-identical | ✅ verified (git diff empty; full suite green) |
+
+**P4.2 is NOT complete**: it is marked complete only after the live Auth0
+flow (incl. invited-testers-only), the deployed Jira E2E, and the privacy
+audit all pass and their evidence is recorded here and in doc 09.
+
+## 11. Live acceptance evidence
+
+### Gate 1 — Postgres migration + zero-skip contract suite (PASSED 2026-07-21)
+
+Sanitized evidence (service/variable names only — no DB URL, password,
+token, or connection-string value was exposed):
+
+1. **Production migration** — Railway web console ran
+   `pnpm --filter @costflow/web migrate` against the production Railway
+   Postgres (via `DATABASE_URL`). Result: SUCCESS —
+   "Migration applied and database reachable."
+2. **Disposable test database** — a SEPARATE Railway Postgres service
+   (`Postgres-MmLy`) was used only for contract testing;
+   `COSTFLOW_TEST_DATABASE_URL` referenced that disposable service. The
+   production DB was never used for tests (per §2 step 4).
+3. **Contract suite** — `pnpm test:pg` → Test Files: 1 passed · Tests:
+   10 passed · Skipped: 0 · Duration: 386ms. Zero-skip criterion met on a
+   real Postgres engine.
+4. **Cleanup** — `COSTFLOW_TEST_DATABASE_URL` removed; disposable service
+   `Postgres-MmLy` and its orphaned volume deleted; only production Postgres
+   remains.
+5. **Privacy** — only service and variable NAMES were recorded; no secret
+   value was exposed.
+
+Local-agent corroboration (this repo, HEAD ef86159): full local gate green
+(`pnpm check` — typecheck + lint + prettier + dependency-cruiser 0 violations
++ vitest 239 passed / 1 skipped, the single skip being the pg contract when
+no test DB is bound locally); goldens, engine packages, and telemetry
+`derive.ts` byte-identical to the pre-web baseline `e3c86e6`.
+
+### Gate 2 — live Auth0 flow + invited-testers-only
+
+Pending (browser agent). Record here: sign-in, callback, session, logout,
+sign-back-in outcomes; confirmation that non-invited emails are rejected.
+
+### Gate 3 — deployed Jira E2E + privacy audit
+
+Pending (browser agent). Record here: the 10-step journey on
+https://app.fbx1.com; persisted run available after a new session; log +
+telemetry privacy audit (no credentials, titles, actor values, emails,
+customer vocabulary, or assumption values).

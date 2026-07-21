@@ -6,14 +6,32 @@
 
 const FIELDS = 'summary,status,assignee,created,updated,duedate';
 
+/**
+ * Enhanced JQL search (`/rest/api/3/search/jql`). The legacy
+ * `GET /rest/api/3/search` was deprecated and removed on current Jira Cloud
+ * (returns 4xx/410), which is what made project import fail after the project
+ * list — served by a different, still-live endpoint — succeeded (P4.2 defect
+ * 2). This endpoint paginates by an opaque `nextPageToken` cursor, not
+ * `startAt`, and returns `{ issues, nextPageToken?, isLast? }`. `fields` must
+ * be requested explicitly (it returns only id/key otherwise); `expand`
+ * carries the changelog for transition history.
+ */
 export function jiraSearchUrl(
   site: string,
   projectKey: string,
-  startAt: number,
+  pageToken: string | undefined,
   pageSize: number,
 ): string {
   const jql = encodeURIComponent(`project = "${projectKey}" ORDER BY created ASC`);
-  return `${site.replace(/\/$/, '')}/rest/api/3/search?jql=${jql}&fields=${FIELDS}&expand=changelog&maxResults=${pageSize}&startAt=${startAt}`;
+  const base = `${site.replace(/\/$/, '')}/rest/api/3/search/jql?jql=${jql}&fields=${FIELDS}&expand=changelog&maxResults=${pageSize}`;
+  return pageToken ? `${base}&nextPageToken=${encodeURIComponent(pageToken)}` : base;
+}
+
+/** Pure: the cursor for the next search page, or null when the page is last. */
+export function jiraSearchNextPageToken(searchPageText: string): string | null {
+  const doc = JSON.parse(searchPageText) as { nextPageToken?: string; isLast?: boolean };
+  if (doc.isLast === true) return null;
+  return doc.nextPageToken ?? null;
 }
 
 export function jiraChangelogUrl(

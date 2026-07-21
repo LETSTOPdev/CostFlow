@@ -14,6 +14,7 @@ export type { JiraMapping, JiraTransformInput } from './providers/jira/transform
 export { transformJira } from './providers/jira/transform';
 export {
   jiraSearchUrl,
+  jiraSearchNextPageToken,
   jiraChangelogUrl,
   jiraProjectsUrl,
   issuesNeedingChangelogTopUp,

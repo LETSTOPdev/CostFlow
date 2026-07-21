@@ -99,6 +99,33 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const csrfField = (session: Session): string =>
     `<input type="hidden" name="csrf" value="${esc(session.csrf)}">`;
 
+  // Authenticated page shell: renders the shared header with a CSRF-protected
+  // sign-out control reachable from EVERY authenticated page (connect, scope,
+  // mapping, assumptions, dashboard, runs, reports). Unauthenticated pages
+  // (dev/OIDC /login) do not use this — no session, no logout control.
+  const page = (session: Session, title: string, body: string): string =>
+    layout(title, body, session.csrf);
+
+  // Sanitized diagnostics for Jira gateway failures (P4.2 defect 2): the
+  // stage, error class, and HTTP status — never URLs, credentials, issue
+  // titles, actor names, or customer data.
+  const logLine =
+    deps.logSink ?? ((line: Record<string, unknown>) => console.log(JSON.stringify(line)));
+  const jiraFailure = (error: unknown): { errorClass: string; stage: string; status?: number } => {
+    if (error instanceof GatewayError) {
+      return {
+        errorClass: error.errorClass,
+        stage: error.stage,
+        ...(error.status !== undefined ? { status: error.status } : {}),
+      };
+    }
+    return { errorClass: 'unexpected', stage: 'unknown' };
+  };
+  const importErrorHtml = (f: { errorClass: string; stage: string; status?: number }): string =>
+    `<p class="error">Import failed (${esc(f.errorClass)} at ${esc(f.stage)}${
+      f.status !== undefined ? `, HTTP ${f.status}` : ''
+    }). <a href="/connect">Check the connection and try again.</a></p>`;
+
   const soleWorkspace = async (session: Session): Promise<WorkspaceRecord | null> => {
     const workspaces = await store.listWorkspaces(session.tenantId);
     return workspaces[0] ?? null;
@@ -161,7 +188,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const jobs = await store.listJobsForWorkspace(session.tenantId, workspace.id);
     const failed = jobs.filter((j) => j.status === 'failed').slice(-3);
     return reply.type('text/html').send(
-      layout(
+      page(
+        session,
         'Dashboard',
         `${STEPS_NAV}
          <h2>${esc(workspace.projectName ?? '')} (${esc(workspace.projectKey ?? '')})</h2>
@@ -188,8 +216,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
                  )
                  .join('')}</ul>`
          }
-         <p><a href="/connect">Connection</a> · <a href="/scope">Scope</a> · <a href="/mapping/statuses">Statuses</a> · <a href="/mapping/actors">Roles</a> · <a href="/assumptions">Assumptions</a></p>
-         <form method="post" action="/logout">${csrfField(session)}<button type="submit">Sign out</button></form>`,
+         <p><a href="/connect">Connection</a> · <a href="/scope">Scope</a> · <a href="/mapping/statuses">Statuses</a> · <a href="/mapping/actors">Roles</a> · <a href="/assumptions">Assumptions</a></p>`,
       ),
     );
   });
@@ -201,7 +228,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!session) return;
     const workspace = await soleWorkspace(session);
     return reply.type('text/html').send(
-      layout(
+      page(
+        session,
         'Connect Jira',
         `${STEPS_NAV}
          <h2>Connect your Jira workspace</h2>
@@ -237,7 +265,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         .code(400)
         .type('text/html')
         .send(
-          layout(
+          page(
+            session,
             'Connect Jira',
             `<p class="error">Site (https URL), email, and token are all required.</p>`,
           ),
@@ -254,7 +283,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         .code(400)
         .type('text/html')
         .send(
-          layout(
+          page(
+            session,
             'Connect Jira',
             `<p class="error">Connection failed (${esc(errorClass)}): ${esc(
               error instanceof GatewayError ? error.message : 'unexpected error',
@@ -291,18 +321,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     try {
       projects = await gateway.listProjects(connection(workspace));
     } catch (error) {
-      const errorClass = error instanceof GatewayError ? error.errorClass : 'unexpected';
-      return reply
-        .type('text/html')
-        .send(
-          layout(
-            'Choose scope',
-            `<p class="error">Could not list projects (${esc(errorClass)}). <a href="/connect">Check the connection.</a></p>`,
-          ),
-        );
+      const f = jiraFailure(error);
+      logLine({ level: 'warn', msg: 'jira-list-projects-failed', ...f });
+      return reply.type('text/html').send(page(session, 'Choose scope', importErrorHtml(f)));
     }
     return reply.type('text/html').send(
-      layout(
+      page(
+        session,
         'Choose scope',
         `${STEPS_NAV}
          <h2>Choose the project to import</h2>
@@ -339,11 +364,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       const { searchPages } = await gateway.fetchAll(conn, project.key);
       observed = observeJiraSearchPages(searchPages);
     } catch (error) {
-      const errorClass = error instanceof GatewayError ? error.errorClass : 'unexpected';
+      const f = jiraFailure(error);
+      logLine({ level: 'warn', msg: 'jira-import-failed', ...f });
       return reply
         .code(400)
         .type('text/html')
-        .send(layout('Choose scope', `<p class="error">Import failed (${esc(errorClass)}).</p>`));
+        .send(page(session, 'Choose scope', importErrorHtml(f)));
     }
     await store.updateWorkspace(session.tenantId, workspace.id, {
       projectKey: project.key,
@@ -368,7 +394,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!workspace) return;
     const kinds = STAGE_KINDS.map((k) => `<option value="${k}">${k}</option>`).join('');
     return reply.type('text/html').send(
-      layout(
+      page(
+        session,
         'Map statuses',
         `${STEPS_NAV}
          <h2>Map every status to a stage kind</h2>
@@ -437,7 +464,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const workspace = await requireStep(session, reply, 'statuses-mapped');
     if (!workspace) return;
     return reply.type('text/html').send(
-      layout(
+      page(
+        session,
         'Map people to roles',
         `${STEPS_NAV}
          <h2>Map people to roles</h2>
@@ -537,7 +565,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       `<tr><td>${esc(label)}</td><td>${controls}</td>
        <td class="note">${esc(PROVENANCE_LABEL[provenance])}<br>${acceptBox(acceptName, provenance)}</td></tr>`;
     return reply.type('text/html').send(
-      layout(
+      page(
+        session,
         'Assumptions',
         `${STEPS_NAV}
          <h2>Assumptions (currency: ${esc(current.currency)})</h2>
@@ -686,7 +715,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         .code(400)
         .type('text/html')
         .send(
-          layout(
+          page(
+            session,
             'Assumptions',
             `<p class="error">Invalid value(s) for: ${esc(invalid.join(', '))} — non-negative decimals only.</p>
              <p><a href="/assumptions">Back</a></p>`,
@@ -811,7 +841,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     if (job.status === 'failed') {
       return reply.type('text/html').send(
-        layout(
+        page(
+          session,
           'Run failed',
           `<h2>Run failed</h2>
            <p class="error">${esc(job.errorClass ?? 'unexpected')}: ${esc(job.errorMessage ?? '')}</p>
@@ -832,7 +863,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return reply
       .type('text/html')
       .send(
-        layout(
+        page(
+          session,
           'Runs',
           runs.length === 0
             ? '<p class="note">No runs yet.</p>'
@@ -856,7 +888,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const firstView = await store.markRunViewed(session.tenantId, runId, nowIso);
     telemetry(webEvent('tm-web-report-viewed', { firstView }));
     const html = await marked.parse(run.reportMd);
-    return reply.type('text/html').send(layout(`Report ${run.id}`, `<article>${html}</article>`));
+    return reply
+      .type('text/html')
+      .send(page(session, `Report ${run.id}`, `<article>${html}</article>`));
   });
 
   return app;

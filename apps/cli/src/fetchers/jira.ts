@@ -1,11 +1,16 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CliError } from '../io';
-import { issuesNeedingChangelogTopUp, jiraChangelogUrl, jiraSearchUrl } from '@costflow/ingestion';
+import {
+  issuesNeedingChangelogTopUp,
+  jiraChangelogUrl,
+  jiraSearchNextPageToken,
+  jiraSearchUrl,
+} from '@costflow/ingestion';
 
 // Re-exported for existing consumers/tests; the pure halves now live in the
 // ingestion package so every effectful edge shares one request shape (P4.1).
-export { issuesNeedingChangelogTopUp, jiraChangelogUrl, jiraSearchUrl };
+export { issuesNeedingChangelogTopUp, jiraChangelogUrl, jiraSearchNextPageToken, jiraSearchUrl };
 
 export function jiraAuthHeader(email: string, token: string): string {
   return `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
@@ -50,19 +55,18 @@ export async function fetchJira(config: JiraFetchConfig, outDir: string): Promis
   const authHeader = jiraAuthHeader(config.email, config.token);
 
   const searchPages: string[] = [];
-  let startAt = 0;
+  let pageToken: string | undefined;
   for (;;) {
     const text = await getJson(
-      jiraSearchUrl(config.site, config.projectKey, startAt, pageSize),
+      jiraSearchUrl(config.site, config.projectKey, pageToken, pageSize),
       authHeader,
     );
     const pageIndex = searchPages.length;
     writeFileSync(join(rawDir, `search-page-${pageIndex}.json`), text);
     searchPages.push(text);
-    const doc = JSON.parse(text) as { issues?: unknown[]; total?: number };
-    const fetched = startAt + (doc.issues?.length ?? 0);
-    if ((doc.issues?.length ?? 0) === 0 || fetched >= (doc.total ?? fetched)) break;
-    startAt = fetched;
+    const next = jiraSearchNextPageToken(text);
+    if (next === null) break;
+    pageToken = next;
   }
 
   const topUps = new Set<string>();

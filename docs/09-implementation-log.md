@@ -1534,3 +1534,40 @@ the three live success criteria remain open until the founder runs them.
 Debt **D-18**: credential-key rotation currently requires tenant reconnect
 (no bulk re-encryption job yet); design recorded in docs/16 §6, to build
 before the first external customer.
+
+### P4.2 live acceptance — evidence ledger (updated 2026-07-21)
+
+P4.2 remains OPEN. One of three live gates has passed; the other two are
+pending the browser agent. This slice is marked complete only when all three
+pass with evidence here and in docs/16 §11.
+
+**Gate 1 — Postgres migration + zero-skip contract suite: ✅ PASSED**
+(sanitized; service/variable names only, no secret value exposed):
+- Production migration via the Railway console:
+  `pnpm --filter @costflow/web migrate` against production Postgres
+  (DATABASE_URL) → SUCCESS, "Migration applied and database reachable."
+- Contract suite `pnpm test:pg` against a SEPARATE disposable Railway
+  Postgres (`Postgres-MmLy`, referenced by COSTFLOW_TEST_DATABASE_URL; the
+  production DB was never used for tests): Test Files 1 passed · Tests 10
+  passed · Skipped 0 · 386ms. Zero-skip criterion met on a real engine.
+- Cleanup: COSTFLOW_TEST_DATABASE_URL removed; disposable service +
+  orphaned volume deleted; only production Postgres remains.
+
+**Local-agent verification (this repo, HEAD ef86159):**
+- `git pull --ff-only` up to date; working tree CLEAN; in sync with
+  origin/main.
+- Full local gate GREEN: `pnpm check` — typecheck + eslint + prettier +
+  dependency-cruiser (0 violations, 123 modules) + vitest 239 passed / 1
+  skipped (the skip is the pg contract when no test DB is bound locally).
+- Byte-identical vs pre-web baseline e3c86e6: tools/golden BYTE-IDENTICAL;
+  domain/friction/cost-engine/analysis/reporting unchanged; telemetry
+  derive.ts unchanged. (Prior additive deltas from P4.1 only: taxonomy.ts
+  tm-web-* registry entries; jira fetcher refactor onto shared URL helpers —
+  behavior proven identical by the byte-identical goldens.)
+
+**Gate 2 — live Auth0 sign-in/callback/session/logout/sign-back-in +
+invited-testers-only restriction: PENDING (browser agent).**
+
+**Gate 3 — real Jira E2E on https://app.fbx1.com (persisted run available
+after a new session) + logs/telemetry privacy audit: PENDING (browser
+agent).**

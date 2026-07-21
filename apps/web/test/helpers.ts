@@ -23,20 +23,23 @@ export class StubJiraGateway implements JiraGateway {
   failListWith: GatewayError | null = null;
   failFetchWith: GatewayError | null = null;
   lastConnection: JiraConnection | null = null;
+  lastFetchProjectKey: string | null = null;
+  projects: { key: string; name: string }[] = [
+    { key: 'OPS', name: 'Operations' },
+    { key: 'MKT', name: 'Marketing Website' },
+  ];
 
   async listProjects(connection: JiraConnection) {
     this.lastConnection = connection;
     if (this.failListWith) throw this.failListWith;
-    return [
-      { key: 'OPS', name: 'Operations' },
-      { key: 'MKT', name: 'Marketing Website' },
-    ];
+    return this.projects;
   }
 
   async fetchAll(connection: JiraConnection, projectKey: string) {
     this.lastConnection = connection;
+    this.lastFetchProjectKey = projectKey;
     if (this.failFetchWith) throw this.failFetchWith;
-    if (projectKey !== 'OPS') throw new GatewayError('fetch-error', 'Unknown project.');
+    if (projectKey !== 'OPS') throw new GatewayError('fetch-error', 'search', 'Unknown project.');
     return { searchPages: [JIRA_FIXTURE_PAGE], supplementaryChangelogs: {} };
   }
 }

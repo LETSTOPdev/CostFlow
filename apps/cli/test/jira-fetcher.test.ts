@@ -3,16 +3,33 @@ import {
   issuesNeedingChangelogTopUp,
   jiraAuthHeader,
   jiraChangelogUrl,
+  jiraSearchNextPageToken,
   jiraSearchUrl,
 } from '../src/fetchers/jira';
 
 describe('jira fetcher pure helpers (HTTP never exercised in tests)', () => {
-  it('builds search URLs with ordered JQL, fields, changelog expansion, and pagination', () => {
-    const url = jiraSearchUrl('https://acme.atlassian.net/', 'OPS', 100, 100);
-    expect(url).toContain('https://acme.atlassian.net/rest/api/3/search?');
-    expect(url).toContain(encodeURIComponent('project = "OPS" ORDER BY created ASC'));
-    expect(url).toContain('expand=changelog');
-    expect(url).toContain('startAt=100');
+  it('builds enhanced JQL search URLs (the current /search/jql endpoint, not the removed one)', () => {
+    const first = jiraSearchUrl('https://acme.atlassian.net/', 'OPS', undefined, 100);
+    // Must target the CURRENT endpoint — the legacy /rest/api/3/search is gone.
+    expect(first).toContain('https://acme.atlassian.net/rest/api/3/search/jql?');
+    expect(first).not.toContain('/rest/api/3/search?');
+    expect(first).toContain(encodeURIComponent('project = "OPS" ORDER BY created ASC'));
+    expect(first).toContain('fields=');
+    expect(first).toContain('expand=changelog');
+    // First page carries no cursor; the legacy startAt param is gone.
+    expect(first).not.toContain('nextPageToken');
+    expect(first).not.toContain('startAt');
+    // Subsequent pages carry the opaque cursor.
+    const next = jiraSearchUrl('https://acme.atlassian.net', 'OPS', 'CURSOR/AB+1', 100);
+    expect(next).toContain(`nextPageToken=${encodeURIComponent('CURSOR/AB+1')}`);
+  });
+
+  it('reads the search cursor (null on the last page)', () => {
+    expect(jiraSearchNextPageToken(JSON.stringify({ nextPageToken: 'tok2', isLast: false }))).toBe(
+      'tok2',
+    );
+    expect(jiraSearchNextPageToken(JSON.stringify({ isLast: true }))).toBeNull();
+    expect(jiraSearchNextPageToken(JSON.stringify({ issues: [] }))).toBeNull();
   });
 
   it('builds changelog top-up URLs with escaped issue keys', () => {
