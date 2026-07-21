@@ -402,6 +402,7 @@ describe('CLI end-to-end determinism gate (multi-signal)', () => {
       return {
         run: readFileSync(join(out, 'run.json'), 'utf8'),
         report: readFileSync(join(out, 'report.md'), 'utf8'),
+        telemetry: readFileSync(join(out, 'telemetry.jsonl'), 'utf8'),
       };
     };
 
@@ -409,7 +410,11 @@ describe('CLI end-to-end determinism gate (multi-signal)', () => {
     const second = invoke();
     expect(first.run).toBe(second.run);
     expect(first.report).toBe(second.report);
+    expect(first.telemetry).toBe(second.telemetry);
     expect(first.run).toBe(readFileSync(join(EXPECTED, 'demo-flow', 'run.json'), 'utf8'));
     expect(first.report).toBe(readFileSync(join(EXPECTED, 'demo-flow', 'report.md'), 'utf8'));
+    expect(first.telemetry).toBe(
+      readFileSync(join(EXPECTED, 'demo-flow', 'telemetry.jsonl'), 'utf8'),
+    );
   }, 60_000);
 });

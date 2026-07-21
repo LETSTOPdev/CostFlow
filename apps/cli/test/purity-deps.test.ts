@@ -17,6 +17,7 @@ const ALLOWED_EXTERNAL: Record<string, string[]> = {
   'cost-engine': ['decimal.js'],
   analysis: [],
   reporting: [],
+  telemetry: [],
 };
 
 describe('pure packages carry no unreviewed external dependencies (R-15)', () => {

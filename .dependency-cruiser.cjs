@@ -10,7 +10,7 @@
  * Pure packages (everything under packages/) may not import node builtins;
  * apps/ is the only effectful edge.
  */
-const PURE = '^packages/(domain|ingestion|friction|cost-engine|analysis|reporting)/';
+const PURE = '^packages/(domain|ingestion|friction|cost-engine|analysis|reporting|telemetry)/';
 
 module.exports = {
   forbidden: [
@@ -49,6 +49,22 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/reporting/' },
       to: { path: '^(packages/(?!domain/|analysis/|cost-engine/|reporting/)|apps/)' },
+    },
+    {
+      name: 'telemetry-only-domain-and-analysis',
+      comment: 'Telemetry reads the immutable run artifact and nothing else (doc 15 P3).',
+      severity: 'error',
+      from: { path: '^packages/telemetry/src/' },
+      to: { path: '^(packages/(?!domain/|analysis/|telemetry/)|apps/)' },
+    },
+    {
+      name: 'nothing-imports-telemetry-except-apps',
+      comment:
+        'P3 proof 1: telemetry is structurally incapable of affecting analysis, pricing, ' +
+        'confidence, ranking, or reports - no pure package may import it.',
+      severity: 'error',
+      from: { path: '^packages/(?!telemetry/)' },
+      to: { path: '^packages/telemetry/' },
     },
     {
       name: 'packages-never-import-apps',

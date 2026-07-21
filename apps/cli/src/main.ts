@@ -10,6 +10,9 @@ import { buildReportModel, renderMarkdown } from '@costflow/reporting';
 import { CliError, readJsonFile, readTextFile } from './io';
 import { preflight } from './preflight';
 import { buildPseudonymizationContext } from './pseudonym';
+import { deriveRunTelemetry } from '@costflow/telemetry';
+import { ImportError } from '@costflow/ingestion';
+import { appendInteractionEvent, interactionEvent, writeDerivedTelemetry } from './telemetry-edge';
 import { fetchJira } from './fetchers/jira';
 import { fetchMonday } from './fetchers/monday';
 import { fetchAsana } from './fetchers/asana';
@@ -98,6 +101,48 @@ function readNumberedPages(baseDir: string, fileNames: string[], pattern: RegExp
     .map((m) => readTextFile(join(baseDir, m[0]), m[0]));
 }
 
+// P3 interaction telemetry: edge-only, failure-contained, machine-shape
+// fields (unknown user input is never echoed into events).
+const startedMs = Date.now();
+const KNOWN_PROVIDERS = new Set(['csv', 'jira', 'monday', 'asana']);
+
+function edgeProvider(): string {
+  const index = process.argv.indexOf('--provider');
+  const raw = index >= 0 ? (process.argv[index + 1] ?? '') : 'csv';
+  return KNOWN_PROVIDERS.has(raw) ? raw : 'unknown';
+}
+
+function recordOutcome(
+  ok: boolean,
+  errorClass: 'cli-error' | 'import-error' | 'unexpected' | null,
+): void {
+  const subcommand = process.argv[2];
+  const durationMs = Date.now() - startedMs;
+  if (subcommand === 'analyze') {
+    appendInteractionEvent(
+      interactionEvent('tm-cli-analyze', {
+        provider: edgeProvider(),
+        mode: process.argv.includes('--simulation') ? 'simulation' : 'report',
+        ok,
+        errorClass,
+        durationMs,
+      }),
+    );
+  } else if (subcommand === 'fetch') {
+    appendInteractionEvent(
+      interactionEvent('tm-cli-fetch', { provider: edgeProvider(), ok, errorClass, durationMs }),
+    );
+  } else if (subcommand === 'preflight') {
+    appendInteractionEvent(interactionEvent('tm-cli-preflight', { ok, durationMs }));
+  }
+}
+
+function classifyError(error: unknown): 'cli-error' | 'import-error' | 'unexpected' {
+  if (error instanceof CliError) return 'cli-error';
+  if (error instanceof ImportError) return 'import-error';
+  return 'unexpected';
+}
+
 function run(): void {
   const { values, positionals } = parseArgs({
     allowPositionals: true,
@@ -147,11 +192,16 @@ function run(): void {
       }
       return fetchAsana({ token, projectGid: values.project }, out);
     })();
-    void fetchPromise.catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(error instanceof CliError ? message : `Error: ${message}`);
-      process.exit(1);
-    });
+    void fetchPromise
+      .then(() => {
+        recordOutcome(true, null);
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(error instanceof CliError ? message : `Error: ${message}`);
+        recordOutcome(false, classifyError(error));
+        process.exit(1);
+      });
     return;
   }
   if (subcommand === 'preflight') {
@@ -170,6 +220,7 @@ function run(): void {
       pseudonymization: resolvePseudonymization(values, mapping.columns.actor !== undefined),
     });
     console.log(result.lines.join('\n'));
+    recordOutcome(result.ok, null);
     if (!result.ok) process.exit(1);
     return;
   }
@@ -346,11 +397,15 @@ function run(): void {
   mkdirSync(outDir, { recursive: true });
   writeFileSync(join(outDir, 'run.json'), JSON.stringify(analysisRun, null, 2) + '\n');
   writeFileSync(join(outDir, 'report.md'), report);
+  // Derived telemetry: a pure function of the artifact just written, emitted
+  // AFTER the analysis artifacts and failure-contained (P3 proofs 1 and 2).
+  writeDerivedTelemetry(outDir, deriveRunTelemetry(analysisRun));
 
   if (!values.quiet) {
     console.log(report);
   }
   console.error(`Run ${runId}: artifacts written to ${outDir}/run.json and ${outDir}/report.md`);
+  recordOutcome(true, null);
 }
 
 try {
@@ -360,5 +415,6 @@ try {
   // trace teaches partners the tool is broken rather than the input (R-08).
   const message = error instanceof Error ? error.message : String(error);
   console.error(error instanceof CliError ? message : `Error: ${message}`);
+  recordOutcome(false, classifyError(error));
   process.exit(1);
 }

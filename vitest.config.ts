@@ -12,6 +12,7 @@ export default defineConfig({
       '@costflow/cost-engine': p('./packages/cost-engine/src/index.ts'),
       '@costflow/analysis': p('./packages/analysis/src/index.ts'),
       '@costflow/reporting': p('./packages/reporting/src/index.ts'),
+      '@costflow/telemetry': p('./packages/telemetry/src/index.ts'),
     },
   },
   test: {

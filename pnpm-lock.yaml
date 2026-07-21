@@ -53,6 +53,9 @@ importers:
       '@costflow/reporting':
         specifier: workspace:*
         version: link:../../packages/reporting
+      '@costflow/telemetry':
+        specifier: workspace:*
+        version: link:../../packages/telemetry
       csv-parse:
         specifier: ^5.6.0
         version: 5.6.0
@@ -102,6 +105,15 @@ importers:
         version: 5.6.0
 
   packages/reporting:
+    dependencies:
+      '@costflow/analysis':
+        specifier: workspace:*
+        version: link:../analysis
+      '@costflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+
+  packages/telemetry:
     dependencies:
       '@costflow/analysis':
         specifier: workspace:*

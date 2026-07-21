@@ -9,6 +9,7 @@
     "@costflow/domain": "workspace:*",
     "@costflow/ingestion": "workspace:*",
     "@costflow/reporting": "workspace:*",
+    "@costflow/telemetry": "workspace:*",
     "csv-parse": "^5.6.0",
     "zod": "^3.24.1"
   }

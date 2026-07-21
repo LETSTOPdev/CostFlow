@@ -1071,3 +1071,199 @@ story-derived multi-homed REST). Capability profiles honestly differ per
 batch, not per marketing claim; every honest gap (monday completeness,
 asana late-add arrival overstatement) is a documented rule with a named
 revisit trigger, not a silent repair.
+
+## Phase 2 / P3 — Telemetry (authorized 2026-07-21)
+
+Founder scope (verbatim intent): telemetry derived from immutable run
+artifacts wherever possible; interaction telemetry only at effectful product
+edges; versioned event taxonomy; no titles, raw actor values, emails,
+assumption values, or customer business data; local by default; explicit
+opt-in before anything leaves the machine; telemetry must never affect
+analysis, pricing, confidence, ranking, or reports; telemetry failure must
+never fail an analysis run; all existing goldens byte-identical unless a
+separate telemetry artifact is intentionally generated. Taxonomy and privacy
+constraints frozen HERE before implementation; five proofs required after;
+stop before P4.
+
+### Event taxonomy v1 (frozen before code)
+
+Envelope, one JSON object per JSONL line, fixed key order:
+`{event, version, kind, at, runId?, fields}`.
+
+**Derived events** (`kind: "derived"`) — computed by the pure function
+`deriveRunTelemetry(run: AnalysisRun)` in the new `@costflow/telemetry`
+package. Deterministic by construction: `at` = the run's pinned analysis
+time (never a clock), `runId` = the run's id, fields are pure functions of
+the immutable artifact. Written by the CLI to `<out>/telemetry.jsonl`
+alongside run.json/report.md — an intentionally generated new golden
+artifact.
+
+- `tm-run@1.0.0` — exactly one per analysis run. Fields:
+  `pricingPolicy` ('report'|'simulation'), `provider` (provider id),
+  `engineAnalysisVersion`,
+  `items {total, imported, dropped}`, `events` (count),
+  `diagnostics {warnings, dropped}`,
+  `capability {hasEventHistory, hasDueDates, hasLastUpdated, hasActors}`,
+  `dueDates {inFlight, withDue}`, `contextObservations` (count),
+  `estimates {count, tiers {A, B, C}}`,
+  `pricing {priced, skipped, skipReasons {vendorSuggestedGate,
+  missingAssumption, noCostModel, other}}`,
+  `provenanceMix {vendorSuggested, customerAccepted, customerCustomized,
+  customerMeasured}` (counts over rate-card entries + defaultRate + present
+  parameters — states only, never values).
+- `tm-detector@1.0.0` — one per detector outcome, in engine order. Fields:
+  `signalId`, `signalVersion`, `status` ('ran'|'skipped'), `instanceCount`,
+  `skipReasonClass` ('missing-capability'|null).
+
+**Interaction events** (`kind: "interaction"`) — constructed ONLY in
+`apps/cli` (the effectful edge), appended to the local file
+`${COSTFLOW_TELEMETRY_DIR:-.costflow}/interactions.jsonl`. `at` = wall
+clock (edge measurement, explicitly non-deterministic, never golden). No
+`runId` in v1 (funnel linkage is a P4 decision, not a default).
+
+- `tm-cli-analyze@1.0.0` — `{provider, mode, ok, errorClass, durationMs}`
+- `tm-cli-fetch@1.0.0` — `{provider, ok, errorClass, durationMs}`
+- `tm-cli-preflight@1.0.0` — `{ok, durationMs}`
+
+`errorClass` enum: 'cli-error' (input/usage), 'import-error' (structural
+data refusal), 'unexpected', or null on success. Never a message string.
+
+Versioning law: any field addition/removal/semantic change bumps the event
+version; the registry (`TELEMETRY_TAXONOMY`) records every event id,
+version, kind, and description; emitters may only emit registered events
+(asserted by test).
+
+Skip-reason classing (deterministic prefix map over engine-owned strings):
+'Rests on vendor-suggested' → vendorSuggestedGate; 'Missing assumption' →
+missingAssumption; 'No cost model' → noCostModel; anything else → other.
+
+### Privacy constraints (frozen before code)
+
+NEVER in any telemetry event, derived or interaction: work-item titles or
+ids; stage names or stage-name slugs (therefore NO friction-instance ids —
+they embed stage slugs); actor values INCLUDING pseudonyms; role names;
+emails; money amounts, rates, or magnitudes (item-hours/-days are customer
+operational data); assumption values or ranges; mapping-template ids/
+versions and assumption-set ids/versions (customer-authored strings); org
+scope ids; salts; tokens; file paths; site URLs, project keys/gids, board
+ids. ALLOWED: counts, booleans, durations, engine-owned identifiers (signal
+ids, cost-model ids, provider ids, versions, tiers, provenance states,
+policies, error classes), the opaque content-hash runId, and the pinned
+analysis time. Mechanical guard, tested: every string value in `fields`
+must match `^[a-z0-9@.:-]+$` (engine vocabulary is lowercase-mechanical;
+customer vocabulary virtually never is), PLUS explicit known-string absence
+scans against all five golden fixtures' titles/stages/actors/roles/rates.
+
+Transport: none exists in P3. Both destinations are local files; the
+interaction log can be disabled entirely with `COSTFLOW_TELEMETRY=off`.
+Any future outward transport requires explicit opt-in machinery that does
+not exist yet — nothing leaves the machine by construction.
+
+Failure containment: every telemetry write (derived and interaction) is
+wrapped at the edge; failure prints one stderr warning and never alters the
+exit code or artifacts.
+
+### The five proofs (test plan, frozen before code)
+
+1. **Cannot modify analysis output**: dependency-cruiser rules — no package
+   may import telemetry (only apps/cli may); telemetry imports domain +
+   analysis only. Plus: `deriveRunTelemetry` leaves its input JSON-identical
+   (before/after compare). Plus: run.json/report.md goldens byte-identical
+   while telemetry is emitted in the same invocation.
+2. **Failure is non-blocking**: spawned CLI with the interaction dir forced
+   unwritable (env points under a regular file) exits 0 with artifacts
+   intact and a stderr warning; derived-write helper unit-tested to swallow
+   an impossible path.
+3. **Prohibited data never appears**: known-string absence scan over the
+   derived telemetry of ALL five golden runs + the machine-shape regex over
+   every string field of every event both kinds.
+4. **Derived events are deterministic**: derive twice → byte-identical;
+   telemetry.jsonl frozen as a golden for all five demo runs; the CLI
+   double-run gate extends to telemetry.jsonl bytes.
+5. **Derived/interaction separation**: the registry types every event's
+   kind; `deriveRunTelemetry` may emit only kind-derived events (asserted);
+   interaction constructors exist only in apps/cli; the two kinds land in
+   different files with different lifecycle (per-run artifact vs local
+   append log).
+
+### Hand-computed derived-telemetry expectations (frozen before code)
+
+demo-monday tm-run fields: pricingPolicy report, provider monday, items
+{3,3,0}, events 7, diagnostics {0,0}, capability all true, dueDates {2,2},
+contextObservations 1, estimates {5, {A:1,B:1,C:3}}, pricing {5,0,{0,0,0,0}},
+provenanceMix {0,1,5,0} (rates: Founder customized; defaultRate customized;
+aging+attention+queueWait customized; overdue ACCEPTED). tm-detector:
+f2-aging ran 1; f1-queue-wait ran 2; f3-overdue ran 2 (engine order).
+
+demo-flow tm-run fields: pricingPolicy report, provider csv, items {4,4,0},
+events 11, diagnostics {0,0}, capability all true, dueDates {3,3},
+contextObservations 1, estimates {3, {A:1,B:2,C:0}}, pricing {3,2,
+{vendorSuggestedGate:1, missingAssumption:1, noCostModel:0, other:0}},
+provenanceMix {1,0,6,0} (3 rates customized + defaultRate VENDOR-SUGGESTED +
+aging/attention/queueWait customized; overdue param absent → not counted).
+tm-detector: f2-aging ran 2; f1-queue-wait ran 2; f3-overdue ran 1.
+
+(demo-ops, demo-jira, demo-asana telemetry goldens are generated and frozen
+under the same law; the two tables above are the pre-committed checks.)
+
+### P3 completion record (2026-07-21)
+
+Built exactly to the frozen taxonomy: new pure package `@costflow/telemetry`
+(taxonomy registry + `deriveRunTelemetry` + byte-deterministic JSONL
+serializer), CLI edge module `telemetry-edge.ts` (the ONLY place interaction
+events are constructed), derived artifact `<out>/telemetry.jsonl` beside
+run.json/report.md, local interaction log
+`${COSTFLOW_TELEMETRY_DIR:-.costflow}/interactions.jsonl` (gitignored;
+`COSTFLOW_TELEMETRY=off` disables). No transport exists — nothing can leave
+the machine. **Both frozen hand tables (demo-monday, demo-flow) matched the
+generated telemetry exactly on first generation**, including demo-flow's
+skip-reason split {vendorSuggestedGate:1, missingAssumption:1} and
+provenance mix {1,0,6,0}.
+
+The five proofs, delivered as tests (all green):
+
+1. **Telemetry cannot modify analysis output.** dependency-cruiser rules
+   `nothing-imports-telemetry-except-apps` (no pure package may import
+   telemetry) and `telemetry-only-domain-and-analysis` (telemetry src reads
+   the artifact types and nothing else) — 0 violations across 94 modules.
+   `deriveRunTelemetry` leaves its input JSON-identical (asserted per golden
+   run and at unit level). All five goldens' run.json/report.md byte-
+   identical while telemetry is emitted in the same invocation (git diff
+   empty; CLI double-run gate).
+2. **Telemetry failure is non-blocking.** Spawned CLI with the interaction
+   destination forced unwritable (dir path under a regular file): exit 0,
+   all three artifacts written, single stderr warning "interaction telemetry
+   not recorded (…) — analysis unaffected." Derived-write helper equally
+   contained. `COSTFLOW_TELEMETRY=off` produces no interaction file at all.
+3. **Prohibited data never appears.** Known-string absence scan over the
+   derived telemetry of ALL five golden runs (titles, stage names, actor
+   values, pseudonym prefix, role names, quoted rate values, currency, org
+   scope, customer-authored mapping/assumption ids) + recursive
+   machine-shape regex `^[a-z0-9@.:-]+$` over every string field of every
+   event, both kinds. Friction-instance ids (which embed stage slugs) are
+   structurally absent from the taxonomy.
+4. **Derived events are deterministic.** `at` = pinned analysis time, never
+   a clock; double-derivation byte-identical; telemetry.jsonl frozen as a
+   golden for all five demo runs; the CLI spawn-twice gate now byte-compares
+   telemetry.jsonl too.
+5. **Interaction events are clearly separated.** The registry types every
+   event's kind; `deriveRunTelemetry` emits only kind-derived registered
+   events (asserted); interaction constructors exist only in apps/cli;
+   different files, different lifecycle, different `at` semantics; the
+   derived artifact is asserted to contain ONLY kind-derived lines.
+
+Verification: full `pnpm check` green — **210/210 tests** (27 added: 7
+telemetry unit, 18 corpus/edge proofs incl. 3 CLI spawns, plus the extended
+double-run gate and R-15 allowlist row) · 94 modules, 0 boundary violations
+· all pre-P3 golden files byte-untouched; the only expected/ additions are
+the five intentional telemetry.jsonl artifacts (authorized by the P3
+directive). R-15 allowlist gained `telemetry: []` — the package carries
+zero external dependencies.
+
+Deliberate limits, named: no transport/opt-in machinery exists yet (P3 is
+local-only by design; outward opt-in is future work with its own
+authorization); interaction taxonomy is minimal (3 CLI events) because the
+funnel the founder directive names (onboarding, mapping completion,
+assumption confirmation, export) belongs to P4 surfaces that do not exist
+yet — P4 ships pre-instrumented on this registry; `runId` is deliberately
+absent from interaction events until a P4 decision links funnels.
