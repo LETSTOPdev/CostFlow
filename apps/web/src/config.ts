@@ -20,6 +20,32 @@ export interface AppConfig {
 
 export type Env = Record<string, string | undefined>;
 
+/**
+ * The public `/logged-out` URL Auth0 returns to after RP-initiated logout.
+ * Base URL comes from COSTFLOW_PUBLIC_URL if set, else the callback URL's
+ * origin — no environment-specific host is hardcoded. Refuses to boot on an
+ * unparseable base or (in production) a non-https URL.
+ */
+export function derivePostLogoutRedirectUri(
+  publicUrl: string | undefined,
+  redirectUri: string,
+  production: boolean,
+): string {
+  let origin: string;
+  try {
+    origin = new URL(publicUrl ?? redirectUri).origin;
+  } catch {
+    throw new Error(
+      'Cannot derive the post-logout redirect URL: COSTFLOW_PUBLIC_URL (or COSTFLOW_OIDC_REDIRECT_URI) is not a valid absolute URL.',
+    );
+  }
+  const url = `${origin}/logged-out`;
+  if (production && !url.startsWith('https://')) {
+    throw new Error('The post-logout redirect URL must be https in production.');
+  }
+  return url;
+}
+
 export function loadConfig(env: Env): AppConfig {
   const production = env['COSTFLOW_ENV'] === 'production';
   const sessionKey = requireKey(env['COSTFLOW_SESSION_KEY'], 'COSTFLOW_SESSION_KEY');
@@ -41,12 +67,21 @@ export function loadConfig(env: Env): AppConfig {
         'COSTFLOW_AUTH=oidc requires COSTFLOW_OIDC_ISSUER, _CLIENT_ID, _CLIENT_SECRET, _REDIRECT_URI.',
       );
     }
+    // Derive the public post-logout redirect URL from the application base URL.
+    // Prefer an explicit COSTFLOW_PUBLIC_URL; otherwise use the callback URL's
+    // origin (the existing config model) — never a hardcoded host. Validated
+    // here so a bad value fails safely at boot, not at logout time.
+    const postLogoutRedirectUri = derivePostLogoutRedirectUri(
+      env['COSTFLOW_PUBLIC_URL'],
+      redirectUri,
+      production,
+    );
     auth = {
       mode: 'oidc',
       sessionKey,
       credentialKey,
       secureCookies,
-      oidc: { issuer, clientId, clientSecret, redirectUri },
+      oidc: { issuer, clientId, clientSecret, redirectUri, postLogoutRedirectUri },
     };
   } else if (authMode === 'dev') {
     if (production) {

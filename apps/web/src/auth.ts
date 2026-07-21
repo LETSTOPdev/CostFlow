@@ -30,9 +30,38 @@ export interface AuthConfig {
     readonly clientId: string;
     readonly clientSecret: string;
     readonly redirectUri: string;
+    /** Public, registered URL Auth0 returns to after SSO logout (validated in config). */
+    readonly postLogoutRedirectUri: string;
   };
   /** Injected so tests can stub the IdP; defaults to global fetch. */
   readonly fetchFn?: typeof fetch;
+}
+
+/**
+ * OIDC RP-initiated logout URL (P4.2 Gate 2). Terminating the local CostFlow
+ * cookie is not enough: the IdP's tenant SSO session would silently
+ * re-authenticate a protected route. This sends the browser to Auth0's
+ * OIDC-compliant `/oidc/logout` (preferred over the legacy `/v2/logout`) to
+ * end the SSO session, then return to the public post-logout page.
+ *
+ * We pass `client_id` + a registered `post_logout_redirect_uri` rather than
+ * `id_token_hint`: the architecture does not retain the id_token (keeping it
+ * out of the session cookie is the safer choice), and Auth0 accepts client_id
+ * when the redirect URI is in the client's Allowed Logout URLs. No `federated`
+ * param — we end only the Auth0 tenant session, never the upstream Google/
+ * social account (that is deliberately more disruptive and out of scope).
+ */
+export function oidcLogoutUrl(oidc: {
+  issuer: string;
+  clientId: string;
+  postLogoutRedirectUri: string;
+}): string {
+  const endpoint = `${oidc.issuer.replace(/\/$/, '')}/oidc/logout`;
+  const params = new URLSearchParams({
+    post_logout_redirect_uri: oidc.postLogoutRedirectUri,
+    client_id: oidc.clientId,
+  });
+  return `${endpoint}?${params.toString()}`;
 }
 
 export function sessionFrom(request: FastifyRequest, key: Buffer): Session | null {

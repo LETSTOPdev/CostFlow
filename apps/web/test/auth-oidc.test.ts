@@ -12,6 +12,7 @@ describe('managed authentication (OIDC adapter)', () => {
     clientId: 'costflow',
     clientSecret: 'cs-secret',
     redirectUri: 'https://app.costflow.example/auth/callback',
+    postLogoutRedirectUri: 'https://app.costflow.example/logged-out',
   };
 
   function stubIdp(): typeof fetch {
@@ -95,7 +96,8 @@ describe('managed authentication (OIDC adapter)', () => {
     expect(await t.store.findUserByEmail('managed@acme.example')).toBeNull();
   });
 
-  it('logout terminates the session and does NOT bounce to the IdP (P4.2 defect 1)', async () => {
+  it('RP-initiated logout: clears local session, then redirects to Auth0 /oidc/logout (P4.2 Gate 2)', async () => {
+    const logs: Record<string, unknown>[] = [];
     const t = makeApp({
       auth: {
         mode: 'oidc',
@@ -105,6 +107,7 @@ describe('managed authentication (OIDC adapter)', () => {
         oidc,
         fetchFn: stubIdp(),
       },
+      logSink: (line) => logs.push(line),
     });
     // Sign in via OIDC.
     const login = await t.app.inject({ method: 'GET', url: '/login' });
@@ -116,7 +119,6 @@ describe('managed authentication (OIDC adapter)', () => {
     });
     const session = cookieOf(callback, 'cf_session');
 
-    // Grab the CSRF the UI rendered, then log out.
     const connect = await t.app.inject({
       method: 'GET',
       url: '/connect',
@@ -130,13 +132,25 @@ describe('managed authentication (OIDC adapter)', () => {
       payload: `csrf=${encodeURIComponent(csrf)}`,
     });
 
-    // Must NOT redirect to /login (which, in OIDC mode, silently re-authenticates
-    // via the live IdP SSO session) — it lands on the neutral /logged-out page.
+    // Redirects to the OIDC-compliant end-session endpoint (not the local page,
+    // not /login, not the legacy /v2/logout).
     expect(logout.statusCode).toBe(302);
-    expect(logout.headers['location']).toBe('/logged-out');
-    expect(logout.headers['location']).not.toBe('/login');
+    const location = logout.headers['location'] as string;
+    const url = new URL(location);
+    expect(url.origin + url.pathname).toBe('https://idp.example/oidc/logout');
+    expect(location).not.toContain('/v2/logout');
+    // Correct client_id + encoded post_logout_redirect_uri.
+    expect(url.searchParams.get('client_id')).toBe('costflow');
+    expect(url.searchParams.get('post_logout_redirect_uri')).toBe(
+      'https://app.costflow.example/logged-out',
+    );
+    expect(location).toContain(
+      `post_logout_redirect_uri=${encodeURIComponent('https://app.costflow.example/logged-out')}`,
+    );
+    // No federated logout by default (do not sign the user out of Google).
+    expect(url.searchParams.get('federated')).toBeNull();
 
-    // The session is genuinely terminated: the cleared cookie no longer authenticates.
+    // Local session invalidated on the SAME response, before the external hop.
     const cleared = cookieOf(logout, 'cf_session'); // cf_session=; Expires=1970...
     const after = await t.app.inject({
       method: 'GET',
@@ -145,5 +159,14 @@ describe('managed authentication (OIDC adapter)', () => {
     });
     expect(after.statusCode).toBe(302);
     expect(after.headers['location']).toBe('/login');
+
+    // No OIDC value (client_id, redirect uri, tokens, state) appears in logs —
+    // request logging records path only, never the redirect Location or query.
+    const serialized = JSON.stringify(logs);
+    expect(serialized).not.toContain('costflow'); // client_id
+    expect(serialized).not.toContain('post_logout_redirect_uri');
+    expect(serialized).not.toContain('logged-out');
+    expect(serialized).not.toContain('at-1'); // access token
+    expect(serialized).not.toContain('good-code'); // auth code
   });
 });

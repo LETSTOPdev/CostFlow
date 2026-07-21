@@ -8,6 +8,7 @@ import { observeJiraSearchPages } from '@costflow/ingestion';
 import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assumptions';
 import {
   clearSession,
+  oidcLogoutUrl,
   registerAuthRoutes,
   sessionFrom,
   type AuthConfig,
@@ -77,6 +78,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (session && (request.body as { csrf?: string })?.csrf !== session.csrf) {
       return reply.code(403).send('Invalid CSRF token.');
     }
+    // Invalidate the local CostFlow session FIRST — always, before any
+    // external redirect — so the app cookie is gone regardless of what the
+    // IdP does next.
     clearSession(reply, auth.secureCookies === true);
     reply.clearCookie('cf_oidc_state', {
       path: '/',
@@ -84,10 +88,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       sameSite: 'lax',
       secure: auth.secureCookies === true,
     });
-    // Land on a neutral, auth-free confirmation page — NOT /login. In OIDC
-    // mode /login bounces straight to the IdP, whose still-live SSO session
-    // would silently re-authenticate the user, so "logout" appeared to do
-    // nothing and the session was never terminated (P4.2 defect 1).
+    // In OIDC mode, RP-initiated logout: send the browser to Auth0's
+    // /oidc/logout to terminate the tenant SSO session, then return to the
+    // public /logged-out page. Without this, a protected route silently
+    // re-authenticates via the live SSO session (P4.2 Gate 2). In dev mode
+    // (no IdP) we land locally.
+    if (auth.mode === 'oidc' && auth.oidc) {
+      return reply.redirect(oidcLogoutUrl(auth.oidc));
+    }
     return reply.redirect('/logged-out');
   });
 
