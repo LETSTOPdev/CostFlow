@@ -12,6 +12,13 @@ export {
 } from './spi';
 export type { JiraMapping, JiraTransformInput } from './providers/jira/transform';
 export { transformJira } from './providers/jira/transform';
+export {
+  jiraSearchUrl,
+  jiraChangelogUrl,
+  jiraProjectsUrl,
+  issuesNeedingChangelogTopUp,
+  observeJiraSearchPages,
+} from './providers/jira/urls';
 export type { MondayMapping, MondayTransformInput } from './providers/monday/transform';
 export { transformMonday } from './providers/monday/transform';
 export type { AsanaMapping, AsanaTransformInput } from './providers/asana/transform';

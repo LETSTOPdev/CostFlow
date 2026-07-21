@@ -1,6 +1,15 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CliError } from '../io';
+import { issuesNeedingChangelogTopUp, jiraChangelogUrl, jiraSearchUrl } from '@costflow/ingestion';
+
+// Re-exported for existing consumers/tests; the pure halves now live in the
+// ingestion package so every effectful edge shares one request shape (P4.1).
+export { issuesNeedingChangelogTopUp, jiraChangelogUrl, jiraSearchUrl };
+
+export function jiraAuthHeader(email: string, token: string): string {
+  return `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
+}
 
 /**
  * Jira Cloud fetcher (doc 15 P1) — the effectful half of the connector:
@@ -16,43 +25,6 @@ export interface JiraFetchConfig {
   readonly token: string;
   readonly projectKey: string;
   readonly pageSize?: number;
-}
-
-const FIELDS = 'summary,status,assignee,created,updated,duedate';
-
-/** Pure: URL builders are unit-testable without HTTP. */
-export function jiraSearchUrl(
-  site: string,
-  projectKey: string,
-  startAt: number,
-  pageSize: number,
-): string {
-  const jql = encodeURIComponent(`project = "${projectKey}" ORDER BY created ASC`);
-  return `${site.replace(/\/$/, '')}/rest/api/3/search?jql=${jql}&fields=${FIELDS}&expand=changelog&maxResults=${pageSize}&startAt=${startAt}`;
-}
-
-export function jiraChangelogUrl(
-  site: string,
-  issueKey: string,
-  startAt: number,
-  pageSize: number,
-): string {
-  return `${site.replace(/\/$/, '')}/rest/api/3/issue/${encodeURIComponent(issueKey)}/changelog?maxResults=${pageSize}&startAt=${startAt}`;
-}
-
-export function jiraAuthHeader(email: string, token: string): string {
-  return `Basic ${Buffer.from(`${email}:${token}`).toString('base64')}`;
-}
-
-/** Pure: which issues on a page need changelog top-ups (embedded history truncated). */
-export function issuesNeedingChangelogTopUp(searchPageText: string): string[] {
-  const doc = JSON.parse(searchPageText) as {
-    issues?: { key?: string; changelog?: { total?: number; histories?: unknown[] } }[];
-  };
-  return (doc.issues ?? [])
-    .filter((issue) => (issue.changelog?.total ?? 0) > (issue.changelog?.histories?.length ?? 0))
-    .map((issue) => issue.key ?? '')
-    .filter((key) => key !== '');
 }
 
 async function getJson(url: string, authHeader: string): Promise<string> {

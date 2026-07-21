@@ -1,0 +1,22 @@
+{
+  "name": "@costflow/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/main.ts",
+  "dependencies": {
+    "@costflow/analysis": "workspace:*",
+    "@costflow/domain": "workspace:*",
+    "@costflow/ingestion": "workspace:*",
+    "@costflow/reporting": "workspace:*",
+    "@costflow/telemetry": "workspace:*",
+    "@fastify/cookie": "^10.0.1",
+    "@fastify/formbody": "^8.0.1",
+    "fastify": "^5.2.0",
+    "marked": "^15.0.4",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.10"
+  }
+}

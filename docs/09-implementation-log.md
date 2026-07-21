@@ -1267,3 +1267,159 @@ funnel the founder directive names (onboarding, mapping completion,
 assumption confirmation, export) belongs to P4 surfaces that do not exist
 yet — P4 ships pre-instrumented on this registry; `runId` is deliberately
 absent from interaction events until a P4 decision links funnels.
+
+## Phase 2 / P4.1 — Self-serve spine: first-report journey (authorized 2026-07-21)
+
+Authorized scope: ONE authenticated customer connects ONE Jira workspace,
+completes configuration, runs analysis, views the first report in the web
+app, and can return to the persisted run. Exclusions per directive (no
+billing/invites/org-admin/Monday-Asana-UI/dashboards/PDF/trends/simulation-
+UI/scheduling/marketplace/branding). All CLI behavior, goldens, privacy
+guarantees, and deterministic analysis unchanged.
+
+### P4.1 execution plan (concise, per directive — not an architecture doc)
+
+**Stack for this slice**: `apps/web` — Fastify, server-rendered HTML (no
+SPA build; fewest moving parts, end-to-end testable via inject), `marked`
+to render the EXISTING report.md artifact (numbers never re-derived),
+node-postgres for persistence. Environment fact: this machine has no
+Postgres/Docker, so the Pg adapter ships schema + SQL behind a store
+contract; the contract test suite runs against the in-memory adapter always
+and against real Postgres when COSTFLOW_TEST_DATABASE_URL is set (same
+honesty pattern as the live-untested provider HTTP paths).
+
+1. **Tenancy & authorization boundaries.** Rows: tenants → users →
+   workspaces → jobs → runs; every row carries tenant_id; runs are
+   append-only. Session cookie (HMAC-signed, httpOnly, SameSite=Lax)
+   resolves {userId, tenantId}; EVERY store read/write takes tenantId as
+   its first argument and scopes by it — cross-tenant ids resolve to
+   not-found, asserted by test. CSRF: per-session token in every POST form.
+   Per-tenant pseudonymization salt generated at tenant creation, encrypted
+   at rest; scope id = tenant id. Auth is an adapter seam: OIDC
+   authorization-code adapter (any managed IdP: issuer/clientId/secret from
+   env, fetch injected so tests drive it with a stub issuer) + an
+   explicitly-gated dev adapter (COSTFLOW_AUTH=dev) for local/test. No
+   passwords are ever stored by CostFlow.
+2. **Credential encryption & redaction.** Jira token encrypted at rest with
+   AES-256-GCM (key: COSTFLOW_CREDENTIAL_KEY, 32-byte base64; payload =
+   iv‖tag‖ciphertext). Decryption happens ONLY inside connection validation
+   and job execution; the token never appears in any HTML response, form
+   echo, log line, error message, or telemetry event (gateway errors are
+   sanitized to status + class). Acceptance test greps every response body
+   of the full journey for the token. Same treatment for the tenant salt.
+3. **Job lifecycle & retry.** jobs: queued → running → succeeded | failed
+   {errorClass: auth-error | fetch-error | import-error | unexpected}.
+   In-process async execution (no background scheduler in scope); UI polls
+   the run page. Retry is explicit: a failed job page offers "Run again" =
+   NEW job row (append-only history; no in-place mutation). Recovery: jobs
+   found 'running' at server start are marked failed/interrupted (crash
+   evidence, never silent). now is captured once at job start (test-
+   injectable for determinism).
+4. **Onboarding state machine** (persisted per workspace):
+   connected → scope-selected → statuses-mapped → actors-mapped →
+   assumptions-set → ready (first successful run). Furthest-completed-step
+   semantics: earlier steps stay editable; each route guards on its
+   prerequisite; run creation requires ≥ assumptions-set. Observed statuses
+   and actor values are extracted from the fetched raw pages (customer's
+   own data shown only to the customer's authenticated session).
+5. **Provenance transitions** (four-state model, doc 03 P4): every
+   assumption is seeded from the vendor catalog as vendor-suggested;
+   "Accept" (explicit button, value untouched) → customer-accepted; any
+   value edit → customer-customized; customer-measured is NOT settable in
+   P4.1 (reserved for measured flows). A customer-owned state never
+   silently reverts to vendor-suggested. Role rates entered during
+   onboarding are customer-customized; a role left without a rate falls
+   back to defaultRate with the existing confidence cap. Report mode only —
+   the engine's unpriced-until-owned gate is the UI's teacher.
+6. **Telemetry events** (additive registry entries, same envelope/privacy
+   law; constructors live only at the web edge): tm-web-signin,
+   tm-web-workspace-connected {provider, ok, errorClass},
+   tm-web-scope-selected {provider}, tm-web-statuses-mapped {mapped,
+   droppedCandidates}, tm-web-actors-mapped {mappedToRoles, unmapped},
+   tm-web-assumptions-confirmed {accepted, customized, vendorRemaining},
+   tm-web-run {provider, ok, errorClass, durationMs}, tm-web-report-viewed
+   {firstView} — all @1.0.0, kind interaction, counts/enums only. Derived
+   tm-run/tm-detector are persisted with each run's artifacts unchanged.
+7. **Failure & recovery states.** Connection validation failure (bad
+   site/credentials) → inline form error, nothing persisted; fetch/import
+   failure during a job → failed job with class + sanitized message +
+   retry; interrupted jobs surfaced (see 3); unconfigured crypto/auth env →
+   refuse to boot with a named message (never limp); telemetry failure
+   never fails a request (P3 law, same wrapper pattern).
+8. **Acceptance tests** (fixture-backed stub gateway = golden Jira raw
+   pages; dev auth; memory store; pinned now): the full 8-step journey in
+   one test — sign in, connect, choose project, map statuses, map actors,
+   accept+customize assumptions (provenance states asserted in store), run
+   (job succeeds), report view (demo-jira's known figures asserted), then a
+   FRESH session views the persisted run. Plus: tenant-isolation (foreign
+   ids 404), token-redaction sweep across all journey responses, job
+   failure + retry, step gating (no run before assumptions), provenance
+   transition rules, funnel telemetry order + privacy scan, store contract
+   suite (memory now, pg when a database URL exists). Full pnpm check;
+   existing goldens byte-identical.
+
+### P4.1 completion record (2026-07-21)
+
+Delivered exactly the authorized scope, nothing from the exclusion list.
+New effectful edge `apps/web` (Fastify, server-rendered HTML, marked
+rendering the EXISTING report.md artifact — no number is ever re-derived);
+new pure module `providers/jira/urls.ts` in ingestion (URL builders +
+observed-vocabulary extraction shared by CLI and web edges; CLI fetcher
+re-exports them, its tests unchanged).
+
+The eight completion criteria, each proven by the acceptance suite:
+
+1. **Sign in** — dev adapter (email-only, explicitly gated) and a real OIDC
+   authorization-code adapter (discovery → code exchange → userinfo) tested
+   against a stubbed managed IdP, state round-trip included. No passwords
+   ever stored.
+2. **Connect a Jira workspace** — credentials validated against the
+   gateway before anything persists; token AES-256-GCM-encrypted at rest;
+   a rejected connection stores nothing and reports its class.
+3. **Choose the imported scope** — project list from the live gateway;
+   selection fetches raw pages and extracts the observed status/actor
+   vocabulary for the mapping forms.
+4. **Map statuses and roles** — every observed status (current + historical,
+   the D-13/J3 rule made visible) must be mapped; people left roleless are
+   pseudonymized, never stored by name.
+5. **Accept or customize assumptions** — four-state provenance with the
+   frozen transition table (`nextProvenance` unit-tested): vendor → accepted
+   only by explicit accept; any edit → customized; owned states never
+   silently downgrade; customer-measured not settable in P4.1. The
+   all-vendor path is also tested: the engine's report-mode gate leaves
+   EVERYTHING unpriced and the report says so.
+6. **Run CostFlow** — jobs queued→running→succeeded/failed with sanitized
+   error classes; retry is a new append-only job; interrupted jobs are
+   marked failed at startup; pinned-clock jobs in tests.
+7. **View a report** — the fixture-backed journey renders the P1
+   hand-computed demo-jira figures (1,062 / 342 / 297) through the web; the
+   persisted run.json carries pseudonyms, never raw identities.
+8. **Return later** — a fresh session lists and renders the persisted run;
+   first-view vs repeat-view distinguished in telemetry.
+
+Cross-cutting proofs: tenant isolation (foreign workspace/job/run ids →
+404 at routes AND null at the store, asserted for both layers); CSRF
+required on every POST; the provider token appears in NO response body
+across the entire journey (swept), in no error message, and in no telemetry
+event; onboarding funnel telemetry fires in order (signin → connected →
+scope → statuses → actors → assumptions{accepted/customized/vendorRemaining
+counts} → run{ok/errorClass/duration} → report-viewed{firstView}) with
+counts/enums only — scanned against customer vocabulary; store contract
+suite runs against MemoryStore (and against Postgres when
+COSTFLOW_TEST_DATABASE_URL exists).
+
+Verification: full `pnpm check` green — **228 tests + 1 skipped** (46
+added for P4.1) · 119 modules, 0 boundary violations · every pre-P4 golden
+file and engine package byte-untouched (git diff empty) · CLI behavior,
+privacy guarantees, and deterministic analysis unchanged (their suites run
+unmodified).
+
+Honest limits, named: the Postgres adapter ships schema + SQL behind the
+contract suite but has never touched a live database (none exists on this
+machine) — first deployment runs the same suite against real Postgres
+before go-live; the OIDC adapter is stub-tested, live IdP shakedown pending;
+jobs execute in-process (background scheduling is excluded from P4.1 by
+directive); the web edge duplicates two small effectful helpers from the
+CLI edge (HMAC pseudonymization, telemetry file sink) because pure packages
+may not hold crypto/fs and apps may not import apps — noted as D-17,
+revisit only if a third edge appears.

@@ -71,6 +71,55 @@ export const TELEMETRY_TAXONOMY: readonly TelemetryEventMeta[] = [
     kind: 'interaction',
     description: 'CLI preflight invocation outcome and duration.',
   },
+  // P4.1 onboarding funnel (web edge) — additive registry entries.
+  {
+    event: 'tm-web-signin',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Web sign-in outcome.',
+  },
+  {
+    event: 'tm-web-workspace-connected',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Provider workspace connected (or refused) in the web app.',
+  },
+  {
+    event: 'tm-web-scope-selected',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Imported scope chosen for a connected workspace.',
+  },
+  {
+    event: 'tm-web-statuses-mapped',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Status mapping step completed (counts only).',
+  },
+  {
+    event: 'tm-web-actors-mapped',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Actor-to-role mapping step completed (counts only).',
+  },
+  {
+    event: 'tm-web-assumptions-confirmed',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Assumption capture completed: accepted/customized/vendor-remaining counts.',
+  },
+  {
+    event: 'tm-web-run',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Web-initiated analysis job outcome and duration.',
+  },
+  {
+    event: 'tm-web-report-viewed',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Report page viewed; flags the first view of a run.',
+  },
 ];
 
 /** One JSONL line per event, fixed envelope key order — byte-deterministic. */
