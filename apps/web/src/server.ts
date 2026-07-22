@@ -160,7 +160,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       .send(
         layout(
           'Signed out',
-          '<h2>You have been signed out.</h2><p>Your CostFlow session has ended. <a href="/login">Sign in again</a>.</p>',
+          '<div class="panel" style="max-width:32rem;margin:2rem auto;text-align:center">' +
+            "<h1>You've been signed out</h1>" +
+            '<p class="lead">Your CostFlow session has ended.</p>' +
+            '<div class="hero-actions" style="margin-top:1.5rem"><a class="btn btn-lg" href="/login">Sign in again</a></div>' +
+            '</div>',
         ),
       );
   });
@@ -339,8 +343,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Public pages (no session): sample report, Terms, Privacy.
   app.get('/demo', async (_request, reply) => {
     const banner =
-      '<p class="note" style="background:#eef6ff;border:1px solid #bcd;padding:0.6rem 0.9rem;border-radius:6px;">' +
-      'This is a <strong>sample report</strong> from demo data. <a href="/login">Sign in</a> to run one on your own Jira — free.</p>';
+      '<div class="info">This is a <strong>sample report</strong> from demo data. ' +
+      '<a href="/login">Sign in</a> to run one on your own Jira — free.</div>';
     let body: string;
     try {
       body = renderReportBody(parseRun(DEMO_RUN_JSON), { runId: 'demo' });
@@ -348,15 +352,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       body = '<p class="error">The sample report is temporarily unavailable.</p>';
     }
     const cta =
-      '<section class="danger" style="border-color:#0645ad;text-align:center;">' +
-      '<h3 style="color:#0645ad;">Ready to see your own?</h3>' +
-      '<p class="note">Connect your Jira in about a minute and get a report like this for your team — free.</p>' +
-      '<p><a href="/login" style="display:inline-block;background:#0645ad;color:#fff;padding:0.5rem 1.2rem;border-radius:6px;text-decoration:none;font-weight:600;">Get started free</a></p>' +
-      '</section>';
+      '<div class="cta-band" style="margin-top:2.5rem">' +
+      '<h2>Ready to see your own?</h2>' +
+      '<p class="lead">Connect your Jira in about a minute and get a report like this for your team — free.</p>' +
+      '<div class="hero-actions"><a class="btn btn-lg" href="/login">Get started free</a></div>' +
+      '</div>';
     return reply
       .type('text/html')
       .send(
-        layout('Sample report — CostFlow', `${banner}${body}${cta}<p><a href="/">← Home</a></p>`),
+        layout(
+          'Sample report — CostFlow',
+          `${banner}${body}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
+        ),
       );
   });
 
@@ -453,24 +460,27 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         session,
         'Connect Jira',
         `${stepsNav('connect')}
-         <h2>Connect your Jira workspace</h2>
-         <p class="note">CostFlow reads your Jira with a personal API token — read-only, encrypted at
-         rest, and never shown again. It takes about a minute to set up.</p>
-         <details>
-           <summary>How to get your Jira API token</summary>
-           <ol class="note">
-             <li>Open <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer">id.atlassian.com → API tokens</a>.</li>
-             <li>Click <strong>Create API token</strong>, name it "CostFlow", and copy it.</li>
-             <li>Paste it below along with your Jira site URL and the email for that Atlassian account.</li>
-           </ol>
-         </details>
-         ${workspace ? `<p class="note">Connected to ${esc(workspace.site)} as ${esc(workspace.email)}. Submitting replaces the stored credentials.</p>` : ''}
-         <form method="post" action="/connect">${csrfField(session)}
-           <label>Jira site URL <input name="site" placeholder="https://your-org.atlassian.net" required value="${esc(workspace?.site ?? '')}"></label>
-           <label>Account email <input name="email" type="email" placeholder="you@company.com" required value="${esc(workspace?.email ?? '')}"></label>
-           <label>API token <input name="token" type="password" required autocomplete="off" placeholder="paste your Atlassian API token"></label>
-           <button type="submit">Validate &amp; connect</button>
-         </form>`,
+         <p class="eyebrow">Step 1 · Connect</p>
+         <h1 style="margin-top:.6rem">Connect your Jira workspace</h1>
+         <p class="lead">CostFlow reads your Jira with a personal API token — read-only, encrypted at
+         rest, and never shown again. It takes about a minute.</p>
+         <div class="panel" style="max-width:38rem;margin-top:1.5rem">
+           ${workspace ? `<div class="info">Connected to <strong>${esc(workspace.site)}</strong> as ${esc(workspace.email)}. Submitting replaces the stored credentials.</div>` : ''}
+           <form method="post" action="/connect">${csrfField(session)}
+             <label>Jira site URL <input name="site" placeholder="https://your-org.atlassian.net" required value="${esc(workspace?.site ?? '')}"></label>
+             <label>Account email <input name="email" type="email" placeholder="you@company.com" required value="${esc(workspace?.email ?? '')}"></label>
+             <label>API token <input name="token" type="password" required autocomplete="off" placeholder="paste your Atlassian API token"></label>
+             <button type="submit">Validate &amp; connect</button>
+           </form>
+           <details style="margin-top:1.25rem">
+             <summary>How to get your Jira API token</summary>
+             <ol class="note">
+               <li>Open <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer">id.atlassian.com → API tokens</a>.</li>
+               <li>Click <strong>Create API token</strong>, name it "CostFlow", and copy it.</li>
+               <li>Paste it above along with your Jira site URL and the email for that Atlassian account.</li>
+             </ol>
+           </details>
+         </div>`,
       ),
     );
   });

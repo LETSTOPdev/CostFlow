@@ -92,7 +92,7 @@ function renderTerms(
       : estimate.trace.terms[0]?.kind === 'overdue-attention'
         ? '<tr><th>Item</th><th>Days overdue</th><th>Due date</th><th>Attention h/day</th><th>Rate</th><th>Subtotal</th></tr>'
         : '<tr><th>Item</th><th>Wait (days)</th><th>Visits</th><th>Open now</th><th>Attention h/day</th><th>Rate</th><th>Subtotal</th></tr>';
-  return `<table>${head}${rows}</table>`;
+  return `<div class="table-wrap"><table>${head}${rows}</table></div>`;
 }
 
 function renderRankedFriction(
@@ -228,7 +228,7 @@ export function renderTrend(current: AnalysisRun, previous: AnalysisRun | null):
     })
     .join('');
   return `<section><h2>Change since previous run</h2>
-    <table><tr><th>Friction</th><th>Previous (expected)</th><th>Current (expected)</th><th>Δ expected</th><th></th></tr>${rows}</table></section>`;
+    <div class="table-wrap"><table><tr><th>Friction</th><th>Previous (expected)</th><th>Current (expected)</th><th>Δ expected</th><th></th></tr>${rows}</table></div></section>`;
 }
 
 /** The report body (to be wrapped in the page shell). `previous` enables trend. */
@@ -251,9 +251,15 @@ export function renderReportBody(
       : '';
   // A business reader wants a readable date, not a raw ISO timestamp.
   const analysisDate = /^\d{4}-\d{2}-\d{2}/.test(run.now) ? run.now.slice(0, 10) : run.now;
-  const summary = `<section>
-    <p class="figure big">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : rangeText(total, currency)}</p>
-    <p class="note">${model.ranked.length} priced · ${model.unpriced.length} unpriced · analysis of ${esc(analysisDate)} · currency ${esc(currency)}</p>
+  const summary = `<section class="report-hero">
+    <p class="note" style="margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Total priced friction</p>
+    <p class="figure big" style="margin:0">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : rangeText(total, currency)}</p>
+    <div class="meta">
+      <span class="chip">${model.ranked.length} priced</span>
+      <span class="chip">${model.unpriced.length} unpriced</span>
+      <span class="chip">Analysis of ${esc(analysisDate)}</span>
+      <span class="chip">Currency ${esc(currency)}</span>
+    </div>
   </section>`;
   const ranked =
     model.ranked.length === 0
@@ -264,7 +270,8 @@ export function renderReportBody(
   const links = options.printLinks
     ? `<p class="note"><a href="/reports/${esc(options.runId)}/print">Printable / export version</a> · <a href="/reports/${esc(options.runId)}/raw">Raw markdown</a></p>`
     : '';
-  return `<h1>Friction report</h1>
+  return `<p class="eyebrow">Friction report</p>
+    <h1 style="margin-top:.6rem">What friction is costing this team</h1>
     <p class="note">Every figure is an estimate with stated assumptions and a traceable formula. <span title="Reference for support">Ref <code>${esc(run.runId)}</code></span></p>
     ${banner}
     ${summary}

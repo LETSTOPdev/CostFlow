@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { encryptSecret, newId, newSalt, signValue, verifyValue } from './crypto';
-import { esc } from './html';
+import { esc, layout } from './html';
 import type { OrgRole, Store } from './store/contract';
 
 /**
@@ -289,9 +289,15 @@ export function registerAuthRoutes(
         .code(400)
         .type('text/html')
         .send(
-          `<!doctype html><title>Sign-in not completed — CostFlow</title>
-           <p>Sign-in was not completed (${esc(query.error)})${errorDescription ? `: ${esc(errorDescription)}` : ''}.</p>
-           <p>If you just created your account, check your email to verify your address, then <a href="/login">sign in</a>. If this keeps happening, contact support@fbx1.com.</p>`,
+          layout(
+            'Sign-in not completed',
+            `<div class="panel" style="max-width:34rem;margin:2rem auto;text-align:center">
+               <h1>Sign-in wasn't completed</h1>
+               <p class="lead">We couldn't finish signing you in (${esc(query.error)})${errorDescription ? `: ${esc(errorDescription)}` : ''}.</p>
+               <p class="note">If you just created your account, check your email to verify your address, then sign in. If this keeps happening, contact <a href="mailto:support@fbx1.com">support@fbx1.com</a>.</p>
+               <div class="hero-actions" style="margin-top:1.5rem"><a class="btn btn-lg" href="/login">Try again</a></div>
+             </div>`,
+          ),
         );
     }
     if (!codePresent || !stateCookiePresent || !stateMatch) {
@@ -300,7 +306,14 @@ export function registerAuthRoutes(
         .code(400)
         .type('text/html')
         .send(
-          `<!doctype html><title>Sign-in error — CostFlow</title><p>We couldn't complete sign-in — the sign-in link expired or was interrupted. <a href="/login">Start again</a>.</p>`,
+          layout(
+            'Sign-in error',
+            `<div class="panel" style="max-width:34rem;margin:2rem auto;text-align:center">
+               <h1>Sign-in couldn't be completed</h1>
+               <p class="lead">The sign-in link expired or was interrupted.</p>
+               <div class="hero-actions" style="margin-top:1.5rem"><a class="btn btn-lg" href="/login">Start again</a></div>
+             </div>`,
+          ),
         );
     }
     const discovery = await discover();
