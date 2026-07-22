@@ -134,7 +134,7 @@ describe('P4.3 organization erasure (FR-22 / NFR-6, GDPR)', () => {
 
     // A replayed old cookie sees no data (nothing to restore).
     const runsPage = await get(t, cookie, '/runs');
-    expect(runsPage.body).toContain('No runs yet.');
+    expect(runsPage.body).toContain('No reports yet');
 
     const deleted = t.events.find((e) => e.event === 'tm-web-data-deleted')!;
     expect(deleted.fields).toEqual({ scope: 'org', cascadedRuns: 1 });

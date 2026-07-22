@@ -113,7 +113,7 @@ describe('P4.4 invitations & membership', () => {
     const memberCookie = await signIn(t, 'member4@acme.example');
 
     // Before being granted the workspace, the member sees no runs and cannot open the report.
-    expect((await get(t, memberCookie, '/runs')).body).toContain('No runs yet.');
+    expect((await get(t, memberCookie, '/runs')).body).toContain('No reports yet');
     expect((await get(t, memberCookie, '/reports/run-m')).statusCode).toBe(404);
 
     // Owner grants workspace access.

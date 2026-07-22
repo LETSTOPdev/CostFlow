@@ -127,8 +127,25 @@ input::placeholder{color:var(--faint)}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--primary);box-shadow:var(--ring)}
 select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%235c5f6e' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right .9rem center;padding-right:2.3rem}
 input[type=checkbox],input[type=radio]{width:1.05rem;height:1.05rem;margin:0 .5rem 0 0;accent-color:var(--primary);vertical-align:-2px;cursor:pointer}
+/* Compact, inline-sized inputs (assumption ranges/rates keep their size attr). */
+input[size]{display:inline-block;width:auto;margin-top:0;padding:.48rem .6rem;vertical-align:middle;text-align:center}
 fieldset{border:1px solid var(--line);border-radius:14px;padding:1rem 1.15rem;margin:0 0 1.25rem}
 legend{font-weight:620;color:var(--ink);padding:0 .4rem}
+/* Inline forms (member/role controls): keep control + button on one line. */
+form.inline{display:inline-flex;align-items:center;gap:.4rem;margin:0;vertical-align:middle}
+form.inline select,form.inline input{width:auto;display:inline-block;margin:0}
+form.inline button{padding:.42rem .8rem;font-size:.85rem;box-shadow:var(--sh-1)}
+/* Onboarding radio/list rows as selectable cards. */
+.pick{display:block;margin:0 0 .6rem}
+.pick input{position:absolute;opacity:0;pointer-events:none}
+.pick > span{display:flex;align-items:center;gap:.7rem;padding:.85rem 1.05rem;border:1px solid var(--line);border-radius:12px;
+  background:var(--surface);box-shadow:var(--sh-1);cursor:pointer;font-weight:550;color:var(--ink);
+  transition:border-color .15s var(--ease),box-shadow .15s var(--ease),background .15s var(--ease)}
+.pick > span::before{content:'';flex:none;width:1.15rem;height:1.15rem;border-radius:50%;border:2px solid var(--line);transition:all .15s var(--ease)}
+.pick:hover > span{border-color:color-mix(in srgb,var(--primary) 40%,var(--line))}
+.pick input:checked + span{border-color:var(--primary);background:var(--grad-soft);box-shadow:var(--ring)}
+.pick input:checked + span::before{border-color:var(--primary);background:var(--primary);box-shadow:inset 0 0 0 3px var(--surface)}
+.pick input:focus-visible + span{box-shadow:var(--ring)}
 
 /* Cards & surfaces */
 .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1.6rem;box-shadow:var(--sh-1);
@@ -171,7 +188,9 @@ tbody tr{transition:background .12s var(--ease)}
 .tier-B{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
 .tier-C{color:var(--neg-ink);background:var(--neg-bg);border-color:var(--neg-line)}
 .chip{display:inline-flex;align-items:center;gap:.4rem;font-size:.82rem;font-weight:550;color:var(--muted);
-  background:var(--surface-2);border:1px solid var(--line);padding:.3rem .7rem;border-radius:999px}
+  background:var(--surface-2);border:1px solid var(--line);padding:.3rem .7rem;border-radius:999px;text-decoration:none;
+  transition:color .15s var(--ease),border-color .15s var(--ease),background .15s var(--ease)}
+a.chip:hover{color:var(--ink);border-color:color-mix(in srgb,var(--primary) 34%,var(--line));background:var(--surface)}
 
 /* details / drill-downs & FAQ */
 details{border:1px solid var(--line);border-radius:13px;background:var(--surface);margin:.7rem 0;overflow:hidden;
@@ -209,6 +228,35 @@ details > *:not(summary):last-child{margin-bottom:1rem}
 .info{color:var(--ink-2);background:var(--grad-soft);border:1px solid color-mix(in srgb,var(--primary) 18%,var(--line));border-radius:12px;padding:.85rem 1.1rem;margin:1rem 0}
 .danger{border:1px solid var(--neg-line);background:var(--neg-bg);border-radius:var(--radius);padding:1.1rem 1.35rem;margin:1.35rem 0}
 .danger h3{margin-top:0;color:var(--neg-ink)}
+
+/* Empty states */
+.empty{text-align:center;padding:2.75rem 1.5rem;border:1px dashed var(--line);border-radius:var(--radius);background:var(--bg-2);margin:1rem 0}
+.empty .ic{margin:0 auto 1rem;width:3rem;height:3rem}
+.empty .ic svg{width:1.5rem;height:1.5rem}
+.empty h3{margin:0 0 .35rem}
+.empty p{color:var(--muted);margin:0 auto 1.2rem;max-width:32rem}
+
+/* Row lists (runs) */
+.rows{display:flex;flex-direction:column;gap:.6rem;margin:1rem 0;list-style:none;padding:0}
+.row{display:flex;align-items:center;justify-content:space-between;gap:1rem;
+  padding:.95rem 1.2rem;border:1px solid var(--line);border-radius:13px;background:var(--surface);box-shadow:var(--sh-1);
+  transition:transform .16s var(--ease),box-shadow .16s var(--ease),border-color .16s var(--ease)}
+.row:hover{transform:translateY(-1px);box-shadow:var(--sh-2);border-color:color-mix(in srgb,var(--primary) 22%,var(--line))}
+.row a.row-main{color:var(--ink);font-weight:600;text-decoration:none;display:flex;flex-direction:column;gap:.15rem;flex:1}
+.row a.row-main:hover{color:var(--ink)}
+.row .row-sub{color:var(--muted);font-size:.85rem;font-weight:450}
+.row .row-go{color:var(--primary);font-weight:600;font-size:.9rem;white-space:nowrap}
+
+/* Spinner (loading) */
+.spinner{width:2.4rem;height:2.4rem;border-radius:50%;border:3px solid color-mix(in srgb,var(--primary) 22%,transparent);
+  border-top-color:var(--primary);animation:cf-spin .8s linear infinite;margin:0 auto}
+@keyframes cf-spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spinner{animation-duration:2s}}
+
+@media (max-width:560px){
+  .row{flex-direction:column;align-items:flex-start;gap:.4rem}
+  form.inline{flex-wrap:wrap}
+}
 
 /* Stepper */
 .stepper{display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;margin:0 0 1.9rem;padding:.45rem;
@@ -313,6 +361,53 @@ export function layout(
   <nav class="nav">${nav}</nav>
 </div></header>
 ${main}
+</body>
+</html>`;
+}
+
+/**
+ * Branded, auto-refreshing "analysis running" page. No JS (CSP `script-src
+ * none`), so it polls with `<meta http-equiv="refresh">`; the CSS spinner and
+ * theme-aware palette keep it on-brand while the job completes.
+ */
+export function loadingPage(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="2">
+<meta name="color-scheme" content="light dark">
+<title>Analysing… — CostFlow</title>
+<style>
+  :root{--ink:#0d0e14;--muted:#5c5f6e;--line:#e9e9f0;--bg:#ffffff;--surface:#ffffff;--primary:#5b54e6;
+    --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);
+    --sh:0 20px 44px -14px rgba(30,24,74,.22),0 8px 18px -10px rgba(30,24,74,.14);
+    --font:'Inter','SF Pro Text',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+  @media (prefers-color-scheme:dark){:root{--ink:#f4f5fb;--muted:#9a9db2;--line:#242634;--bg:#0a0b11;--surface:#12141d;--primary:#8b87f5;--sh:0 26px 52px -14px rgba(0,0,0,.72)}}
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);
+    display:flex;align-items:center;justify-content:center;padding:1.5rem;-webkit-font-smoothing:antialiased}
+  .box{text-align:center;background:var(--surface);border:1px solid var(--line);border-radius:22px;
+    padding:2.75rem 2.5rem;box-shadow:var(--sh);max-width:26rem}
+  .sp{width:2.6rem;height:2.6rem;border-radius:50%;border:3px solid color-mix(in srgb,var(--primary) 22%,transparent);
+    border-top-color:var(--primary);animation:s .8s linear infinite;margin:0 auto 1.4rem}
+  @keyframes s{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.sp{animation-duration:2s}}
+  h1{font-size:1.35rem;letter-spacing:-.02em;margin:0 0 .4rem}
+  p{color:var(--muted);margin:0;font-size:.95rem;line-height:1.55}
+  .bar{height:4px;width:8rem;margin:1.4rem auto 0;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--primary) 14%,transparent)}
+  .bar::before{content:'';display:block;height:100%;width:40%;border-radius:999px;background:var(--grad);animation:m 1.3s var(--ease,ease-in-out) infinite}
+  @keyframes m{0%{transform:translateX(-120%)}100%{transform:translateX(320%)}}
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="sp"></div>
+    <h1>Analysing your workflow…</h1>
+    <p>Importing work items and pricing friction. This usually takes a few seconds — the page refreshes on its own.</p>
+    <div class="bar"></div>
+  </div>
 </body>
 </html>`;
 }

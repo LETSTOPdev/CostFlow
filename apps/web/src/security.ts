@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { layout } from './html';
 import type { Store } from './store/contract';
 
 /**
@@ -106,9 +107,42 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
       .code(status)
       .type('text/html')
       .send(
-        status === 500
-          ? '<!doctype html><title>Error — CostFlow</title><p>Something went wrong on our end. Please try again.</p>'
-          : '<!doctype html><title>Error — CostFlow</title><p>That request could not be processed.</p>',
+        layout(
+          status === 500 ? 'Something went wrong' : 'Request not processed',
+          `<div class="empty" style="max-width:34rem;margin:2.5rem auto">
+             <h3>${status === 500 ? 'Something went wrong on our end' : "That request couldn't be processed"}</h3>
+             <p>${
+               status === 500
+                 ? 'We hit an unexpected error. Nothing about your data changed. Please try again in a moment.'
+                 : 'The request was malformed or is no longer valid. Please go back and try again.'
+             }</p>
+             <a class="btn" href="/">Back to CostFlow</a>
+           </div>`,
+        ),
+      );
+  });
+
+  // Unmatched routes get the branded 404, not Fastify's default JSON body.
+  app.setNotFoundHandler((request, reply) => {
+    log({
+      level: 'info',
+      msg: 'not-found',
+      method: request.method,
+      path: redactPath(request.url.split('?')[0] ?? request.url),
+      status: 404,
+    });
+    return reply
+      .code(404)
+      .type('text/html')
+      .send(
+        layout(
+          'Page not found',
+          `<div class="empty" style="max-width:34rem;margin:2.5rem auto">
+             <h3>We couldn't find that page</h3>
+             <p>The link may be broken or the page may have moved.</p>
+             <a class="btn" href="/">Back to CostFlow</a>
+           </div>`,
+        ),
       );
   });
 

@@ -21,7 +21,7 @@ import {
 } from './auth';
 import type { AnalysisRun } from '@costflow/analysis';
 import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
-import { esc, layout, METHODOLOGY_APPENDIX, printLayout, stepsNav, STEPS_NAV } from './html';
+import { esc, layout, loadingPage, METHODOLOGY_APPENDIX, printLayout, stepsNav } from './html';
 import { LOGO_SVG } from './brand';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
 import { parseRun, renderReportBody } from './report-view';
@@ -193,6 +193,45 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // (dev/OIDC /login) do not use this — no session, no logout control.
   const page = (session: Session, title: string, body: string): string =>
     layout(title, body, session.csrf);
+
+  // Human-readable, timezone-stable timestamp for lists (deterministic — parsed
+  // from the ISO string, never locale/TZ-dependent).
+  const MONTHS = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  const fmtWhen = (iso: string): string => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
+    if (!m) return esc(iso);
+    return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]} · ${m[4]}:${m[5]} UTC`;
+  };
+
+  // Styled "not found" for a missing resource (job/run/member), replacing the
+  // bare-text 404. Uses the public shell so it renders with or without chrome.
+  const notFound = (reply: FastifyReply): FastifyReply =>
+    reply
+      .code(404)
+      .type('text/html')
+      .send(
+        layout(
+          'Not found',
+          `<div class="empty" style="max-width:34rem;margin:2.5rem auto">
+             <h3>We couldn't find that</h3>
+             <p>The page or item you're looking for doesn't exist, was deleted, or isn't yours to view.</p>
+             <a class="btn" href="/">Back to CostFlow</a>
+           </div>`,
+        ),
+      );
 
   // ---------- roles & permission enforcement (P4.4) ----------
 
@@ -384,7 +423,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const user = await currentUser(session);
     const admins = (deps.adminEmails ?? []).map((email) => email.toLowerCase());
     if (!user || !admins.includes(user.email.toLowerCase())) {
-      return reply.code(404).send('Not found.');
+      return notFound(reply);
     }
     const stats = await store.funnelStats();
     const pct = (n: number, d: number): string => (d === 0 ? '—' : `${Math.round((n / d) * 100)}%`);
@@ -394,13 +433,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Admin — activation funnel',
-        `<h2>Activation funnel</h2>
-         <table><tr><th>Stage</th><th>Organizations</th><th>of signups</th></tr>
+        `<p class="eyebrow">Admin</p>
+         <h1 style="margin-top:.6rem">Activation funnel</h1>
+         <div class="table-wrap" style="max-width:34rem"><table><tr><th>Stage</th><th>Organizations</th><th>of signups</th></tr>
            ${row('Signed up', stats.organizations)}
            ${row('Connected a workspace', stats.connectedWorkspaces)}
            ${row('Ran an analysis', stats.analysesRun)}
            ${row('Viewed a report', stats.reportsViewed)}
-         </table>
+         </table></div>
          <p class="note">Aggregate counts of distinct organizations reaching each step. No customer content, emails, or identities.</p>`,
       ),
     );
@@ -418,33 +458,49 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Dashboard',
-        `${STEPS_NAV}
-         <h2>${esc(workspace.projectName ?? '')} (${esc(workspace.projectKey ?? '')})</h2>
-         <p class="note">Jira site ${esc(workspace.site)} · connected as ${esc(workspace.email)} · credentials stored encrypted</p>
-         <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run CostFlow</button></form>
+        `<div class="panel" style="display:flex;flex-wrap:wrap;gap:1.25rem;align-items:center;justify-content:space-between">
+           <div>
+             <p class="eyebrow" style="margin-bottom:.5rem">Workspace</p>
+             <h1 style="margin:0 0 .35rem">${esc(workspace.projectName ?? 'Your project')} ${workspace.projectKey ? `<span class="note" style="font-weight:500;font-size:1rem">(${esc(workspace.projectKey)})</span>` : ''}</h1>
+             <p class="note" style="margin:0">Jira site ${esc(workspace.site)} · connected as ${esc(workspace.email)} · credentials encrypted at rest</p>
+           </div>
+           <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run analysis</button></form>
+         </div>
          ${
            failed.length > 0
-             ? `<h3>Recent failures</h3><ul>${failed
+             ? `<div class="danger"><h3>Recent failures</h3><ul style="margin:0">${failed
                  .map(
                    (j) =>
-                     `<li>${esc(j.createdAt)} — ${esc(j.errorClass ?? '')}: ${esc(j.errorMessage ?? '')}</li>`,
+                     `<li><span class="note">${fmtWhen(j.createdAt)}</span> — <strong>${esc(j.errorClass ?? 'unexpected')}</strong>${j.errorMessage ? `: ${esc(j.errorMessage)}` : ''}</li>`,
                  )
-                 .join('')}</ul>`
+                 .join('')}</ul></div>`
              : ''
          }
-         <h3>Runs</h3>
+         <h2 style="margin-top:2rem">Reports</h2>
          ${
            runs.length === 0
-             ? '<p class="note">No runs yet.</p>'
-             : `<ul>${runs
+             ? `<div class="empty">
+                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg></span>
+                  <h3>No reports yet</h3>
+                  <p>Run your first analysis to price this project's friction.</p>
+                  <form method="post" action="/runs" style="display:inline">${csrfField(session)}<button type="submit">Run your first analysis</button></form>
+                </div>`
+             : `<ul class="rows">${runs
                  .map(
                    (r) =>
-                     `<li><a href="/reports/${esc(r.id)}">${esc(r.createdAt)} — run ${esc(r.id)}</a></li>`,
+                     `<li class="row"><a class="row-main" href="/reports/${esc(r.id)}"><span>Friction analysis</span><span class="row-sub">${fmtWhen(r.createdAt)} · Ref ${esc(r.id)}</span></a><span class="row-go">View report →</span></li>`,
                  )
                  .join('')}</ul>`
          }
-         <p><a href="/connect">Connection</a> · <a href="/scope">Scope</a> · <a href="/mapping/statuses">Statuses</a> · <a href="/mapping/actors">Roles</a> · <a href="/assumptions">Assumptions</a></p>
-         <p><a href="/org">Organization &amp; members</a> · <a href="/settings">Settings</a></p>`,
+         <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:2rem">
+           <a class="chip" href="/connect">Connection</a>
+           <a class="chip" href="/scope">Scope</a>
+           <a class="chip" href="/mapping/statuses">Statuses</a>
+           <a class="chip" href="/mapping/actors">Roles</a>
+           <a class="chip" href="/assumptions">Assumptions</a>
+           <a class="chip" href="/org">Organization &amp; members</a>
+           <a class="chip" href="/settings">Settings</a>
+         </div>`,
       ),
     );
   });
@@ -570,18 +626,28 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         session,
         'Choose scope',
         `${stepsNav('scope')}
-         <h2>Choose the project to import</h2>
-         <form method="post" action="/scope">${csrfField(session)}
-           ${projects
-             .map(
-               (p, index) =>
-                 `<label><input type="radio" name="project" value="${index}" ${
-                   workspace.projectKey === p.key ? 'checked' : ''
-                 } required> ${esc(p.name)} (${esc(p.key)})</label>`,
-             )
-             .join('')}
-           <button type="submit">Import this project</button>
-         </form>`,
+         <p class="eyebrow">Step 2 · Scope</p>
+         <h1 style="margin-top:.6rem">Choose the project to import</h1>
+         <p class="lead">Pick the Jira project you want CostFlow to analyse. You can reconnect and switch it later.</p>
+         ${
+           projects.length === 0
+             ? `<div class="empty" style="max-width:38rem">
+                  <h3>No projects found</h3>
+                  <p>This account can't see any Jira projects. Check that the API token belongs to a user with project access, then reconnect.</p>
+                  <a class="btn" href="/connect">Back to connection</a>
+                </div>`
+             : `<form method="post" action="/scope" class="panel" style="max-width:40rem;margin-top:1.5rem">${csrfField(session)}
+                 ${projects
+                   .map(
+                     (p, index) =>
+                       `<label class="pick"><input type="radio" name="project" value="${index}" ${
+                         workspace.projectKey === p.key ? 'checked' : ''
+                       } required><span><span style="flex:1">${esc(p.name)} (${esc(p.key)})</span></span></label>`,
+                   )
+                   .join('')}
+                 <button type="submit" style="margin-top:.5rem">Import this project</button>
+               </form>`
+         }`,
       ),
     );
   });
@@ -642,16 +708,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!session) return;
     const workspace = await requireStep(session, reply, 'scope-selected');
     if (!workspace) return;
-    const kinds = STAGE_KINDS.map((k) => `<option value="${k}">${k}</option>`).join('');
     return reply.type('text/html').send(
       page(
         session,
         'Map statuses',
         `${stepsNav('statuses')}
-         <h2>Map every status to a stage kind</h2>
-         <p class="note">All ${workspace.observedStatuses.length} statuses observed in the project (current and historical) must be mapped — history through an unmapped status would make the analysis refuse.</p>
-         <form method="post" action="/mapping/statuses">${csrfField(session)}
-           <table><tr><th>Status in Jira</th><th>Stage kind</th></tr>
+         <p class="eyebrow">Step 3 · Statuses</p>
+         <h1 style="margin-top:.6rem">Map every status to a stage kind</h1>
+         <p class="lead">All ${workspace.observedStatuses.length} statuses observed in the project (current and historical) must be mapped — history through an unmapped status would make the analysis refuse.</p>
+         <form method="post" action="/mapping/statuses" class="panel" style="margin-top:1.5rem">${csrfField(session)}
+           <div class="table-wrap"><table><tr><th>Status in Jira</th><th>Stage kind</th></tr>
            ${workspace.observedStatuses
              .map(
                (status, index) =>
@@ -664,9 +730,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
                   </select></td></tr>`,
              )
              .join('')}
-           </table>
-           ${kinds.length === 0 ? '' : ''}
-           <button type="submit">Save status mapping</button>
+           </table></div>
+           <button type="submit" style="margin-top:1.1rem">Save status mapping</button>
          </form>`,
       ),
     );
@@ -718,21 +783,22 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         session,
         'Map people to roles',
         `${stepsNav('roles')}
-         <h2>Map people to roles</h2>
-         <p class="note">Role names (e.g. "Legal", "Ops") price work by rate card. Anyone left blank is
+         <p class="eyebrow">Step 4 · Roles</p>
+         <h1 style="margin-top:.6rem">Map people to roles</h1>
+         <p class="lead">Role names (e.g. "Legal", "Ops") price work by rate card. Anyone left blank is
          pseudonymized — never stored by name — and priced at the default rate with reduced confidence.</p>
-         <form method="post" action="/mapping/actors">${csrfField(session)}
-           <table><tr><th>Person (from Jira)</th><th>Role (blank = pseudonymize)</th></tr>
+         <form method="post" action="/mapping/actors" class="panel" style="margin-top:1.5rem">${csrfField(session)}
+           <div class="table-wrap"><table><tr><th>Person (from Jira)</th><th>Role (blank = pseudonymize)</th></tr>
            ${workspace.observedActors
              .map(
                (actor, index) =>
-                 `<tr><td>${esc(actor)}</td><td><input name="a${index}" value="${esc(
+                 `<tr><td>${esc(actor)}</td><td><input name="a${index}" placeholder="e.g. Legal" value="${esc(
                    workspace.actorRoleMap?.[actor] ?? '',
                  )}"></td></tr>`,
              )
              .join('')}
-           </table>
-           <button type="submit">Save role mapping</button>
+           </table></div>
+           <button type="submit" style="margin-top:1.1rem">Save role mapping</button>
          </form>`,
       ),
     );
@@ -819,12 +885,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         session,
         'Assumptions',
         `${stepsNav('assumptions')}
-         <h2>Assumptions (currency: ${esc(current.currency)})</h2>
-         <p class="note">Nothing is priced on a vendor suggestion: accept a value as yours, or change
-         it. Unconfirmed assumptions leave their frictions unpriced in reports.</p>
-         <form method="post" action="/assumptions">${csrfField(session)}
-           <p><label><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong> — start with our estimates and refine later (you can change any value now).</label></p>
-           <table><tr><th>Assumption</th><th>Value</th><th>Status</th></tr>
+         <p class="eyebrow">Step 5 · Assumptions</p>
+         <h1 style="margin-top:.6rem">Confirm your assumptions</h1>
+         <p class="lead">Nothing is priced on a vendor suggestion: accept a value as yours, or change
+         it. Unconfirmed assumptions leave their frictions unpriced in reports. Currency: ${esc(current.currency)}.</p>
+         <form method="post" action="/assumptions" class="panel" style="margin-top:1.5rem">${csrfField(session)}
+           <div class="info"><label style="margin:0"><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong> — start with our estimates and refine later (you can change any value now).</label></div>
+           <div class="table-wrap"><table><tr><th>Assumption</th><th>Value</th><th>Status</th></tr>
            ${current.rates
              .map((rate, index) =>
                row(
@@ -879,8 +946,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
              ),
              'overdue',
            )}
-           </table>
-           <button type="submit">Save assumptions</button>
+           </table></div>
+           <button type="submit" style="margin-top:1.1rem">Save assumptions</button>
          </form>`,
       ),
     );
@@ -1089,7 +1156,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!session) return;
     const jobId = (request.params as { jobId: string }).jobId;
     const job = await store.getJob(session.tenantId, jobId);
-    if (!job) return reply.code(404).send('Not found.');
+    if (!job) return notFound(reply);
     if (job.status === 'succeeded' && job.runId) {
       return reply.redirect(`/reports/${job.runId}`);
     }
@@ -1098,16 +1165,19 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         page(
           session,
           'Run failed',
-          `<h2>Run failed</h2>
-           <p class="error">${esc(job.errorClass ?? 'unexpected')}: ${esc(job.errorMessage ?? '')}</p>
-           <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run again</button></form>`,
+          `<div class="panel" style="max-width:38rem">
+             <h1>The analysis didn't finish</h1>
+             <p class="lead">We hit a problem while importing or analysing your project. Nothing was saved from this run.</p>
+             <div class="error"><strong>${esc(job.errorClass ?? 'unexpected')}</strong>${job.errorMessage ? ` — ${esc(job.errorMessage)}` : ''}</div>
+             <div class="hero-actions" style="justify-content:flex-start;margin-top:1.25rem">
+               <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run again</button></form>
+               <a class="btn btn-ghost" href="/connect">Check connection</a>
+             </div>
+           </div>`,
         ),
       );
     }
-    return reply.type('text/html').send(
-      `<!doctype html><meta http-equiv="refresh" content="2"><title>Running…</title>
-       <p>Analysis ${esc(job.status)}… this page refreshes automatically.</p>`,
-    );
+    return reply.type('text/html').send(loadingPage());
   });
 
   app.get('/runs', async (request, reply) => {
@@ -1117,22 +1187,28 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const allowed = await accessibleWorkspaceIds(session, user);
     let runs = await store.listRuns(session.tenantId);
     if (allowed) runs = runs.filter((r) => allowed.has(r.workspaceId));
-    return reply
-      .type('text/html')
-      .send(
-        page(
-          session,
-          'Runs',
-          runs.length === 0
-            ? '<p class="note">No runs yet.</p>'
-            : `<ul>${runs
-                .map(
-                  (r) =>
-                    `<li><a href="/reports/${esc(r.id)}">${esc(r.createdAt)} — run ${esc(r.id)}</a></li>`,
-                )
-                .join('')}</ul>`,
-        ),
-      );
+    return reply.type('text/html').send(
+      page(
+        session,
+        'Runs',
+        runs.length === 0
+          ? `<h1>Reports</h1>
+               <div class="empty">
+                 <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg></span>
+                 <h3>No reports yet</h3>
+                 <p>Run your first analysis to see what workflow friction is costing your team — every figure traceable to its formula.</p>
+                 <a class="btn" href="/">Start an analysis</a>
+               </div>`
+          : `<h1>Reports</h1>
+               <p class="note">${runs.length} ${runs.length === 1 ? 'report' : 'reports'}, newest first.</p>
+               <ul class="rows">${runs
+                 .map(
+                   (r) =>
+                     `<li class="row"><a class="row-main" href="/reports/${esc(r.id)}"><span>Friction analysis</span><span class="row-sub">${fmtWhen(r.createdAt)} · Ref ${esc(r.id)}</span></a><span class="row-go">View report →</span></li>`,
+                 )
+                 .join('')}</ul>`,
+      ),
+    );
   });
 
   // Load a run the session may view (tenant-scoped + member workspace check).
@@ -1143,13 +1219,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   ): Promise<{ record: RunRecord; workspace: WorkspaceRecord | null } | null> => {
     const record = await store.getRun(session.tenantId, runId);
     if (!record) {
-      void reply.code(404).send('Not found.');
+      void notFound(reply);
       return null;
     }
     const viewer = await currentUser(session);
     const allowed = await accessibleWorkspaceIds(session, viewer);
     if (allowed && !allowed.has(record.workspaceId)) {
-      void reply.code(404).send('Not found.');
+      void notFound(reply);
       return null;
     }
     const workspace = await store.getWorkspace(session.tenantId, record.workspaceId);
@@ -1287,8 +1363,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Settings',
-        `<h2>Data &amp; privacy</h2>
-         <p class="note">You control your data. Deleting is permanent and cascades to every
+        `<p class="eyebrow">Settings</p>
+         <h1 style="margin-top:.6rem">Data &amp; privacy</h1>
+         <p class="lead">You control your data. Deleting is permanent and cascades to every
          derived analysis (GDPR erasure). CostFlow keeps no copy.</p>
          ${workspaces.length === 0 ? '<p class="note">No workspaces connected.</p>' : workspaceCards}
          ${
@@ -1328,7 +1405,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         );
     }
     const summary = await store.deleteWorkspace(session.tenantId, workspaceId);
-    if (!summary) return reply.code(404).send('Not found.');
+    if (!summary) return notFound(reply);
     telemetry(webEvent('tm-web-data-deleted', { scope: 'workspace', cascadedRuns: summary.runs }));
     return reply.redirect('/settings');
   });
@@ -1409,14 +1486,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const token = (request.params as { token: string }).token;
     const invitation = await store.getInvitationByToken(token);
     if (!invitation || invitation.status !== 'pending') {
-      return reply
-        .type('text/html')
-        .send(
-          layout(
-            'Invitation',
-            '<h2>Invitation unavailable</h2><p>This invitation link is invalid, already used, or was revoked. <a href="/login">Sign in</a>.</p>',
-          ),
-        );
+      return reply.type('text/html').send(
+        layout(
+          'Invitation',
+          `<div class="panel" style="max-width:34rem;margin:2rem auto;text-align:center">
+               <h1>Invitation unavailable</h1>
+               <p class="lead">This invitation link is invalid, already used, or was revoked.</p>
+               <div class="hero-actions" style="margin-top:1.25rem"><a class="btn btn-lg" href="/login">Sign in</a></div>
+             </div>`,
+        ),
+      );
     }
     const tenant = await store.getTenant(invitation.tenantId);
     // Must survive the cross-site IdP round-trip (same reason as cf_oidc_state).
@@ -1429,10 +1508,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return reply.type('text/html').send(
       layout(
         'Invitation',
-        `<h2>Join ${esc(orgLabel(tenant?.name ?? null))}</h2>
-         <p>You have been invited to join as <strong>${esc(invitation.role)}</strong>. Sign in as
-         <strong>${esc(invitation.email)}</strong> to accept.</p>
-         <p><a href="/login">Continue to sign in</a></p>`,
+        `<div class="panel" style="max-width:36rem;margin:2rem auto;text-align:center">
+           <p class="eyebrow" style="margin:0 auto">You're invited</p>
+           <h1 style="margin-top:1rem">Join ${esc(orgLabel(tenant?.name ?? null))}</h1>
+           <p class="lead">You've been invited to join as <strong>${esc(invitation.role)}</strong>. Sign in as
+           <strong>${esc(invitation.email)}</strong> to accept.</p>
+           <div class="hero-actions" style="margin-top:1.5rem"><a class="btn btn-lg" href="/login">Continue to sign in</a></div>
+         </div>`,
       ),
     );
   });
@@ -1507,36 +1589,45 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Organization',
-        `<h2>Organization</h2>
-         <p class="note">You are signed in as <strong>${esc(actor?.email ?? '')}</strong> (${esc(actor?.role ?? '')}).</p>
+        `<p class="eyebrow">Organization</p>
+         <h1 style="margin-top:.6rem">Organization &amp; members</h1>
+         <p class="lead">Signed in as <strong>${esc(actor?.email ?? '')}</strong> · ${esc(actor?.role ?? '')}.</p>
 
-         <h3>Name</h3>
-         <form method="post" action="/org/rename">${csrfField(session)}
-           <label>Organization name <input name="name" value="${esc(orgLabel(tenant?.name ?? null))}" maxlength="100" required></label>
-           <button type="submit">Save name</button>
-         </form>
+         <div class="panel">
+           <h3 style="margin-top:0">Name</h3>
+           <form method="post" action="/org/rename">${csrfField(session)}
+             <label>Organization name <input name="name" value="${esc(orgLabel(tenant?.name ?? null))}" maxlength="100" required></label>
+             <button type="submit">Save name</button>
+           </form>
+         </div>
 
-         <h3>Members</h3>
-         <table><tr><th>Email</th><th>Role</th><th></th></tr>${users.map(memberRow).join('')}</table>
+         <div class="panel">
+           <h3 style="margin-top:0">Members</h3>
+           <div class="table-wrap"><table><tr><th>Email</th><th>Role</th><th></th></tr>${users.map(memberRow).join('')}</table></div>
+         </div>
 
-         <h3>Invitations</h3>
-         ${
-           invitations.length === 0
-             ? '<p class="note">No invitations yet.</p>'
-             : `<table><tr><th>Email</th><th>Role</th><th>Status</th><th>Invite link</th><th></th></tr>${invitations.map(invRow).join('')}</table>`
-         }
-         <form method="post" action="/org/invitations">${csrfField(session)}
-           <label>Invite email <input name="email" type="email" required autocomplete="off"></label>
-           <label>Role <select name="role"><option value="member">member</option><option value="admin">admin</option></select></label>
-           <button type="submit">Create invitation</button>
-           <p class="note">Share the generated link with the invitee — they join this organization when they sign in with that email.</p>
-         </form>
+         <div class="panel">
+           <h3 style="margin-top:0">Invitations</h3>
+           ${
+             invitations.length === 0
+               ? '<p class="note">No invitations yet.</p>'
+               : `<div class="table-wrap"><table><tr><th>Email</th><th>Role</th><th>Status</th><th>Invite link</th><th></th></tr>${invitations.map(invRow).join('')}</table></div>`
+           }
+           <form method="post" action="/org/invitations" style="margin-top:1.25rem">${csrfField(session)}
+             <label>Invite email <input name="email" type="email" required autocomplete="off"></label>
+             <label>Role <select name="role"><option value="member">member</option><option value="admin">admin</option></select></label>
+             <button type="submit">Create invitation</button>
+             <p class="note" style="margin-top:.75rem">Share the generated link with the invitee — they join this organization when they sign in with that email.</p>
+           </form>
+         </div>
 
-         <h3>Workspace access</h3>
-         <p class="note">Owners and admins can reach every workspace. Members reach only the workspaces granted here.</p>
-         ${workspaces.length === 0 ? '<p class="note">No workspaces yet.</p>' : wsSection}
+         <div class="panel">
+           <h3 style="margin-top:0">Workspace access</h3>
+           <p class="note">Owners and admins can reach every workspace. Members reach only the workspaces granted here.</p>
+           ${workspaces.length === 0 ? '<p class="note">No workspaces yet.</p>' : wsSection}
+         </div>
 
-         <p><a href="/dashboard">Dashboard</a> · <a href="/settings">Settings</a></p>`,
+         <div style="display:flex;gap:.5rem;margin-top:1.5rem"><a class="chip" href="/dashboard">Dashboard</a> <a class="chip" href="/settings">Settings</a></div>`,
       ),
     );
   });
@@ -1588,7 +1679,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!checkCsrf(request, session, reply)) return;
     const id = (request.params as { id: string }).id;
     const updated = await store.updateInvitationStatus(session.tenantId, id, 'revoked', null);
-    if (!updated) return reply.code(404).send('Not found.');
+    if (!updated) return notFound(reply);
     telemetry(webEvent('tm-web-invite-revoked', {}));
     return reply.redirect('/org');
   });
@@ -1604,7 +1695,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     const actor = await currentUser(session);
     const target = await store.getUser(session.tenantId, targetId);
-    if (!target) return reply.code(404).send('Not found.');
+    if (!target) return notFound(reply);
     if (actor?.role !== 'owner' && (target.role === 'owner' || newRole === 'owner')) {
       return forbidden(session, reply, 'Only the owner can grant or change the owner role.');
     }
@@ -1630,7 +1721,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     const actor = await currentUser(session);
     const target = await store.getUser(session.tenantId, targetId);
-    if (!target) return reply.code(404).send('Not found.');
+    if (!target) return notFound(reply);
     if (actor?.role !== 'owner' && target.role === 'owner') {
       return forbidden(session, reply, 'Only the owner can remove an owner.');
     }
@@ -1649,7 +1740,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const workspaceId = (request.params as { workspaceId: string }).workspaceId;
     const userId = (request.body as { userId?: string }).userId ?? '';
     const workspace = await store.getWorkspace(session.tenantId, workspaceId);
-    if (!workspace) return reply.code(404).send('Not found.');
+    if (!workspace) return notFound(reply);
     const member = await store.getUser(session.tenantId, userId);
     if (!member) return orgBadRequest(session, reply, 'Unknown member.');
     await store.addWorkspaceMember(session.tenantId, workspaceId, userId);
@@ -1663,7 +1754,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!checkCsrf(request, session, reply)) return;
     const { workspaceId, userId } = request.params as { workspaceId: string; userId: string };
     const workspace = await store.getWorkspace(session.tenantId, workspaceId);
-    if (!workspace) return reply.code(404).send('Not found.');
+    if (!workspace) return notFound(reply);
     await store.removeWorkspaceMember(session.tenantId, workspaceId, userId);
     telemetry(webEvent('tm-web-workspace-member-removed', {}));
     return reply.redirect('/org');
