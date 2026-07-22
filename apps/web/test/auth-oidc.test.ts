@@ -75,6 +75,25 @@ describe('managed authentication (OIDC adapter)', () => {
     expect(t.events[0]).toMatchObject({ event: 'tm-web-signin', fields: { ok: true } });
   });
 
+  it('/signup hands off to the IdP registration screen (screen_hint=signup)', async () => {
+    const t = makeApp({
+      auth: {
+        mode: 'oidc',
+        sessionKey: Buffer.alloc(32, 1),
+        credentialKey: Buffer.alloc(32, 2),
+        oidc,
+        fetchFn: stubIdp(),
+      },
+    });
+    const res = await t.app.inject({ method: 'GET', url: '/signup' });
+    expect(res.statusCode).toBe(302);
+    const location = new URL(res.headers['location'] as string);
+    expect(location.origin + location.pathname).toBe('https://idp.example/authorize');
+    expect(location.searchParams.get('screen_hint')).toBe('signup');
+    // Same state round-trip as /login: the callback still validates.
+    expect(cookieOf(res, 'cf_oidc_state').length).toBeGreaterThan(10);
+  });
+
   it('rejects a callback with a mismatched state', async () => {
     const t = makeApp({
       auth: {

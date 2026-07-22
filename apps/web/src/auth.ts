@@ -218,6 +218,8 @@ export function registerAuthRoutes(
       await completeSignIn(request, reply, email);
       return reply.redirect('/');
     });
+    // Dev mode has no separate registration screen — /signup is /login.
+    app.get('/signup', async (_request, reply) => reply.redirect('/login'));
     return;
   }
 
@@ -234,7 +236,10 @@ export function registerAuthRoutes(
     return (await response.json()) as OidcDiscovery;
   };
 
-  app.get('/login', async (_request, reply) => {
+  // Shared IdP hand-off. `screen_hint=signup` makes Auth0 Universal Login open
+  // on the REGISTRATION screen — a first-time visitor clicking "Get started"
+  // never has to find the small "Sign up" link on a login form.
+  const beginAuth = async (reply: FastifyReply, screenHint?: 'signup'): Promise<FastifyReply> => {
     const discovery = await discover();
     const state = newId();
     reply.setCookie('cf_oidc_state', signValue({ state }, config.sessionKey), {
@@ -247,9 +252,13 @@ export function registerAuthRoutes(
       `${discovery.authorization_endpoint}?response_type=code` +
       `&client_id=${encodeURIComponent(oidc.clientId)}` +
       `&redirect_uri=${encodeURIComponent(oidc.redirectUri)}` +
-      `&scope=${encodeURIComponent('openid email')}&state=${state}`;
+      `&scope=${encodeURIComponent('openid email')}&state=${state}` +
+      (screenHint ? `&screen_hint=${screenHint}` : '');
     return reply.redirect(url);
-  });
+  };
+
+  app.get('/login', async (_request, reply) => beginAuth(reply));
+  app.get('/signup', async (_request, reply) => beginAuth(reply, 'signup'));
 
   app.get('/auth/callback', async (request, reply) => {
     const query = request.query as {

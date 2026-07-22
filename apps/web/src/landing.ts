@@ -101,7 +101,7 @@ const hero = `
     <p class="lp-sub">Connect Jira. Get an itemized, ranked cost report in about a minute —
       every figure traceable to its formula.</p>
     <div class="lp-cta">
-      <a class="btn btn-lg" href="/login">Get started free</a>
+      <a class="btn btn-lg" href="/signup">Get started free</a>
       <a class="btn btn-ghost btn-lg" href="/demo">See a sample report</a>
     </div>
     <div class="lp-trust">
@@ -182,7 +182,7 @@ const traceable = `
 
 const midCta = `
 <section class="lp-midcta"><div class="container">
-  <a class="btn btn-lg" href="/login">See what it's costing my team — free</a>
+  <a class="btn btn-lg" href="/signup">See what it's costing my team — free</a>
   <p class="lp-midcta-fine">Your own report in about a minute · no credit card · read-only</p>
 </div></section>`;
 
@@ -246,7 +246,7 @@ const ctaBand = `
     <div class="lp-cta-glow" aria-hidden="true"></div>
     <div class="lp-cta-inner">
       <h2 class="lp-cta-h">Find out what your delays<br>are really costing you.</h2>
-      <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="/login">Get started free</a>
+      <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>
         <a class="lp-cta-link" href="/demo">or see a sample report →</a></div>
       <p class="lp-cta-fine">No credit card · read-only access · delete your data anytime</p>
     </div>

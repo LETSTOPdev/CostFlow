@@ -343,7 +343,7 @@ export function layout(
 ): string {
   const nav =
     csrf === undefined
-      ? `<span class="nav-extra"><a href="/demo">Sample report</a><a href="/login">Sign in</a></span><a class="btn btn-sm" href="/login">Get started</a>`
+      ? `<span class="nav-extra"><a href="/demo">Sample report</a><a href="/login">Sign in</a></span><a class="btn btn-sm" href="/signup">Get started</a>`
       : `<a href="/">Home</a><a href="/runs">Runs</a><form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
           csrf,
         )}"><button type="submit">Sign out</button></form>`;

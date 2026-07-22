@@ -546,7 +546,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // (never the token) and the reason on top.
   const connectPage = (
     session: Session,
-    opts: { site?: string; email?: string; error?: string; connectedNote?: string },
+    opts: {
+      site?: string;
+      email?: string;
+      error?: string;
+      connectedNote?: string;
+      helpOpen?: boolean;
+    },
   ): string =>
     page(
       session,
@@ -560,13 +566,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
          ${opts.error ? `<div class="error" role="alert">${opts.error}</div>` : ''}
          ${opts.connectedNote ?? ''}
          <form method="post" action="/connect">${csrfField(session)}
-           <label>Jira site URL <input name="site" placeholder="https://your-org.atlassian.net" required value="${esc(opts.site ?? '')}"></label>
-           <label>Account email <input name="email" type="email" placeholder="you@company.com" required value="${esc(opts.email ?? '')}"></label>
+           <label>Jira site URL <input name="site" placeholder="https://your-org.atlassian.net" required autocomplete="url" inputmode="url" ${opts.site ? '' : 'autofocus '}value="${esc(opts.site ?? '')}"></label>
+           <label>Account email <input name="email" type="email" placeholder="you@company.com" required autocomplete="email" value="${esc(opts.email ?? '')}"></label>
            <label>API token <input name="token" type="password" required autocomplete="off" placeholder="paste your Atlassian API token"></label>
            <button type="submit">Validate &amp; connect</button>
          </form>
-         <details style="margin-top:1.25rem">
-           <summary>How to get your Jira API token</summary>
+         <details style="margin-top:1.25rem"${opts.helpOpen ? ' open' : ''}>
+           <summary>How to get your Jira API token (~60 seconds)</summary>
            <ol class="note">
              <li>Open <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer">id.atlassian.com → API tokens</a>.</li>
              <li>Click <strong>Create API token</strong>, name it "CostFlow", and copy it.</li>
@@ -587,6 +593,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         connectedNote: workspace
           ? `<div class="info">Connected to <strong>${esc(workspace.site)}</strong> as ${esc(workspace.email)}. Submitting replaces the stored credentials.</div>`
           : '',
+        helpOpen: !workspace,
       }),
     );
   });
@@ -693,7 +700,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
                    .map(
                      (p, index) =>
                        `<label class="pick"><input type="radio" name="project" value="${index}" ${
-                         workspace.projectKey === p.key ? 'checked' : ''
+                         workspace.projectKey === p.key ||
+                         (!workspace.projectKey && projects.length === 1)
+                           ? 'checked'
+                           : ''
                        } required><span><span style="flex:1">${esc(p.name)} (${esc(p.key)})</span></span></label>`,
                    )
                    .join('')}
@@ -765,6 +775,22 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // ---------- step 3: status mapping ----------
 
+  // Pre-selection heuristic for common Jira status names. Purely a FORM
+  // DEFAULT: nothing is stored until the user reviews and submits, so the
+  // "you approved every mapping" invariant is untouched — this only turns
+  // N dropdown selections into a review pass for typical boards.
+  const guessStageKind = (status: string): StageKind | null => {
+    const s = status.toLowerCase();
+    if (/(done|closed|complete|resolved|released|shipped|deployed|live)/.test(s)) return 'done';
+    if (/(cancel|abandon|won'?t|rejected|discard|invalid|obsolete)/.test(s)) return 'abandoned';
+    if (/(block|on hold|hold|stuck|imped|paused|waiting)/.test(s)) return 'blocked';
+    if (/(review|approv|qa|test|verif|validat)/.test(s)) return 'review';
+    if (/(progress|develop|doing|active|implement|build|working|started)/.test(s)) return 'active';
+    if (/(backlog|to ?do|open|new|triage|queue|ready|selected|refin|planned)/.test(s))
+      return 'queue';
+    return null;
+  };
+
   app.get('/mapping/statuses', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
@@ -779,18 +805,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
          <h1 style="margin-top:.6rem">Map every status to a stage kind</h1>
          <p class="lead">All ${workspace.observedStatuses.length} statuses observed in the project (current and historical) must be mapped — history through an unmapped status would make the analysis refuse.</p>
          <form method="post" action="/mapping/statuses" class="panel" style="margin-top:1.5rem">${csrfField(session)}
+           <div class="info">We've pre-selected suggestions for common status names — review each one, adjust anything that's off, and save.</div>
            <div class="table-wrap"><table><tr><th>Status in Jira</th><th>Stage kind</th></tr>
            ${workspace.observedStatuses
-             .map(
-               (status, index) =>
-                 `<tr><td>${esc(status)}</td><td><select name="s${index}" required>
-                    <option value="" ${workspace.statusMap?.[status] === undefined ? 'selected' : ''} disabled>choose…</option>
+             .map((status, index) => {
+               const chosen = workspace.statusMap?.[status] ?? guessStageKind(status);
+               return `<tr><td>${esc(status)}</td><td><select name="s${index}" required>
+                    <option value="" ${chosen === null ? 'selected' : ''} disabled>choose…</option>
                     ${STAGE_KINDS.map(
-                      (k) =>
-                        `<option value="${k}" ${workspace.statusMap?.[status] === k ? 'selected' : ''}>${k}</option>`,
+                      (k) => `<option value="${k}" ${chosen === k ? 'selected' : ''}>${k}</option>`,
                     ).join('')}
-                  </select></td></tr>`,
-             )
+                  </select></td></tr>`;
+             })
              .join('')}
            </table></div>
            <button type="submit" style="margin-top:1.1rem">Save status mapping</button>
@@ -858,6 +884,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
          <p class="lead">Role names (e.g. "Legal", "Ops") price work by rate card. Anyone left blank is
          pseudonymized — never stored by name — and priced at the default rate with reduced confidence.</p>
          <form method="post" action="/mapping/actors" class="panel" style="margin-top:1.5rem">${csrfField(session)}
+           <div class="info">This step is optional — leaving everything blank is fine and is the fastest path to your first report. You can refine roles later.</div>
            <div class="table-wrap"><table><tr><th>Person (from Jira)</th><th>Role (blank = pseudonymize)</th></tr>
            ${workspace.observedActors
              .map(
@@ -868,7 +895,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
              )
              .join('')}
            </table></div>
-           <button type="submit" style="margin-top:1.1rem">Save role mapping</button>
+           <button type="submit" style="margin-top:1.1rem">Continue</button>
          </form>`,
       ),
     );
@@ -964,7 +991,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
          <p class="lead">Nothing is priced on a vendor suggestion: accept a value as yours, or change
          it. Unconfirmed assumptions leave their frictions unpriced in reports. Currency: ${esc(current.currency)}.</p>
          <form method="post" action="/assumptions" class="panel" style="margin-top:1.5rem">${csrfField(session)}
-           <div class="info"><label style="margin:0"><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong> — start with our estimates and refine later (you can change any value now).</label></div>
+           <div class="info"><label style="margin:0"><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong> — the fastest path to a fully priced report. You can change any value now or refine later.</label></div>
            <div class="table-wrap"><table><tr><th>Assumption</th><th>Value</th><th>Status</th></tr>
            ${current.rates
              .map((rate, index) =>
