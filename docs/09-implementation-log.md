@@ -1974,3 +1974,26 @@ individual identity is ever rendered (pseudonymized at ingestion + guarded).
 - Trend matches by friction instance id (stable per stage/type); a renamed
   stage starts a fresh series. No multi-run charting yet (single previous-run
   comparison).
+
+### P5 deployment resolution (2026-07-22) — corrected record
+
+Honest correction: the P4 hardening (`0aee2b9`) and P5 (`12735d1`) builds did
+NOT go live when first pushed. Root cause (found via the Railway deploy logs):
+the earlier migrate-on-boot change (`19250ff`) set the start command to
+`migrate && start`; the migrate process did not exit promptly, so `&& start`
+never fired, no server bound to $PORT, and the healthcheck timed out
+(Deploy ✓, Healthcheck ✗ after the full window). Railway kept the last good
+build (P4.4, `707131c`) — so every deploy from `19250ff` onward failed while
+production stayed on P4.4 code. (The failed deploys' migrate step still ran,
+which is why the P4.4 schema was present in prod and `/org`//invite worked; my
+health-green sampling was misleading — the old build was serving.)
+
+Fix (`8ed0c28`): migration moved to Railway's `deploy.preDeployCommand` (a
+separate one-off phase before promotion); `startCommand`/Docker `CMD` are
+start-only; `healthcheckTimeout` raised to 60s; `migrate.ts` now calls
+`process.exit` on both paths. Result: deploy `8ed0c28` went **ACTIVE /
+Deployment successful in ~45s**, carrying P4-hardening + P5 together. External
+verification: `/healthz` 200, `/readyz` 200; the new `/reports/:id`,
+`/reports/:id/print`, `/reports/:id/raw` routes all 302→`/login`; `/org`,
+`/settings`, `/jobs/:id` gated (302); `/invite/<bad>` 200; CSP/HSTS/X-Frame
+headers present. **P5 is live and healthy.**
