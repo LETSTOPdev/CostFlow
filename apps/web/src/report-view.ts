@@ -73,7 +73,19 @@ function renderTerms(
   const item = (id: string): string =>
     `${esc(titleOf.get(id) ?? id)} <span class="note">${esc(id)}</span>`;
 
-  const rows = estimate.trace.terms
+  // A single friction can aggregate tens of thousands of work items (large Jira
+  // projects). Rendering one <tr> per item produced multi-MB reports and browser
+  // jank (QA: 27MB HTML at 100k issues). We show the top contributors — biggest
+  // subtotal first, the ones a reader actually inspects — and count the rest.
+  // The full itemized breakdown remains in the raw markdown / run.json export.
+  const TRACE_ROW_CAP = 50;
+  const ordered = [...estimate.trace.terms].sort((a, b) =>
+    compareDecimalStrings(b.subtotal.expected, a.subtotal.expected),
+  );
+  const shown = ordered.slice(0, TRACE_ROW_CAP);
+  const hidden = ordered.length - shown.length;
+
+  const rows = shown
     .map((term) => {
       if (term.kind === 'aging-attention') {
         return `<tr><td>${item(term.workItemId)}</td><td>${term.excessDays}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
@@ -86,13 +98,19 @@ function renderTerms(
     })
     .join('');
 
+  const kind = estimate.trace.terms[0]?.kind;
   const head =
-    estimate.trace.terms[0]?.kind === 'aging-attention'
+    kind === 'aging-attention'
       ? '<tr><th>Item</th><th>Days beyond threshold</th><th>Attention h/day</th><th>Rate</th><th>Subtotal</th></tr>'
-      : estimate.trace.terms[0]?.kind === 'overdue-attention'
+      : kind === 'overdue-attention'
         ? '<tr><th>Item</th><th>Days overdue</th><th>Due date</th><th>Attention h/day</th><th>Rate</th><th>Subtotal</th></tr>'
         : '<tr><th>Item</th><th>Wait (days)</th><th>Visits</th><th>Open now</th><th>Attention h/day</th><th>Rate</th><th>Subtotal</th></tr>';
-  return `<div class="table-wrap"><table>${head}${rows}</table></div>`;
+  const cols = kind === 'aging-attention' ? 5 : kind === 'overdue-attention' ? 6 : 7;
+  const more =
+    hidden > 0
+      ? `<tr><td colspan="${cols}" class="note">+ ${hidden.toLocaleString('en-US')} more item${hidden === 1 ? '' : 's'} contributing to this figure — the full itemized breakdown is in the <em>Raw markdown</em> export.</td></tr>`
+      : '';
+  return `<div class="table-wrap"><table>${head}${rows}${more}</table></div>`;
 }
 
 function renderRankedFriction(
