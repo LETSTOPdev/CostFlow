@@ -1,5 +1,7 @@
 /** Minimal server-rendered HTML shell (doc 09 P4.1 plan — no SPA build). */
 
+import { HEADER_MARK } from './brand';
+
 export function esc(value: string): string {
   // Defense in depth: a mistyped non-string (e.g. a Date leaking from the DB
   // driver) must never crash the render layer with `replaceAll is not a
@@ -68,7 +70,7 @@ export function layout(title: string, body: string, csrf?: string): string {
 </style>
 </head>
 <body>
-<header><h1><a href="/" style="color:inherit;text-decoration:none;">CostFlow</a></h1><nav>${nav}</nav></header>
+<header><h1 style="display:flex;align-items:center;"><a href="/" style="color:inherit;text-decoration:none;display:inline-flex;align-items:center;">${HEADER_MARK}CostFlow</a></h1><nav>${nav}</nav></header>
 ${body}
 </body>
 </html>`;

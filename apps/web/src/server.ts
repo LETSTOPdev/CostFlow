@@ -22,6 +22,7 @@ import {
 import type { AnalysisRun } from '@costflow/analysis';
 import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
 import { esc, layout, METHODOLOGY_APPENDIX, printLayout, stepsNav, STEPS_NAV } from './html';
+import { LOGO_SVG } from './brand';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
 import { parseRun, renderReportBody } from './report-view';
 import { executeJob } from './jobs';
@@ -354,6 +355,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         layout('Sample report — CostFlow', `${banner}${body}${cta}<p><a href="/">← Home</a></p>`),
       );
   });
+
+  // Public brand logo — served so Auth0 Universal Login can render the same
+  // CostFlow mark the app header uses (one identity across product + sign-in).
+  app.get('/brand/logo.svg', async (_request, reply) =>
+    reply.type('image/svg+xml').header('cache-control', 'public, max-age=86400').send(LOGO_SVG),
+  );
 
   app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms()));
   app.get('/privacy', async (_request, reply) => reply.type('text/html').send(renderPrivacy()));

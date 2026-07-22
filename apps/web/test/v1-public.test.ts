@@ -29,6 +29,22 @@ describe('v1 public pages', () => {
     expect(res.body).toContain('/demo');
   });
 
+  it('serves the CostFlow brand logo publicly for Auth0 to use', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/brand/logo.svg' });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toContain('image/svg+xml');
+    expect(res.body).toContain('<svg');
+    expect(res.body).toContain('CostFlow'); // aria-label
+    expect(String(res.headers['cache-control'])).toContain('max-age');
+  });
+
+  it('shows the brand mark in the header on public and app pages', async () => {
+    const t = makeApp();
+    const landing = await t.app.inject({ method: 'GET', url: '/' });
+    expect(landing.body).toContain('viewBox="0 0 120 120"'); // header mark
+  });
+
   it('serves Terms and Privacy publicly (no session)', async () => {
     const t = makeApp();
     const terms = await t.app.inject({ method: 'GET', url: '/terms' });
