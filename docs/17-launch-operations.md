@@ -69,6 +69,33 @@ its own organization.
 > Ups" in Auth0. Existing users keep working; new signups stop immediately. No
 > code deploy needed.
 
+### 2a. Auth0 branding (make Universal Login feel like CostFlow)
+
+The app serves a CostFlow logo at **`https://app.fbx1.com/brand/logo.svg`** (the
+same mark the app header uses). Configure the Auth0 tenant to use it — all in
+the admin console:
+
+- [ ] **Remove the dev-tenant identifier.** Settings → **General** → set
+      **Friendly Name** = `CostFlow`. (This is what turns "Log in to
+      dev-0l6ne8ms0d1s30aw to continue to CostFlow" into "Log in to CostFlow…".)
+- [ ] **Tenant logo.** Settings → General → **Logo URL** =
+      `https://app.fbx1.com/brand/logo.svg` (if the field rejects SVG, use a PNG
+      export of the same mark; ask and I'll add a PNG route).
+- [ ] **Universal Login logo + colors.** Branding → **Universal Login** →
+      Settings → **Logo** = the URL above, **Primary color** = `#0645AD`,
+      **Page background** = white/`#FFFFFF` (matches the app).
+- [ ] **Page title "Welcome to CostFlow".** Branding → Universal Login → the
+      **Login** screen → Text/i18n customization → set the login screen `title`
+      to `Welcome to CostFlow`.
+- [ ] **Application logo.** Applications → CostFlow app → Settings →
+      **Application Logo** = the URL above (shows in consent/other flows).
+- [ ] **Custom login domain `login.fbx1.com`** — Auth0 **Custom Domains** is a
+      **paid-plan** feature (not available on the current free `dev-` tenant).
+      Deferred: needs an Auth0 plan upgrade (payment) + a DNS record at the
+      registrar. Not required — once the branding above is set, the hosted login
+      already reads as CostFlow; only the address bar briefly shows the auth0.com
+      host. Revisit at GA.
+
 ---
 
 ## 3. Railway configuration checklist
