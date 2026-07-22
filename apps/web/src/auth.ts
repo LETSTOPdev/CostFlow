@@ -256,6 +256,7 @@ export function registerAuthRoutes(
       code?: string;
       state?: string;
       error?: string;
+      error_description?: string;
     };
     const stateCookie = verifyValue<{ state: string }>(
       request.cookies['cf_oidc_state'],
@@ -264,8 +265,13 @@ export function registerAuthRoutes(
     const codePresent = typeof query.code === 'string' && query.code.length > 0;
     const stateCookiePresent = stateCookie !== null;
     const stateMatch = stateCookie !== null && stateCookie.state === query.state;
-    // Sanitized diagnostics: booleans + the OAuth error CODE only — never the
-    // code, tokens, email, or the state value.
+    // The IdP's error message (from an Action's api.access.deny, an email-
+    // verification gate, etc.). Capped; it names the denial reason and is not
+    // customer data. Already visible to the user in the callback URL.
+    const errorDescription =
+      typeof query.error_description === 'string' ? query.error_description.slice(0, 200) : null;
+    // Sanitized diagnostics: booleans + the OAuth error code/description only —
+    // never the auth code, tokens, email, or the state value.
     log({
       level: 'info',
       msg: 'oidc-callback',
@@ -273,16 +279,19 @@ export function registerAuthRoutes(
       state_cookie_present: stateCookiePresent,
       state_match: stateMatch,
       error: typeof query.error === 'string' ? query.error : null,
+      error_description: errorDescription,
     });
-    // The IdP explicitly declined (e.g. access_denied for an unverified email):
-    // surface that, not a misleading "invalid state".
+    // The IdP explicitly declined (e.g. access_denied for an unverified email,
+    // or a tester allowlist Action): surface the reason, not "invalid state".
     if (query.error) {
       onSignIn(false);
       return reply
         .code(400)
         .type('text/html')
         .send(
-          `<!doctype html><title>Sign-in not completed — CostFlow</title><p>Sign-in was not completed (${esc(query.error)}). <a href="/login">Try again</a>.</p>`,
+          `<!doctype html><title>Sign-in not completed — CostFlow</title>
+           <p>Sign-in was not completed (${esc(query.error)})${errorDescription ? `: ${esc(errorDescription)}` : ''}.</p>
+           <p>If you just created your account, check your email to verify your address, then <a href="/login">sign in</a>. If this keeps happening, contact support@fbx1.com.</p>`,
         );
     }
     if (!codePresent || !stateCookiePresent || !stateMatch) {

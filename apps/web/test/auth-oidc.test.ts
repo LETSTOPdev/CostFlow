@@ -133,15 +133,20 @@ describe('managed authentication (OIDC adapter)', () => {
     const login = await t.app.inject({ method: 'GET', url: '/login' });
     const callback = await t.app.inject({
       method: 'GET',
-      url: '/auth/callback?error=access_denied',
+      url: '/auth/callback?error=access_denied&error_description=Please%20verify%20your%20email',
       headers: { cookie: cookieOf(login, 'cf_oidc_state') },
     });
     expect(callback.statusCode).toBe(400);
     expect(callback.body).toContain('access_denied');
+    expect(callback.body).toContain('Please verify your email'); // the IdP reason is shown
     expect(callback.body).not.toContain('Invalid sign-in state');
-    // Sanitized diagnostic: booleans + the error CODE, never tokens/state/email.
+    // Sanitized diagnostic: booleans + the error CODE + description (the reason).
     const diag = logs.find((l) => l['msg'] === 'oidc-callback');
-    expect(diag).toMatchObject({ code_present: false, error: 'access_denied' });
+    expect(diag).toMatchObject({
+      code_present: false,
+      error: 'access_denied',
+      error_description: 'Please verify your email',
+    });
     expect(await t.store.findUserByEmail('managed@acme.example')).toBeNull();
   });
 
