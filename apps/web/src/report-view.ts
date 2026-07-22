@@ -249,9 +249,11 @@ export function renderReportBody(
     run.pricingPolicy === 'simulation'
       ? `<p class="error"><strong>Simulation mode</strong> — this run prices vendor-suggested (unconfirmed) assumptions. Figures are conditional and not suitable for executive reporting.</p>`
       : '';
+  // A business reader wants a readable date, not a raw ISO timestamp.
+  const analysisDate = /^\d{4}-\d{2}-\d{2}/.test(run.now) ? run.now.slice(0, 10) : run.now;
   const summary = `<section>
     <p class="figure big">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : rangeText(total, currency)}</p>
-    <p class="note">${model.ranked.length} priced · ${model.unpriced.length} unpriced · analysis time ${esc(run.now)} · currency ${esc(currency)}</p>
+    <p class="note">${model.ranked.length} priced · ${model.unpriced.length} unpriced · analysis of ${esc(analysisDate)} · currency ${esc(currency)}</p>
   </section>`;
   const ranked =
     model.ranked.length === 0
@@ -263,7 +265,7 @@ export function renderReportBody(
     ? `<p class="note"><a href="/reports/${esc(options.runId)}/print">Printable / export version</a> · <a href="/reports/${esc(options.runId)}/raw">Raw markdown</a></p>`
     : '';
   return `<h1>Friction report</h1>
-    <p class="note">Run <code>${esc(run.runId)}</code>. Every figure is an estimate with stated assumptions and a traceable formula.</p>
+    <p class="note">Every figure is an estimate with stated assumptions and a traceable formula. <span title="Reference for support">Ref <code>${esc(run.runId)}</code></span></p>
     ${banner}
     ${summary}
     ${links}

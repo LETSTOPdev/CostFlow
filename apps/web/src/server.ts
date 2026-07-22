@@ -21,7 +21,7 @@ import {
 } from './auth';
 import type { AnalysisRun } from '@costflow/analysis';
 import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
-import { esc, layout, METHODOLOGY_APPENDIX, printLayout, STEPS_NAV } from './html';
+import { esc, layout, METHODOLOGY_APPENDIX, printLayout, stepsNav, STEPS_NAV } from './html';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
 import { parseRun, renderReportBody } from './report-view';
 import { executeJob } from './jobs';
@@ -342,9 +342,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     } catch {
       body = '<p class="error">The sample report is temporarily unavailable.</p>';
     }
+    const cta =
+      '<section class="danger" style="border-color:#0645ad;text-align:center;">' +
+      '<h3 style="color:#0645ad;">Ready to see your own?</h3>' +
+      '<p class="note">Connect your Jira in about a minute and get a report like this for your team — free.</p>' +
+      '<p><a href="/login" style="display:inline-block;background:#0645ad;color:#fff;padding:0.5rem 1.2rem;border-radius:6px;text-decoration:none;font-weight:600;">Get started free</a></p>' +
+      '</section>';
     return reply
       .type('text/html')
-      .send(layout('Sample report — CostFlow', `${banner}${body}<p><a href="/">← Home</a></p>`));
+      .send(
+        layout('Sample report — CostFlow', `${banner}${body}${cta}<p><a href="/">← Home</a></p>`),
+      );
   });
 
   app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms()));
@@ -433,14 +441,23 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Connect Jira',
-        `${STEPS_NAV}
+        `${stepsNav('connect')}
          <h2>Connect your Jira workspace</h2>
+         <p class="note">CostFlow reads your Jira with a personal API token — read-only, encrypted at
+         rest, and never shown again. It takes about a minute to set up.</p>
+         <details>
+           <summary>How to get your Jira API token</summary>
+           <ol class="note">
+             <li>Open <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer">id.atlassian.com → API tokens</a>.</li>
+             <li>Click <strong>Create API token</strong>, name it "CostFlow", and copy it.</li>
+             <li>Paste it below along with your Jira site URL and the email for that Atlassian account.</li>
+           </ol>
+         </details>
          ${workspace ? `<p class="note">Connected to ${esc(workspace.site)} as ${esc(workspace.email)}. Submitting replaces the stored credentials.</p>` : ''}
          <form method="post" action="/connect">${csrfField(session)}
            <label>Jira site URL <input name="site" placeholder="https://your-org.atlassian.net" required value="${esc(workspace?.site ?? '')}"></label>
-           <label>Account email <input name="email" type="email" required value="${esc(workspace?.email ?? '')}"></label>
-           <label>API token <input name="token" type="password" required autocomplete="off"></label>
-           <p class="note">The token is encrypted at rest and never shown again. CostFlow reads only.</p>
+           <label>Account email <input name="email" type="email" placeholder="you@company.com" required value="${esc(workspace?.email ?? '')}"></label>
+           <label>API token <input name="token" type="password" required autocomplete="off" placeholder="paste your Atlassian API token"></label>
            <button type="submit">Validate &amp; connect</button>
          </form>`,
       ),
@@ -531,7 +548,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Choose scope',
-        `${STEPS_NAV}
+        `${stepsNav('scope')}
          <h2>Choose the project to import</h2>
          <form method="post" action="/scope">${csrfField(session)}
            ${projects
@@ -609,7 +626,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Map statuses',
-        `${STEPS_NAV}
+        `${stepsNav('statuses')}
          <h2>Map every status to a stage kind</h2>
          <p class="note">All ${workspace.observedStatuses.length} statuses observed in the project (current and historical) must be mapped — history through an unmapped status would make the analysis refuse.</p>
          <form method="post" action="/mapping/statuses">${csrfField(session)}
@@ -679,7 +696,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Map people to roles',
-        `${STEPS_NAV}
+        `${stepsNav('roles')}
          <h2>Map people to roles</h2>
          <p class="note">Role names (e.g. "Legal", "Ops") price work by rate card. Anyone left blank is
          pseudonymized — never stored by name — and priced at the default rate with reduced confidence.</p>
@@ -780,11 +797,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       page(
         session,
         'Assumptions',
-        `${STEPS_NAV}
+        `${stepsNav('assumptions')}
          <h2>Assumptions (currency: ${esc(current.currency)})</h2>
          <p class="note">Nothing is priced on a vendor suggestion: accept a value as yours, or change
          it. Unconfirmed assumptions leave their frictions unpriced in reports.</p>
          <form method="post" action="/assumptions">${csrfField(session)}
+           <p><label><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong> — start with our estimates and refine later (you can change any value now).</label></p>
            <table><tr><th>Assumption</th><th>Value</th><th>Status</th></tr>
            ${current.rates
              .map((rate, index) =>
@@ -860,7 +878,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       const raw = (body[name] ?? '').trim();
       return DECIMAL.test(raw) ? raw : null;
     };
-    const accepted = (name: string): boolean => body[`accept_${name}`] !== undefined;
+    // "Accept all suggested values" accepts every still-vendor-suggested value
+    // in one click, so a first-time user reaches a priced report fast.
+    const acceptAll = body['accept_all'] !== undefined;
+    const accepted = (name: string): boolean => acceptAll || body[`accept_${name}`] !== undefined;
 
     const invalid: string[] = [];
     const scalar = (name: string, previousValue: string): { value: string; changed: boolean } => {

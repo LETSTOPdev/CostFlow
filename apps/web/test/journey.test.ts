@@ -198,4 +198,46 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
     expect(report.body).toContain('vendor-suggested');
     expect(report.body).toContain('No priced frictions detected'); // nothing priced at all
   });
+
+  it('"Accept all suggested values" (v1) reaches a priced report in one click', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'fast@acme.example');
+    await post(t, cookie, '/connect', {
+      site: 'https://acme.atlassian.net',
+      email: 'ops@acme.example',
+      token: TOKEN,
+    });
+    await post(t, cookie, '/scope', { project: '0' });
+    await post(t, cookie, '/mapping/statuses', { s0: 'active', s1: 'review', s2: 'queue' });
+    await post(t, cookie, '/mapping/actors', { a0: 'Ops', a1: '', a2: 'Legal' });
+    // Keep the suggested values as-is and tick ONLY the master "accept all" box.
+    await post(t, cookie, '/assumptions', {
+      accept_all: 'on',
+      rate0: '50',
+      rate1: '50',
+      defaultRate: '50',
+      agingThresholdDays: '14',
+      attention_low: '0.15',
+      attention_expected: '0.3',
+      attention_high: '0.6',
+      queueWait_low: '0.1',
+      queueWait_expected: '0.2',
+      queueWait_high: '0.4',
+      overdue_low: '0.1',
+      overdue_expected: '0.2',
+      overdue_high: '0.4',
+    });
+    // Every assumption is now accepted — nothing left vendor-suggested.
+    const confirmed = t.events.find((e) => e.event === 'tm-web-assumptions-confirmed')!;
+    expect(confirmed.fields['vendorRemaining']).toBe(0);
+    expect(confirmed.fields['accepted']).toBe(7);
+
+    const runResponse = await post(t, cookie, '/runs', {});
+    const jobPage = await get(t, cookie, runResponse.headers['location'] as string);
+    const report = await get(t, cookie, jobPage.headers['location'] as string);
+    // A priced report, not the all-unpriced gate.
+    expect(report.body).toContain('Ranked frictions');
+    expect(report.body).not.toContain('No priced frictions detected');
+    expect(report.body).toContain('Confidence');
+  });
 });

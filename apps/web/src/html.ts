@@ -20,10 +20,12 @@ export function esc(value: string): string {
  * every authenticated page. Public pages omit it (no session, no token).
  */
 export function layout(title: string, body: string, csrf?: string): string {
-  const authedNav =
+  // Public pages (no session) get a marketing header with a single "Sign in"
+  // action; authenticated pages get the app nav + a CSRF-protected sign-out.
+  const nav =
     csrf === undefined
-      ? ''
-      : ` · <form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
+      ? '<a href="/login">Sign in</a>'
+      : `<a href="/">Home</a> · <a href="/runs">Runs</a> · <form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
           csrf,
         )}"><button type="submit">Sign out</button></form>`;
   return `<!doctype html>
@@ -66,14 +68,27 @@ export function layout(title: string, body: string, csrf?: string): string {
 </style>
 </head>
 <body>
-<header><h1>CostFlow</h1><nav><a href="/">Home</a> · <a href="/runs">Runs</a>${authedNav}</nav></header>
+<header><h1><a href="/" style="color:inherit;text-decoration:none;">CostFlow</a></h1><nav>${nav}</nav></header>
 ${body}
 </body>
 </html>`;
 }
 
-export const STEPS_NAV =
-  '<p class="steps">Onboarding: connect → scope → statuses → roles → assumptions → run</p>';
+const ONBOARDING_STEPS = ['connect', 'scope', 'statuses', 'roles', 'assumptions', 'run'] as const;
+
+/**
+ * Onboarding progress line with the current step highlighted, so a first-time
+ * user always knows where they are and what's left.
+ */
+export function stepsNav(current?: (typeof ONBOARDING_STEPS)[number]): string {
+  const parts = ONBOARDING_STEPS.map((s) => (s === current ? `<strong>${s}</strong>` : s)).join(
+    ' → ',
+  );
+  return `<p class="steps">Onboarding: ${parts}</p>`;
+}
+
+/** Back-compat default (no step highlighted). */
+export const STEPS_NAV = stepsNav();
 
 /**
  * Standalone print/export document (P5): no app chrome, print-optimized CSS,
