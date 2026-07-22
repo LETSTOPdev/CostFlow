@@ -96,6 +96,55 @@ describe('managed authentication (OIDC adapter)', () => {
     expect(await t.store.findUserByEmail('managed@acme.example')).toBeNull();
   });
 
+  it('sets the OIDC state cookie SameSite=None; Secure in production (survives the IdP callback)', async () => {
+    const t = makeApp({
+      auth: {
+        mode: 'oidc',
+        sessionKey: Buffer.alloc(32, 1),
+        credentialKey: Buffer.alloc(32, 2),
+        secureCookies: true, // production posture
+        oidc,
+        fetchFn: stubIdp(),
+      },
+    });
+    const login = await t.app.inject({ method: 'GET', url: '/login' });
+    const setCookie = login.headers['set-cookie'];
+    const line = (Array.isArray(setCookie) ? setCookie : [String(setCookie)]).find((c) =>
+      c.startsWith('cf_oidc_state='),
+    )!;
+    // Lax would be dropped on the cross-site signup callback → "Invalid sign-in state".
+    expect(line).toContain('SameSite=None');
+    expect(line).toContain('Secure');
+    expect(line).toContain('HttpOnly');
+  });
+
+  it('surfaces an explicit IdP error (e.g. access_denied) instead of "invalid state"', async () => {
+    const logs: Record<string, unknown>[] = [];
+    const t = makeApp({
+      auth: {
+        mode: 'oidc',
+        sessionKey: Buffer.alloc(32, 1),
+        credentialKey: Buffer.alloc(32, 2),
+        oidc,
+        fetchFn: stubIdp(),
+      },
+      logSink: (line) => logs.push(line),
+    });
+    const login = await t.app.inject({ method: 'GET', url: '/login' });
+    const callback = await t.app.inject({
+      method: 'GET',
+      url: '/auth/callback?error=access_denied',
+      headers: { cookie: cookieOf(login, 'cf_oidc_state') },
+    });
+    expect(callback.statusCode).toBe(400);
+    expect(callback.body).toContain('access_denied');
+    expect(callback.body).not.toContain('Invalid sign-in state');
+    // Sanitized diagnostic: booleans + the error CODE, never tokens/state/email.
+    const diag = logs.find((l) => l['msg'] === 'oidc-callback');
+    expect(diag).toMatchObject({ code_present: false, error: 'access_denied' });
+    expect(await t.store.findUserByEmail('managed@acme.example')).toBeNull();
+  });
+
   it('RP-initiated logout: clears local session, then redirects to Auth0 /oidc/logout (P4.2 Gate 2)', async () => {
     const logs: Record<string, unknown>[] = [];
     const t = makeApp({

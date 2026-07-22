@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { encryptSecret, newId, newSalt, signValue, verifyValue } from './crypto';
+import { esc } from './html';
 import type { OrgRole, Store } from './store/contract';
 
 /**
@@ -159,15 +160,24 @@ export function registerAuthRoutes(
   config: AuthConfig,
   store: Store,
   onSignIn: (ok: boolean) => void,
+  log: (line: Record<string, unknown>) => void,
   onInviteAccepted?: (role: OrgRole) => void,
 ): void {
+  // Cookies that must survive the cross-site redirect BACK from the identity
+  // provider (the OIDC state nonce and a pending invite token) need
+  // SameSite=None in production: a SameSite=Lax cookie is not reliably returned
+  // on the IdP's cross-site callback (form_post, or after Chrome's
+  // "Lax-allow-unsafe" 2-minute window during a slow interactive signup), which
+  // manifested as "Invalid sign-in state" on real signups. None requires
+  // Secure (production has it); dev over http keeps Lax.
+  const crossSiteSameSite: 'none' | 'lax' = config.secureCookies === true ? 'none' : 'lax';
   const readInviteToken = (request: FastifyRequest): string | undefined =>
     verifyValue<{ token: string }>(request.cookies[INVITE_COOKIE], config.sessionKey)?.token;
   const clearInvite = (reply: FastifyReply): void => {
     reply.clearCookie(INVITE_COOKIE, {
       path: '/',
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: crossSiteSameSite,
       secure: config.secureCookies === true,
     });
   };
@@ -230,7 +240,7 @@ export function registerAuthRoutes(
     reply.setCookie('cf_oidc_state', signValue({ state }, config.sessionKey), {
       path: '/',
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: crossSiteSameSite,
       secure: config.secureCookies === true,
     });
     const url =
@@ -242,14 +252,47 @@ export function registerAuthRoutes(
   });
 
   app.get('/auth/callback', async (request, reply) => {
-    const query = request.query as { code?: string; state?: string };
+    const query = request.query as {
+      code?: string;
+      state?: string;
+      error?: string;
+    };
     const stateCookie = verifyValue<{ state: string }>(
       request.cookies['cf_oidc_state'],
       config.sessionKey,
     );
-    if (!query.code || !stateCookie || stateCookie.state !== query.state) {
+    const codePresent = typeof query.code === 'string' && query.code.length > 0;
+    const stateCookiePresent = stateCookie !== null;
+    const stateMatch = stateCookie !== null && stateCookie.state === query.state;
+    // Sanitized diagnostics: booleans + the OAuth error CODE only — never the
+    // code, tokens, email, or the state value.
+    log({
+      level: 'info',
+      msg: 'oidc-callback',
+      code_present: codePresent,
+      state_cookie_present: stateCookiePresent,
+      state_match: stateMatch,
+      error: typeof query.error === 'string' ? query.error : null,
+    });
+    // The IdP explicitly declined (e.g. access_denied for an unverified email):
+    // surface that, not a misleading "invalid state".
+    if (query.error) {
       onSignIn(false);
-      return reply.code(400).send('Invalid sign-in state.');
+      return reply
+        .code(400)
+        .type('text/html')
+        .send(
+          `<!doctype html><title>Sign-in not completed — CostFlow</title><p>Sign-in was not completed (${esc(query.error)}). <a href="/login">Try again</a>.</p>`,
+        );
+    }
+    if (!codePresent || !stateCookiePresent || !stateMatch) {
+      onSignIn(false);
+      return reply
+        .code(400)
+        .type('text/html')
+        .send(
+          `<!doctype html><title>Sign-in error — CostFlow</title><p>We couldn't complete sign-in — the sign-in link expired or was interrupted. <a href="/login">Start again</a>.</p>`,
+        );
     }
     const discovery = await discover();
     const tokenResponse = await fetchFn(discovery.token_endpoint as string, {
@@ -257,7 +300,7 @@ export function registerAuthRoutes(
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         grant_type: 'authorization_code',
-        code: query.code,
+        code: query.code as string, // guaranteed present by the guard above
         redirect_uri: oidc.redirectUri,
         client_id: oidc.clientId,
         client_secret: oidc.clientSecret,

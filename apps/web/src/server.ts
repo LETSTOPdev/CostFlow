@@ -95,11 +95,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     ...(deps.logSink ? { logSink: deps.logSink } : {}),
   });
 
+  // Injected sanitized structured log sink (tests capture it); stdout JSON by
+  // default. Defined here so the auth routes can emit callback diagnostics.
+  const logLine =
+    deps.logSink ?? ((line: Record<string, unknown>) => console.log(JSON.stringify(line)));
+
   registerAuthRoutes(
     app,
     auth,
     store,
     (ok) => telemetry(webEvent('tm-web-signin', { ok })),
+    logLine,
     (role) => telemetry(webEvent('tm-web-invite-accepted', { role })),
   );
 
@@ -110,7 +116,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     reply.clearCookie('cf_oidc_state', {
       path: '/',
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: auth.secureCookies === true ? 'none' : 'lax',
       secure: auth.secureCookies === true,
     });
   };
@@ -258,8 +264,6 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Sanitized diagnostics for Jira gateway failures (P4.2 defect 2): the
   // stage, error class, and HTTP status — never URLs, credentials, issue
   // titles, actor names, or customer data.
-  const logLine =
-    deps.logSink ?? ((line: Record<string, unknown>) => console.log(JSON.stringify(line)));
   const jiraFailure = (error: unknown): { errorClass: string; stage: string; status?: number } => {
     if (error instanceof GatewayError) {
       return {
@@ -1405,10 +1409,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         );
     }
     const tenant = await store.getTenant(invitation.tenantId);
+    // Must survive the cross-site IdP round-trip (same reason as cf_oidc_state).
     reply.setCookie(INVITE_COOKIE, signValue({ token }, auth.sessionKey), {
       path: '/',
       httpOnly: true,
-      sameSite: 'lax',
+      sameSite: auth.secureCookies === true ? 'none' : 'lax',
       secure: auth.secureCookies === true,
     });
     return reply.type('text/html').send(
