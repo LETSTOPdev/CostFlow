@@ -106,16 +106,16 @@ const hero = `
   <div class="lp-aurora" aria-hidden="true"></div>
   <div class="lp-grid-bg" aria-hidden="true"></div>
   <div class="container lp-hero-inner">
-    <a class="lp-badge" href="/demo"><span class="lp-badge-dot"></span> Now in free public beta · see a live report →</a>
-    <h1 class="lp-h1">Turn workflow friction into<br><span class="lp-grad">a number your CFO trusts.</span></h1>
-    <p class="lp-sub">CostFlow connects to your Jira and prices the delays, queues, and overdue work
-      hiding in your board — every figure traceable to its formula and assumptions.</p>
+    <a class="lp-badge" href="/demo"><span class="lp-badge-dot"></span> Free during beta · see a live report first →</a>
+    <h1 class="lp-h1">See what delays in your Jira<br><span class="lp-grad">are costing you — in dollars.</span></h1>
+    <p class="lp-sub">Connect your board and CostFlow turns delays, queues, and overdue work into an
+      itemized, ranked cost report — in about a minute, every figure traceable to its formula.</p>
     <div class="lp-cta">
       <a class="btn btn-lg" href="/login">Get started free</a>
-      <a class="btn btn-ghost btn-lg" href="/demo">View a sample report</a>
+      <a class="btn btn-ghost btn-lg" href="/demo">See a sample report</a>
     </div>
     <div class="lp-trust">
-      <span>✓ No credit card</span><span>✓ Read-only access</span><span>✓ Live in ~1 minute</span>
+      <span>✓ Free during beta</span><span>✓ No credit card</span><span>✓ Read-only — never writes to your board</span><span>✓ Ready in ~1 minute</span>
     </div>
   </div>
   ${productMockup}
@@ -135,8 +135,8 @@ const how = `
   <div class="container">
     <div class="lp-shead">
       <p class="lp-kicker">How it works</p>
-      <h2 class="lp-h2">From board to boardroom in three steps</h2>
-      <p class="lp-lead">No spreadsheets, no consultants — a defensible cost estimate in about a minute.</p>
+      <h2 class="lp-h2">Your first report in about a minute</h2>
+      <p class="lp-lead">No spreadsheets, no consultants, no install. Three steps from a read-only token to a priced report.</p>
     </div>
     <div class="lp-steps">
       <div class="lp-step">
@@ -205,6 +205,12 @@ const traceable = `
   </div>
 </section>`;
 
+const midCta = `
+<section class="lp-midcta"><div class="container">
+  <a class="btn btn-lg" href="/login">See what it's costing my team — free</a>
+  <p class="lp-midcta-fine">Your own report in about a minute · no credit card · read-only</p>
+</div></section>`;
+
 const ICONS = {
   trace:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg>',
@@ -243,24 +249,24 @@ const trust = `
 function faq(): string {
   const items: [string, string][] = [
     [
-      'Is it really free?',
-      'Yes — CostFlow is a free public beta while we learn what teams need. Paid plans will come later; nothing you do now will cost you.',
+      'Is it really free? What is the catch?',
+      'No catch. CostFlow is a free public beta — no credit card, no trial clock. Paid plans come later; nothing you do now will cost you.',
+    ],
+    [
+      'Will you change anything in my Jira?',
+      'Never. CostFlow is read-only — a personal API token, used only to read. No comments, no status changes, nothing written back.',
+    ],
+    [
+      'How are the numbers calculated?',
+      'From your imported work items and the rates you confirm. Every figure drills down to its formula and inputs — open the sample report to see exactly how.',
+    ],
+    [
+      'What about privacy and my data?',
+      `Credentials are encrypted; individuals are pseudonymized before analysis; you can export or permanently delete everything anytime. See <a href="/privacy">Privacy</a>, or email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.`,
     ],
     [
       'Which tools do you support?',
       'Jira today. Monday, Asana, and CSV import are proven in our engine and coming to the product soon.',
-    ],
-    [
-      'Do you write to my Jira?',
-      'Never. CostFlow reads only. We ask for a read-only API token and never modify your board.',
-    ],
-    [
-      'How are the numbers calculated?',
-      'From your imported work items and the rates and effort assumptions you confirm. Every figure drills down to its formula and inputs — open the sample report to see exactly how.',
-    ],
-    [
-      'What about privacy and my data?',
-      `Credentials are encrypted; individual identities are pseudonymized before analysis; you can export or permanently delete everything. See our <a href="/privacy">Privacy</a> page, or email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.`,
     ],
   ];
   return `<section class="lp-section"><div class="container">
@@ -276,11 +282,12 @@ const ctaBand = `
   <div class="lp-cta-band">
     <div class="lp-cta-glow" aria-hidden="true"></div>
     <div class="lp-cta-inner">
-      <p class="lp-kicker" style="color:#c4b5fd">Free public beta</p>
-      <h2 class="lp-cta-h">See what your team's friction<br>is really costing you.</h2>
-      <p class="lp-cta-sub">Connect Jira in about a minute and get an executive-ready report — free.</p>
+      <p class="lp-kicker" style="color:#c4b5fd">Free during beta</p>
+      <h2 class="lp-cta-h">Find out what your delays<br>are really costing you.</h2>
+      <p class="lp-cta-sub">Connect Jira and get your itemized, ranked cost report in about a minute.</p>
       <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="/login">Get started free</a>
-        <a class="lp-cta-link" href="/demo">or view a sample report →</a></div>
+        <a class="lp-cta-link" href="/demo">or see a sample report →</a></div>
+      <p class="lp-cta-fine">No credit card · read-only access · delete your data anytime</p>
     </div>
   </div>
 </div></section>`;
@@ -504,6 +511,11 @@ a.lp-cta-btn,.lp-cta-btn{background:#fff;color:#4c43d6}
 a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:#4c43d6;filter:brightness(1.02)}
 .lp-cta-link{color:#c4b5fd;font-weight:600;font-size:.95rem}
 .lp-cta-link:hover{color:#fff}
+.lp-cta-fine{color:#9498b2;font-size:.85rem;margin:1.1rem 0 0}
+
+/* Mid-page CTA (post-proof) */
+.lp-midcta{text-align:center;padding:clamp(1.5rem,1rem+2vw,3rem) 0 0}
+.lp-midcta-fine{color:var(--muted);font-size:.88rem;margin:.9rem 0 0}
 
 /* Footer */
 .lp-footer{border-top:1px solid var(--line);padding:2.6rem 0;background:var(--bg-2)}
@@ -537,7 +549,7 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:#4c43d6;filter:bright
 
 /** Marketing landing shown to logged-out visitors at `/`. */
 export function renderLanding(): string {
-  const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero}${how}${traceable}${trust}${faq()}${ctaBand}${footer}</div>`;
+  const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero}${how}${traceable}${midCta}${trust}${faq()}${ctaBand}${footer}</div>`;
   return layout('CostFlow — see what friction costs your team', body, undefined, { bleed: true });
 }
 
