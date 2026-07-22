@@ -57,9 +57,19 @@ missing or malformed — the server never limps.
 ## 3. Migrations
 
 - Schema lives in `apps/web/src/store/schema.sql`, applied by
-  `pnpm --filter @costflow/web migrate` (or automatically at server boot).
-- All statements are `create ... if not exists` — safe to re-run.
-- Forward-only in P4.2. A future destructive migration must ship as a new,
+  `pnpm --filter @costflow/web migrate`.
+- **Migration runs automatically on every deploy (P4.4).** The Railway
+  `startCommand` and the Docker `CMD` are
+  `pnpm --filter @costflow/web migrate && pnpm --filter @costflow/web start`,
+  so schema changes are applied before the app serves traffic — it never runs
+  on a stale schema. (Previously migration was a manual pre-deploy step; P4.4
+  added `users.role`, `tenants.name`, and the `invitations`/`workspace_members`
+  tables, which every authenticated request now reads, so the migration is now
+  part of boot.)
+- All statements are idempotent — `create ... if not exists` and
+  `alter table ... add column if not exists` — safe to re-run, and safe under
+  concurrent instance boots (Postgres DDL locks; each is a no-op once applied).
+- Forward-only. A future destructive migration must ship as a new,
   separately-reviewed SQL file with an explicit up/down and a backup taken
   first (§4).
 
