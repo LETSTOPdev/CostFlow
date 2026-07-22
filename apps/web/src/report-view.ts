@@ -100,6 +100,7 @@ function renderRankedFriction(
   titleOf: Map<string, string>,
   currency: string,
   open: boolean,
+  barPct: number,
 ): string {
   const { instance, estimate } = rf;
   const trace = estimate.trace;
@@ -117,7 +118,8 @@ function renderRankedFriction(
           .join('')}</ul>`;
   return `<div class="friction">
     <h3>#${rf.rank} · ${esc(frictionLabel(instance.frictionType))} — stage “${esc(instance.location.stage.name)}”</h3>
-    <p class="figure">${rangeText(estimate.cost, currency)} &nbsp; ${confidenceBadge(estimate.confidence.tier)}</p>
+    <p class="figure">${money(estimate.cost.expected, currency)} <span class="range-sub">· ${money(estimate.cost.low, currency)} – ${money(estimate.cost.high, currency)}</span> ${confidenceBadge(estimate.confidence.tier)}</p>
+    <div class="fbar" aria-hidden="true"><i style="width:${barPct}%"></i></div>
     <p class="note">${instance.magnitude.value} ${esc(instance.magnitude.unit)}</p>
     <details${open ? ' open' : ''}>
       <summary>How this number was computed</summary>
@@ -135,12 +137,14 @@ function renderRankedFriction(
 function renderCoverage(run: AnalysisRun): string {
   const c = run.batch.counts;
   const cap = run.batch.capability;
-  const capLine = [
-    `event history ${cap.hasEventHistory ? '✓' : '—'}`,
-    `due dates ${cap.hasDueDates ? '✓' : '—'}`,
-    `last-updated ${cap.hasLastUpdated ? '✓' : '—'}`,
-    `actors ${cap.hasActors ? '✓' : '—'}`,
-  ].join(' · ');
+  const capChips = [
+    `<span class="chip">${c.imported} of ${c.totalRows} rows imported</span>`,
+    c.dropped > 0 ? `<span class="chip">${c.dropped} dropped</span>` : '',
+    `<span class="chip">event history ${cap.hasEventHistory ? '✓' : '—'}</span>`,
+    `<span class="chip">due dates ${cap.hasDueDates ? '✓' : '—'}</span>`,
+    `<span class="chip">last-updated ${cap.hasLastUpdated ? '✓' : '—'}</span>`,
+    `<span class="chip">actors ${cap.hasActors ? '✓' : '—'}</span>`,
+  ].join('');
   const detectors = run.detectors
     .map(
       (d) =>
@@ -159,7 +163,7 @@ function renderCoverage(run: AnalysisRun): string {
           .join('')}</ul>`;
   return `<section>
     <h2>Coverage &amp; confidence</h2>
-    <p class="note">${c.imported} of ${c.totalRows} rows imported${c.dropped > 0 ? `, ${c.dropped} dropped` : ''}. Capability: ${capLine}.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:.4rem;margin:.6rem 0 .9rem">${capChips}</div>
     <ul>${detectors}</ul>
     ${diagnostics}
   </section>`;
@@ -252,8 +256,9 @@ export function renderReportBody(
   // A business reader wants a readable date, not a raw ISO timestamp.
   const analysisDate = /^\d{4}-\d{2}-\d{2}/.test(run.now) ? run.now.slice(0, 10) : run.now;
   const summary = `<section class="report-hero">
-    <p class="note" style="margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Total priced friction</p>
-    <p class="figure big" style="margin:0">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : rangeText(total, currency)}</p>
+    <p class="note" style="margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Total priced friction · expected</p>
+    <p class="figure big" style="margin:0">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : money(total.expected, currency)}</p>
+    ${model.ranked.length === 0 ? '' : `<p class="note" style="margin:.3rem 0 0">Range ${money(total.low, currency)} – ${money(total.high, currency)}</p>`}
     <div class="meta">
       <span class="chip">${model.ranked.length} priced</span>
       <span class="chip">${model.unpriced.length} unpriced</span>
@@ -261,11 +266,27 @@ export function renderReportBody(
       <span class="chip">Currency ${esc(currency)}</span>
     </div>
   </section>`;
+  // Relative-magnitude bars: the width ratio is PURE PRESENTATION (a CSS
+  // percentage, never rendered as a figure), so a float here cannot leak into
+  // any displayed number — all money strings still come from the engine.
+  const maxExpected = model.ranked.reduce(
+    (acc, rf) => Math.max(acc, Number(rf.estimate.cost.expected) || 0),
+    0,
+  );
+  const pctOf = (rf: RankedFriction): number =>
+    maxExpected <= 0
+      ? 0
+      : Math.max(
+          2,
+          Math.min(100, Math.round((Number(rf.estimate.cost.expected) / maxExpected) * 100)),
+        );
   const ranked =
     model.ranked.length === 0
       ? '<p class="note">No priced frictions detected above thresholds in this import.</p>'
       : model.ranked
-          .map((rf) => renderRankedFriction(rf, titleOf, currency, options.open === true))
+          .map((rf) =>
+            renderRankedFriction(rf, titleOf, currency, options.open === true, pctOf(rf)),
+          )
           .join('');
   const links = options.printLinks
     ? `<p class="note"><a href="/reports/${esc(options.runId)}/print">Printable / export version</a> · <a href="/reports/${esc(options.runId)}/raw">Raw markdown</a></p>`
@@ -286,4 +307,23 @@ export function renderReportBody(
 /** Parse a persisted run.json string into the typed artifact. */
 export function parseRun(runJson: string): AnalysisRun {
   return JSON.parse(runJson) as AnalysisRun;
+}
+
+/**
+ * Safe headline summary of a stored run for list rows (runs list, dashboard).
+ * Same deterministic model + formatter the report uses; null on any parse
+ * failure so callers fall back to a generic label.
+ */
+export function runSummary(runJson: string): { expectedText: string; priced: number } | null {
+  try {
+    const run = parseRun(runJson);
+    const model = buildReportModel(run);
+    const total = totalRange(model.ranked);
+    return {
+      priced: model.ranked.length,
+      expectedText: formatWholeMoney(total.expected, run.assumptions.currency),
+    };
+  } catch {
+    return null;
+  }
 }

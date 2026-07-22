@@ -24,7 +24,7 @@ import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
 import { esc, layout, loadingPage, METHODOLOGY_APPENDIX, printLayout, stepsNav } from './html';
 import { LOGO_SVG } from './brand';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
-import { parseRun, renderReportBody } from './report-view';
+import { parseRun, renderReportBody, runSummary } from './report-view';
 import { executeJob } from './jobs';
 import { GatewayError, type JiraGateway } from './jira-gateway';
 import { registerSecurity } from './security';
@@ -214,6 +214,21 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
     if (!m) return esc(iso);
     return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]} · ${m[4]}:${m[5]} UTC`;
+  };
+
+  // Executive list row for a stored run: the headline is the expected total —
+  // the number a reader scans for — with a safe fallback when the artifact
+  // can't be summarized.
+  const runRow = (r: { id: string; createdAt: string; runJson: string }): string => {
+    const s = runSummary(r.runJson);
+    const title =
+      s === null
+        ? 'Friction analysis'
+        : s.priced === 0
+          ? 'No priced frictions'
+          : `${esc(s.expectedText)} expected`;
+    const sub = `${fmtWhen(r.createdAt)}${s !== null && s.priced > 0 ? ` · ${s.priced} priced` : ''} · Ref ${esc(r.id)}`;
+    return `<li class="row"><a class="row-main" href="/reports/${esc(r.id)}"><span>${title}</span><span class="row-sub">${sub}</span></a><span class="row-go">View report →</span></li>`;
   };
 
   // Styled "not found" for a missing resource (job/run/member), replacing the
@@ -485,12 +500,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
                   <p>Run your first analysis to price this project's friction.</p>
                   <form method="post" action="/runs" style="display:inline">${csrfField(session)}<button type="submit">Run your first analysis</button></form>
                 </div>`
-             : `<ul class="rows">${runs
-                 .map(
-                   (r) =>
-                     `<li class="row"><a class="row-main" href="/reports/${esc(r.id)}"><span>Friction analysis</span><span class="row-sub">${fmtWhen(r.createdAt)} · Ref ${esc(r.id)}</span></a><span class="row-go">View report →</span></li>`,
-                 )
-                 .join('')}</ul>`
+             : `<ul class="rows">${runs.map((r) => runRow(r)).join('')}</ul>`
          }
          <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:2rem">
            <a class="chip" href="/connect">Connection</a>
@@ -1201,12 +1211,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
                </div>`
           : `<h1>Reports</h1>
                <p class="note">${runs.length} ${runs.length === 1 ? 'report' : 'reports'}, newest first.</p>
-               <ul class="rows">${runs
-                 .map(
-                   (r) =>
-                     `<li class="row"><a class="row-main" href="/reports/${esc(r.id)}"><span>Friction analysis</span><span class="row-sub">${fmtWhen(r.createdAt)} · Ref ${esc(r.id)}</span></a><span class="row-go">View report →</span></li>`,
-                 )
-                 .join('')}</ul>`,
+               <ul class="rows">${runs.map((r) => runRow(r)).join('')}</ul>`,
       ),
     );
   });
