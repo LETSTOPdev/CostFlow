@@ -58,9 +58,20 @@ export const ASANA_DESCRIPTOR: ProviderDescriptor = {
   deliverable: { items: true, eventHistory: true, dueDates: true, actors: true },
 };
 
+export const CLICKUP_DESCRIPTOR: ProviderDescriptor = {
+  id: 'clickup',
+  name: 'ClickUp',
+  auth: { kind: 'token', inputs: ['token-file'] },
+  // ClickUp's standard API has no ordered status transitions (Time-in-Status
+  // is plan-gated and aggregate-only — doc 09 M1, doc 18 CU4). The descriptor
+  // tells the truth; detectors that need events skip visibly.
+  deliverable: { items: true, eventHistory: false, dueDates: true, actors: true },
+};
+
 export const PROVIDER_DESCRIPTORS: Readonly<Record<string, ProviderDescriptor>> = {
   [CSV_DESCRIPTOR.id]: CSV_DESCRIPTOR,
   [JIRA_DESCRIPTOR.id]: JIRA_DESCRIPTOR,
   [MONDAY_DESCRIPTOR.id]: MONDAY_DESCRIPTOR,
   [ASANA_DESCRIPTOR.id]: ASANA_DESCRIPTOR,
+  [CLICKUP_DESCRIPTOR.id]: CLICKUP_DESCRIPTOR,
 };
