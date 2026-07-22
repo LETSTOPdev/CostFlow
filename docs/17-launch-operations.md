@@ -226,6 +226,15 @@ lines; there is no external telemetry transport. Watch these:
 - [ ] **Error signal in logs** (project Logs tab): grep for
       `"msg":"request-error"` (uncaught errors — the message is never logged,
       only the error class name + redacted path). Any spike is worth a look.
+- [ ] **Sign-in signal:** `"msg":"oidc-callback"` logs booleans only —
+      `code_present`, `state_cookie_present`, `state_match`, `error` (the OAuth
+      error code, e.g. `access_denied`, never tokens/state/email). A failed
+      signup shows exactly which one is false: `state_cookie_present:false`
+      (browser dropped the state cookie — a SameSite/cookie issue),
+      `error:"access_denied"` (the IdP declined, e.g. unverified email), etc.
+      The OIDC round-trip cookies are `SameSite=None; Secure` so the state
+      survives the cross-site callback (fixing the "Invalid sign-in state"
+      signup bug).
 - [ ] **Failure signals to know:** `attribution-guard-blocked` (a report was
       withheld because it would name an individual — should be rare/zero),
       `report-render-fallback` (a run.json failed structured render and fell
