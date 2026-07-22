@@ -18,6 +18,8 @@ export interface AppConfig {
   readonly trustProxy: boolean;
   /** Emails allowed to view the founder analytics page (COSTFLOW_ADMIN_EMAILS). */
   readonly adminEmails: string[];
+  /** Max issues imported per project (COSTFLOW_MAX_ISSUES); undefined → server default. */
+  readonly maxIssues: number | undefined;
 }
 
 export type Env = Record<string, string | undefined>;
@@ -110,6 +112,9 @@ export function loadConfig(env: Env): AppConfig {
     .split(',')
     .map((email) => email.trim().toLowerCase())
     .filter((email) => email !== '');
+  const rawMax = env['COSTFLOW_MAX_ISSUES'];
+  const parsedMax = rawMax !== undefined && /^\d+$/.test(rawMax) ? Number(rawMax) : undefined;
+  const maxIssues = parsedMax !== undefined && parsedMax > 0 ? parsedMax : undefined;
 
   return {
     port: Number(env['PORT'] ?? 3000),
@@ -120,5 +125,6 @@ export function loadConfig(env: Env): AppConfig {
     secureCookies,
     trustProxy,
     adminEmails,
+    maxIssues,
   };
 }

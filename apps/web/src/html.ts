@@ -75,6 +75,8 @@ p{margin:0 0 1rem;text-wrap:pretty}
 a{color:var(--primary);text-decoration:none;transition:color .15s var(--ease),opacity .15s var(--ease)}
 a:hover{color:var(--primary-2)}
 a:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:4px}
+.skip{position:absolute;left:-9999px;top:.5rem;z-index:100;background:var(--surface);color:var(--ink);font-weight:600;padding:.6rem 1rem;border:1px solid var(--line);border-radius:10px;box-shadow:var(--sh-2)}
+.skip:focus{left:.5rem}
 strong{color:var(--ink);font-weight:620}
 hr{border:none;border-top:1px solid var(--line);margin:2rem 0}
 ::selection{background:rgba(139,92,246,.22)}
@@ -348,8 +350,8 @@ export function layout(
           csrf,
         )}"><button type="submit">Sign out</button></form>`;
   const main = opts.bleed
-    ? `<main class="bleed">${body}</main>`
-    : `<main class="page"><div class="container">${body}</div></main>`;
+    ? `<main id="main" class="bleed">${body}</main>`
+    : `<main id="main" class="page"><div class="container">${body}</div></main>`;
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -379,6 +381,7 @@ export function layout(
 <style>${STYLES}</style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="site-header"><div class="container">
   <a class="brand" href="/">${HEADER_MARK}<span>CostFlow</span></a>
   <nav class="nav">${nav}</nav>

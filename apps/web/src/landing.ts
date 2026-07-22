@@ -59,7 +59,7 @@ const productMockup = `
           <span>Operations · OPS</span>
         </div>
       </aside>
-      <main class="lp-main">
+      <div class="lp-main">
         <div class="lp-report-eyebrow">Friction report</div>
         <div class="lp-report-hero">
           <div class="lp-rh-label">Total priced friction</div>
@@ -83,7 +83,7 @@ const productMockup = `
           ${frictionRow(2, 'Overdue exposure · To Do', '$342', 'A', 42)}
           ${frictionRow(3, 'Aging · In Review', '$297', 'B', 34)}
         </div>
-      </main>
+      </div>
     </div>
   </div>
 </div>`;

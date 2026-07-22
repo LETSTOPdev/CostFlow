@@ -63,6 +63,15 @@ export interface ServerDeps {
   readonly logSink?: (line: Record<string, unknown>) => void;
   /** Emails allowed to view the founder analytics page (v1). */
   readonly adminEmails?: string[];
+  /**
+   * Reliability ceiling: max issues imported per project. A single very large
+   * analysis holds the whole batch + traces in memory (~1GB heap and a ~165MB
+   * run.json at 100k issues), so on a shared multi-tenant process an unbounded
+   * import can OOM the process and take down every tenant. We refuse above this
+   * at import time with a clear message. Default 50,000 covers essentially all
+   * real projects; override via COSTFLOW_MAX_ISSUES.
+   */
+  readonly maxIssues?: number;
 }
 
 // Committed snapshot of the demo-jira golden run.json, shipped in the image
@@ -747,9 +756,45 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
           ),
         );
     }
+    const maxIssues = deps.maxIssues ?? 50_000;
     let observed;
     try {
       const { searchPages } = await gateway.fetchAll(conn, project.key);
+      // Reliability guard: count before the memory-heavy analysis. `total` is
+      // authoritative from Jira's first page; fall back to counting embedded
+      // issues if absent.
+      const issueCount = ((): number => {
+        try {
+          const first = JSON.parse(searchPages[0] ?? '{}') as {
+            total?: number;
+            issues?: unknown[];
+          };
+          if (typeof first.total === 'number') return first.total;
+        } catch {
+          /* fall through to counting */
+        }
+        return searchPages.reduce((acc, p) => {
+          try {
+            return acc + ((JSON.parse(p) as { issues?: unknown[] }).issues?.length ?? 0);
+          } catch {
+            return acc;
+          }
+        }, 0);
+      })();
+      if (issueCount > maxIssues) {
+        logLine({ level: 'warn', msg: 'jira-import-too-large', issueCount, maxIssues });
+        return reply
+          .code(400)
+          .type('text/html')
+          .send(
+            page(
+              session,
+              'Choose scope',
+              `<div class="error" role="alert">This project has <strong>${issueCount.toLocaleString('en-US')}</strong> issues, which is above the current per-project limit of <strong>${maxIssues.toLocaleString('en-US')}</strong>. Narrow the project (or a board/filter) and reconnect, or email <a href="mailto:support@fbx1.com">support@fbx1.com</a> to enable a larger import.</div>
+               <p><a class="btn btn-ghost" href="/scope">Back to project selection</a></p>`,
+            ),
+          );
+      }
       observed = observeJiraSearchPages(searchPages);
     } catch (error) {
       const f = jiraFailure(error);

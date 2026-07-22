@@ -143,4 +143,45 @@ describe('graceful gateway failure on /scope', () => {
     expect(res.body).toContain('Import failed');
     expect(res.body).not.toContain('nope'); // raw gateway message is not echoed
   });
+
+  it('refuses a project above the issue ceiling before the memory-heavy analysis', async () => {
+    // A single unbounded analysis holds ~1GB heap at 100k issues; on a shared
+    // process that OOMs every tenant. The guard converts it into a clear 400.
+    class HugeGateway extends StubJiraGateway {
+      override async fetchAll() {
+        // Jira's first page carries the authoritative `total`.
+        return {
+          searchPages: [JSON.stringify({ total: 999_999, issues: [] })],
+          supplementaryChangelogs: {},
+        };
+      }
+    }
+    const store = new MemoryStore();
+    const gateway = new HugeGateway();
+    const app = buildServer({
+      store,
+      gateway,
+      auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
+      telemetry: () => {},
+      jobNowFn: () => '2026-07-20T00:00:00Z',
+      awaitJobs: true,
+      maxIssues: 50_000,
+    });
+    const t = { app, store, gateway, events: [], logs: [] };
+    const cookie = await signIn(t, 'huge@scope.example');
+    await post(t, cookie, '/connect', {
+      site: 'https://acme.atlassian.net',
+      email: 'ops@acme.example',
+      token: 'secret-jira-token-abc123',
+    });
+    const res = await post(t, cookie, '/scope', { project: '0' });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('999,999');
+    expect(res.body).toContain('50,000');
+    // The workspace never advances to a state that could trigger the analysis.
+    const ws = (
+      await store.listWorkspaces((await store.findUserByEmail('huge@scope.example'))!.tenantId)
+    )[0]!;
+    expect(ws.onboarding).toBe('connected');
+  });
 });
