@@ -84,6 +84,17 @@ describe('global error boundary', () => {
   });
 });
 
+describe('authenticated responses forbid caching (financial data privacy)', () => {
+  it('sets Cache-Control: no-store on an authenticated page but not on the public landing', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'cache@acme.example');
+    const authed = await get(t, cookie, '/runs');
+    expect(String(authed.headers['cache-control'])).toContain('no-store');
+    const publicLanding = await t.app.inject({ method: 'GET', url: '/' });
+    expect(publicLanding.headers['cache-control']).toBeUndefined();
+  });
+});
+
 describe('member authorization on the job surface', () => {
   it('a member cannot view a job page (manager-gated)', async () => {
     const t = makeApp();

@@ -58,9 +58,16 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
   const log = context.logSink ?? ((line) => console.log(JSON.stringify(line)));
   const headers = securityHeaders(context.production);
 
-  app.addHook('onSend', async (_request, reply, payload) => {
+  app.addHook('onSend', async (request, reply, payload) => {
     for (const [name, value] of Object.entries(headers)) {
       reply.header(name, value);
+    }
+    // Authenticated responses may contain a customer's financial data (reports,
+    // dashboards). Forbid all caching so a shared/public browser cannot reveal
+    // them via the back button after sign-out. Public marketing pages (no
+    // session cookie) stay cacheable. Health probes set their own no-store.
+    if (request.cookies?.['cf_session'] && !reply.getHeader('cache-control')) {
+      reply.header('cache-control', 'no-store, private');
     }
     return payload;
   });
