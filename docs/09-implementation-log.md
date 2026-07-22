@@ -1750,3 +1750,23 @@ behavior anywhere in this slice; deterministic throughout.
 - `deleteWorkspace` operates on an explicit workspace id (multi-workspace
   ready) though the onboarding UI is still sole-workspace; `/settings` lists
   every workspace the tenant owns.
+
+### P4.3 closure (2026-07-22)
+
+Committed as `46f0ce5` and deployed (Railway; `/settings` → 302 `/login`,
+`/healthz` 200, `/readyz` 200). Closure items:
+
+- **ADR-0002** pins the response-layer attribution guard and the fail-closed
+  decision (withhold-not-emit, count-only diagnostics, one choke point).
+- **ADR-0003** pins the transactional-erasure guarantees: every deletion path
+  is all-or-nothing and tenant-scoped — Postgres via `begin`/ordered
+  child-first deletes/`commit`+`rollback`, memory via await-free atomic
+  methods; cascade declared twice (schema FK + explicit in-transaction).
+  Verified across all deletion orchestration paths (`deleteWorkspace`,
+  `deleteTenantData`, and — from P4.4 — `removeUser`).
+- Operations doc 16 §12 (deletion) and §13 (attribution) document the runtime
+  guarantees and the one backup-retention caveat.
+
+P4.3 is **fully closed**. The only non-fabricated open item is the
+against-real-Postgres cascade run (needs Railway console/CLI credentials),
+recorded honestly, to run at next Railway access.
