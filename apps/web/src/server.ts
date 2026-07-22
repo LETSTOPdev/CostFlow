@@ -9,21 +9,25 @@ import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assu
 import { findIndividualAttribution } from './attribution';
 import {
   clearSession,
+  INVITE_COOKIE,
   oidcLogoutUrl,
   registerAuthRoutes,
   sessionFrom,
   type AuthConfig,
   type Session,
 } from './auth';
-import { decryptSecret, encryptSecret } from './crypto';
+import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
 import { esc, layout, STEPS_NAV } from './html';
 import { executeJob } from './jobs';
 import { GatewayError, type JiraGateway } from './jira-gateway';
 import { registerSecurity } from './security';
 import {
   onboardingRank,
+  ORG_ROLES,
+  type OrgRole,
   type OnboardingState,
   type Store,
+  type UserRecord,
   type WorkspaceRecord,
 } from './store/contract';
 import { webEvent, type TelemetrySink } from './telemetry-web';
@@ -72,7 +76,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     ...(deps.logSink ? { logSink: deps.logSink } : {}),
   });
 
-  registerAuthRoutes(app, auth, store, (ok) => telemetry(webEvent('tm-web-signin', { ok })));
+  registerAuthRoutes(
+    app,
+    auth,
+    store,
+    (ok) => telemetry(webEvent('tm-web-signin', { ok })),
+    (role) => telemetry(webEvent('tm-web-invite-accepted', { role })),
+  );
 
   app.post('/logout', async (request, reply) => {
     const session = sessionFrom(request, auth.sessionKey);
@@ -149,6 +159,76 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const page = (session: Session, title: string, body: string): string =>
     layout(title, body, session.csrf);
 
+  // ---------- roles & permission enforcement (P4.4) ----------
+
+  const currentUser = (session: Session): Promise<UserRecord | null> =>
+    store.getUser(session.tenantId, session.userId);
+
+  const isManager = (user: UserRecord | null): boolean =>
+    user !== null && (user.role === 'owner' || user.role === 'admin');
+
+  // Paths that require an owner/admin role. Member-visible surfaces (`/`,
+  // `/runs`, `/reports/:id`, auth, logout) are intentionally excluded.
+  const managerPath = (method: string, pathname: string): boolean => {
+    if (pathname === '/org' || pathname.startsWith('/org/')) return true;
+    if (pathname.startsWith('/workspaces/')) return true;
+    if (pathname === '/settings' || pathname === '/account/delete') return true;
+    const onboardingPost = [
+      '/connect',
+      '/scope',
+      '/mapping/statuses',
+      '/mapping/actors',
+      '/assumptions',
+      '/runs',
+    ];
+    const onboardingGet = [
+      '/dashboard',
+      '/connect',
+      '/scope',
+      '/mapping/statuses',
+      '/mapping/actors',
+      '/assumptions',
+    ];
+    if (method === 'POST' && onboardingPost.includes(pathname)) return true;
+    if (method === 'GET' && onboardingGet.includes(pathname)) return true;
+    return false;
+  };
+
+  // Coarse role gate: a valid non-manager session on a manager-only path is
+  // refused (403). Unauthenticated requests fall through to each route's own
+  // /login redirect. Fine-grained rules (owner-only, last-owner protection)
+  // live in the individual handlers.
+  app.addHook('preHandler', async (request, reply) => {
+    const session = sessionFrom(request, auth.sessionKey);
+    if (!session) return;
+    const pathname = request.url.split('?')[0] ?? request.url;
+    if (!managerPath(request.method, pathname)) return;
+    const user = await currentUser(session);
+    if (!isManager(user)) {
+      return reply
+        .code(403)
+        .type('text/html')
+        .send(
+          page(
+            session,
+            'Not allowed',
+            '<p class="error">This action requires an owner or admin role. <a href="/runs">Back to your runs</a>.</p>',
+          ),
+        );
+    }
+  });
+
+  // Workspaces this session may view: managers see all; members see only the
+  // workspaces they belong to.
+  const accessibleWorkspaceIds = async (
+    session: Session,
+    user: UserRecord | null,
+  ): Promise<Set<string> | null> => {
+    if (isManager(user)) return null; // null = all
+    const ids = await store.listWorkspaceIdsForMember(session.tenantId, session.userId);
+    return new Set(ids);
+  };
+
   // Sanitized diagnostics for Jira gateway failures (P4.2 defect 2): the
   // stage, error class, and HTTP status — never URLs, credentials, issue
   // titles, actor names, or customer data.
@@ -217,6 +297,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
+    const user = await currentUser(session);
+    // Members don't onboard — they land on the runs they can see.
+    if (!isManager(user)) return reply.redirect('/runs');
     const workspace = await soleWorkspace(session);
     if (!workspace) return reply.redirect('/connect');
     return reply.redirect(nextStepPath(workspace));
@@ -259,7 +342,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
                  )
                  .join('')}</ul>`
          }
-         <p><a href="/connect">Connection</a> · <a href="/scope">Scope</a> · <a href="/mapping/statuses">Statuses</a> · <a href="/mapping/actors">Roles</a> · <a href="/assumptions">Assumptions</a></p>`,
+         <p><a href="/connect">Connection</a> · <a href="/scope">Scope</a> · <a href="/mapping/statuses">Statuses</a> · <a href="/mapping/actors">Roles</a> · <a href="/assumptions">Assumptions</a></p>
+         <p><a href="/org">Organization &amp; members</a> · <a href="/settings">Settings</a></p>`,
       ),
     );
   });
@@ -902,7 +986,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/runs', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
-    const runs = await store.listRuns(session.tenantId);
+    const user = await currentUser(session);
+    const allowed = await accessibleWorkspaceIds(session, user);
+    let runs = await store.listRuns(session.tenantId);
+    if (allowed) runs = runs.filter((r) => allowed.has(r.workspaceId));
     return reply
       .type('text/html')
       .send(
@@ -927,6 +1014,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const runId = (request.params as { runId: string }).runId;
     const run = await store.getRun(session.tenantId, runId);
     if (!run) return reply.code(404).send('Not found.');
+    // Members may open only reports for workspaces they belong to.
+    const viewer = await currentUser(session);
+    const allowed = await accessibleWorkspaceIds(session, viewer);
+    if (allowed && !allowed.has(run.workspaceId)) return reply.code(404).send('Not found.');
     const html = await marked.parse(run.reportMd);
     // FR-17 attribution guard — the single reporting-layer choke point. A
     // correct report is pseudonymized at ingestion and never names a person;
@@ -1032,6 +1123,20 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const session = requireSession(request, reply);
     if (!session) return;
     if (!checkCsrf(request, session, reply)) return;
+    // Erasing the whole organization is owner-only (admins cannot).
+    const actor = await currentUser(session);
+    if (actor?.role !== 'owner') {
+      return reply
+        .code(403)
+        .type('text/html')
+        .send(
+          page(
+            session,
+            'Not allowed',
+            '<p class="error">Only the organization owner can delete the entire organization.</p>',
+          ),
+        );
+    }
     const confirm = ((request.body as { confirm?: string }).confirm ?? '').trim();
     if (confirm !== DELETE_ACCOUNT_PHRASE) {
       return reply
@@ -1058,6 +1163,301 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       secure: auth.secureCookies === true,
     });
     return reply.redirect('/logged-out');
+  });
+
+  // ---------- organization management (P4.4) ----------
+
+  const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const orgLabel = (name: string | null): string =>
+    name && name.trim() !== '' ? name : 'My organization';
+  const countOwners = async (tenantId: string): Promise<number> =>
+    (await store.listUsers(tenantId)).filter((u) => u.role === 'owner').length;
+  const forbidden = (session: Session, reply: FastifyReply, message: string) =>
+    reply
+      .code(403)
+      .type('text/html')
+      .send(
+        page(
+          session,
+          'Not allowed',
+          `<p class="error">${esc(message)}</p><p><a href="/org">Back to organization</a></p>`,
+        ),
+      );
+  const orgBadRequest = (session: Session, reply: FastifyReply, message: string) =>
+    reply
+      .code(400)
+      .type('text/html')
+      .send(
+        page(
+          session,
+          'Organization',
+          `<p class="error">${esc(message)}</p><p><a href="/org">Back</a></p>`,
+        ),
+      );
+
+  // Public invitation landing: stash the token in a signed cookie and route to
+  // sign-in, where it is honored (join the inviting org, not a new one).
+  app.get('/invite/:token', async (request, reply) => {
+    const token = (request.params as { token: string }).token;
+    const invitation = await store.getInvitationByToken(token);
+    if (!invitation || invitation.status !== 'pending') {
+      return reply
+        .type('text/html')
+        .send(
+          layout(
+            'Invitation',
+            '<h2>Invitation unavailable</h2><p>This invitation link is invalid, already used, or was revoked. <a href="/login">Sign in</a>.</p>',
+          ),
+        );
+    }
+    const tenant = await store.getTenant(invitation.tenantId);
+    reply.setCookie(INVITE_COOKIE, signValue({ token }, auth.sessionKey), {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: auth.secureCookies === true,
+    });
+    return reply.type('text/html').send(
+      layout(
+        'Invitation',
+        `<h2>Join ${esc(orgLabel(tenant?.name ?? null))}</h2>
+         <p>You have been invited to join as <strong>${esc(invitation.role)}</strong>. Sign in as
+         <strong>${esc(invitation.email)}</strong> to accept.</p>
+         <p><a href="/login">Continue to sign in</a></p>`,
+      ),
+    );
+  });
+
+  app.get('/org', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    const tenant = await store.getTenant(session.tenantId);
+    const users = await store.listUsers(session.tenantId);
+    const invitations = await store.listInvitations(session.tenantId);
+    const workspaces = await store.listWorkspaces(session.tenantId);
+    const actor = await currentUser(session);
+    const isOwner = actor?.role === 'owner';
+    const origin = `${request.protocol}://${request.headers.host ?? ''}`;
+    const userById = new Map(users.map((u) => [u.id, u]));
+
+    const roleOptions = (current: OrgRole, allowOwner: boolean): string =>
+      ORG_ROLES.filter((r) => allowOwner || r !== 'owner')
+        .map((r) => `<option value="${r}" ${r === current ? 'selected' : ''}>${r}</option>`)
+        .join('');
+    const memberRow = (u: UserRecord): string => {
+      const canModify = isOwner || u.role !== 'owner';
+      const isSelf = u.id === session.userId;
+      const roleControl = canModify
+        ? `<form method="post" action="/org/members/${esc(u.id)}/role" class="inline">${csrfField(session)}
+             <select name="role">${roleOptions(u.role, isOwner)}</select>
+             <button type="submit">Update</button></form>`
+        : esc(u.role);
+      const removeControl =
+        !isSelf && canModify
+          ? `<form method="post" action="/org/members/${esc(u.id)}/remove" class="inline">${csrfField(session)}<button type="submit">Remove</button></form>`
+          : '';
+      return `<tr><td>${esc(u.email)}</td><td>${roleControl}</td><td>${removeControl}</td></tr>`;
+    };
+    const invRow = (inv: (typeof invitations)[number]): string => {
+      const controls =
+        inv.status === 'pending'
+          ? `<form method="post" action="/org/invitations/${esc(inv.id)}/revoke" class="inline">${csrfField(session)}<button type="submit">Revoke</button></form>`
+          : '';
+      const linkCell =
+        inv.status === 'pending' ? `<code>${esc(`${origin}/invite/${inv.token}`)}</code>` : '';
+      return `<tr><td>${esc(inv.email)}</td><td>${esc(inv.role)}</td><td>${esc(inv.status)}</td><td>${linkCell}</td><td>${controls}</td></tr>`;
+    };
+    const memberIdsByWs = new Map<string, string[]>();
+    for (const w of workspaces) {
+      memberIdsByWs.set(w.id, await store.listWorkspaceMemberIds(session.tenantId, w.id));
+    }
+    const wsSection = workspaces
+      .map((w) => {
+        const memberIds = memberIdsByWs.get(w.id) ?? [];
+        const memberList =
+          memberIds.length === 0
+            ? '<span class="note">No explicit members — owners and admins always have access.</span>'
+            : memberIds
+                .map((uid) => {
+                  const mu = userById.get(uid);
+                  return `${esc(mu?.email ?? uid)} <form method="post" action="/workspaces/${esc(w.id)}/members/${esc(uid)}/remove" class="inline">${csrfField(session)}<button type="submit">remove</button></form>`;
+                })
+                .join('; ');
+        const addable = users.filter((u) => !memberIds.includes(u.id));
+        const addForm =
+          addable.length === 0
+            ? ''
+            : `<form method="post" action="/workspaces/${esc(w.id)}/members" class="inline">${csrfField(session)}
+                 <select name="userId">${addable.map((u) => `<option value="${esc(u.id)}">${esc(u.email)}</option>`).join('')}</select>
+                 <button type="submit">Grant access</button></form>`;
+        return `<div class="ws"><h4>${esc(w.projectName ?? 'Unconfigured workspace')} (${esc(w.projectKey ?? w.provider)})</h4><p>${memberList}</p>${addForm}</div>`;
+      })
+      .join('');
+
+    return reply.type('text/html').send(
+      page(
+        session,
+        'Organization',
+        `<h2>Organization</h2>
+         <p class="note">You are signed in as <strong>${esc(actor?.email ?? '')}</strong> (${esc(actor?.role ?? '')}).</p>
+
+         <h3>Name</h3>
+         <form method="post" action="/org/rename">${csrfField(session)}
+           <label>Organization name <input name="name" value="${esc(orgLabel(tenant?.name ?? null))}" maxlength="100" required></label>
+           <button type="submit">Save name</button>
+         </form>
+
+         <h3>Members</h3>
+         <table><tr><th>Email</th><th>Role</th><th></th></tr>${users.map(memberRow).join('')}</table>
+
+         <h3>Invitations</h3>
+         ${
+           invitations.length === 0
+             ? '<p class="note">No invitations yet.</p>'
+             : `<table><tr><th>Email</th><th>Role</th><th>Status</th><th>Invite link</th><th></th></tr>${invitations.map(invRow).join('')}</table>`
+         }
+         <form method="post" action="/org/invitations">${csrfField(session)}
+           <label>Invite email <input name="email" type="email" required autocomplete="off"></label>
+           <label>Role <select name="role"><option value="member">member</option><option value="admin">admin</option></select></label>
+           <button type="submit">Create invitation</button>
+           <p class="note">Share the generated link with the invitee — they join this organization when they sign in with that email.</p>
+         </form>
+
+         <h3>Workspace access</h3>
+         <p class="note">Owners and admins can reach every workspace. Members reach only the workspaces granted here.</p>
+         ${workspaces.length === 0 ? '<p class="note">No workspaces yet.</p>' : wsSection}
+
+         <p><a href="/dashboard">Dashboard</a> · <a href="/settings">Settings</a></p>`,
+      ),
+    );
+  });
+
+  app.post('/org/rename', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const name = ((request.body as { name?: string }).name ?? '').trim();
+    if (name === '' || name.length > 100) {
+      return orgBadRequest(session, reply, 'Organization name must be 1–100 characters.');
+    }
+    await store.updateTenantName(session.tenantId, name);
+    telemetry(webEvent('tm-web-org-renamed', {}));
+    return reply.redirect('/org');
+  });
+
+  app.post('/org/invitations', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const body = request.body as { email?: string; role?: string };
+    const email = (body.email ?? '').trim().toLowerCase();
+    const role = body.role;
+    if (!EMAIL_RE.test(email)) {
+      return orgBadRequest(session, reply, 'A valid invite email is required.');
+    }
+    if (role !== 'admin' && role !== 'member') {
+      return orgBadRequest(session, reply, 'Invited role must be admin or member.');
+    }
+    const existing = await store.findUserByEmail(email);
+    if (existing && existing.tenantId === session.tenantId) {
+      return orgBadRequest(session, reply, 'That email is already a member of this organization.');
+    }
+    const token = newId();
+    await store.createInvitation(session.tenantId, {
+      email,
+      role,
+      token,
+      invitedBy: session.userId,
+    });
+    telemetry(webEvent('tm-web-member-invited', { role }));
+    return reply.redirect('/org');
+  });
+
+  app.post('/org/invitations/:id/revoke', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const id = (request.params as { id: string }).id;
+    const updated = await store.updateInvitationStatus(session.tenantId, id, 'revoked', null);
+    if (!updated) return reply.code(404).send('Not found.');
+    telemetry(webEvent('tm-web-invite-revoked', {}));
+    return reply.redirect('/org');
+  });
+
+  app.post('/org/members/:id/role', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const targetId = (request.params as { id: string }).id;
+    const newRole = (request.body as { role?: string }).role;
+    if (newRole !== 'owner' && newRole !== 'admin' && newRole !== 'member') {
+      return orgBadRequest(session, reply, 'Unknown role.');
+    }
+    const actor = await currentUser(session);
+    const target = await store.getUser(session.tenantId, targetId);
+    if (!target) return reply.code(404).send('Not found.');
+    if (actor?.role !== 'owner' && (target.role === 'owner' || newRole === 'owner')) {
+      return forbidden(session, reply, 'Only the owner can grant or change the owner role.');
+    }
+    if (
+      target.role === 'owner' &&
+      newRole !== 'owner' &&
+      (await countOwners(session.tenantId)) <= 1
+    ) {
+      return orgBadRequest(session, reply, 'The organization must always have at least one owner.');
+    }
+    await store.updateUserRole(session.tenantId, targetId, newRole);
+    telemetry(webEvent('tm-web-member-role-changed', { role: newRole }));
+    return reply.redirect('/org');
+  });
+
+  app.post('/org/members/:id/remove', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const targetId = (request.params as { id: string }).id;
+    if (targetId === session.userId) {
+      return orgBadRequest(session, reply, 'You cannot remove yourself from the organization.');
+    }
+    const actor = await currentUser(session);
+    const target = await store.getUser(session.tenantId, targetId);
+    if (!target) return reply.code(404).send('Not found.');
+    if (actor?.role !== 'owner' && target.role === 'owner') {
+      return forbidden(session, reply, 'Only the owner can remove an owner.');
+    }
+    if (target.role === 'owner' && (await countOwners(session.tenantId)) <= 1) {
+      return orgBadRequest(session, reply, 'The organization must always have at least one owner.');
+    }
+    await store.removeUser(session.tenantId, targetId);
+    telemetry(webEvent('tm-web-member-removed', {}));
+    return reply.redirect('/org');
+  });
+
+  app.post('/workspaces/:workspaceId/members', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const workspaceId = (request.params as { workspaceId: string }).workspaceId;
+    const userId = (request.body as { userId?: string }).userId ?? '';
+    const workspace = await store.getWorkspace(session.tenantId, workspaceId);
+    if (!workspace) return reply.code(404).send('Not found.');
+    const member = await store.getUser(session.tenantId, userId);
+    if (!member) return orgBadRequest(session, reply, 'Unknown member.');
+    await store.addWorkspaceMember(session.tenantId, workspaceId, userId);
+    telemetry(webEvent('tm-web-workspace-member-added', {}));
+    return reply.redirect('/org');
+  });
+
+  app.post('/workspaces/:workspaceId/members/:userId/remove', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const { workspaceId, userId } = request.params as { workspaceId: string; userId: string };
+    const workspace = await store.getWorkspace(session.tenantId, workspaceId);
+    if (!workspace) return reply.code(404).send('Not found.');
+    await store.removeWorkspaceMember(session.tenantId, workspaceId, userId);
+    telemetry(webEvent('tm-web-workspace-member-removed', {}));
+    return reply.redirect('/org');
   });
 
   return app;

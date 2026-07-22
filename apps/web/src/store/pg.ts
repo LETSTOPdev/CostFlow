@@ -5,7 +5,9 @@ import pg from 'pg';
 import { newId } from '../crypto';
 import type {
   DeletionSummary,
+  InvitationRecord,
   JobRecord,
+  OrgRole,
   RunRecord,
   Store,
   TenantRecord,
@@ -58,12 +60,56 @@ export class PgStore implements Store {
     return new Date(Date.now()).toISOString();
   }
 
+  private userFromRow(row: Record<string, unknown>): UserRecord {
+    return {
+      id: row['id'] as string,
+      tenantId: row['tenant_id'] as string,
+      email: row['email'] as string,
+      role: row['role'] as OrgRole,
+      createdAt: toIso(row['created_at']) as string,
+    };
+  }
+
+  private tenantFromRow(row: Record<string, unknown>): TenantRecord {
+    return {
+      id: row['id'] as string,
+      name: (row['name'] as string | null) ?? null,
+      saltCiphertext: row['salt_ciphertext'] as string,
+      createdAt: toIso(row['created_at']) as string,
+    };
+  }
+
+  private invitationFromRow(row: Record<string, unknown>): InvitationRecord {
+    return {
+      id: row['id'] as string,
+      tenantId: row['tenant_id'] as string,
+      email: row['email'] as string,
+      role: row['role'] as OrgRole,
+      token: row['token'] as string,
+      status: row['status'] as InvitationRecord['status'],
+      invitedBy: (row['invited_by'] as string | null) ?? null,
+      createdAt: toIso(row['created_at']) as string,
+      acceptedAt: toIso(row['accepted_at']),
+    };
+  }
+
   async createTenantWithUser(
     email: string,
     saltCiphertext: string,
   ): Promise<{ tenant: TenantRecord; user: UserRecord }> {
-    const tenant: TenantRecord = { id: newId(), saltCiphertext, createdAt: this.now() };
-    const user: UserRecord = { id: newId(), tenantId: tenant.id, email, createdAt: this.now() };
+    const tenant: TenantRecord = {
+      id: newId(),
+      name: null,
+      saltCiphertext,
+      createdAt: this.now(),
+    };
+    const user: UserRecord = {
+      id: newId(),
+      tenantId: tenant.id,
+      email,
+      role: 'owner',
+      createdAt: this.now(),
+    };
     const client = await this.pool.connect();
     try {
       await client.query('begin');
@@ -72,8 +118,8 @@ export class PgStore implements Store {
         [tenant.id, tenant.saltCiphertext, tenant.createdAt],
       );
       await client.query(
-        'insert into users (id, tenant_id, email, created_at) values ($1, $2, $3, $4)',
-        [user.id, user.tenantId, user.email, user.createdAt],
+        'insert into users (id, tenant_id, email, role, created_at) values ($1, $2, $3, $4, $5)',
+        [user.id, user.tenantId, user.email, user.role, user.createdAt],
       );
       await client.query('commit');
     } catch (error) {
@@ -86,37 +132,176 @@ export class PgStore implements Store {
   }
 
   async findUserByEmail(email: string): Promise<UserRecord | null> {
-    const result = await this.pool.query<{
-      id: string;
-      tenant_id: string;
-      email: string;
-      created_at: string;
-    }>('select id, tenant_id, email, created_at from users where email = $1', [email]);
-    const row = result.rows[0];
-    return row
-      ? {
-          id: row.id,
-          tenantId: row.tenant_id,
-          email: row.email,
-          createdAt: toIso(row.created_at) as string,
-        }
-      : null;
+    const result = await this.pool.query(
+      'select id, tenant_id, email, role, created_at from users where email = $1',
+      [email],
+    );
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? this.userFromRow(row) : null;
   }
 
   async getTenant(tenantId: string): Promise<TenantRecord | null> {
-    const result = await this.pool.query<{
-      id: string;
-      salt_ciphertext: string;
-      created_at: string;
-    }>('select id, salt_ciphertext, created_at from tenants where id = $1', [tenantId]);
-    const row = result.rows[0];
-    return row
-      ? {
-          id: row.id,
-          saltCiphertext: row.salt_ciphertext,
-          createdAt: toIso(row.created_at) as string,
-        }
-      : null;
+    const result = await this.pool.query(
+      'select id, name, salt_ciphertext, created_at from tenants where id = $1',
+      [tenantId],
+    );
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? this.tenantFromRow(row) : null;
+  }
+
+  async updateTenantName(tenantId: string, name: string): Promise<TenantRecord | null> {
+    await this.pool.query('update tenants set name = $2 where id = $1', [tenantId, name]);
+    return this.getTenant(tenantId);
+  }
+
+  async getUser(tenantId: string, userId: string): Promise<UserRecord | null> {
+    const result = await this.pool.query(
+      'select id, tenant_id, email, role, created_at from users where tenant_id = $1 and id = $2',
+      [tenantId, userId],
+    );
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? this.userFromRow(row) : null;
+  }
+
+  async listUsers(tenantId: string): Promise<UserRecord[]> {
+    const result = await this.pool.query(
+      'select id, tenant_id, email, role, created_at from users where tenant_id = $1 order by created_at, id',
+      [tenantId],
+    );
+    return (result.rows as Record<string, unknown>[]).map((row) => this.userFromRow(row));
+  }
+
+  async createUserInTenant(tenantId: string, email: string, role: OrgRole): Promise<UserRecord> {
+    const user: UserRecord = {
+      id: newId(),
+      tenantId,
+      email,
+      role,
+      createdAt: this.now(),
+    };
+    await this.pool.query(
+      'insert into users (id, tenant_id, email, role, created_at) values ($1, $2, $3, $4, $5)',
+      [user.id, user.tenantId, user.email, user.role, user.createdAt],
+    );
+    return user;
+  }
+
+  async updateUserRole(
+    tenantId: string,
+    userId: string,
+    role: OrgRole,
+  ): Promise<UserRecord | null> {
+    await this.pool.query('update users set role = $3 where tenant_id = $1 and id = $2', [
+      tenantId,
+      userId,
+      role,
+    ]);
+    return this.getUser(tenantId, userId);
+  }
+
+  async removeUser(tenantId: string, userId: string): Promise<boolean> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('begin');
+      const exists = await client.query('select 1 from users where tenant_id = $1 and id = $2', [
+        tenantId,
+        userId,
+      ]);
+      if (exists.rowCount === 0) {
+        await client.query('rollback');
+        return false;
+      }
+      await client.query('delete from workspace_members where tenant_id = $1 and user_id = $2', [
+        tenantId,
+        userId,
+      ]);
+      await client.query('delete from users where tenant_id = $1 and id = $2', [tenantId, userId]);
+      await client.query('commit');
+      return true;
+    } catch (error) {
+      await client.query('rollback');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async createInvitation(
+    tenantId: string,
+    data: { email: string; role: OrgRole; token: string; invitedBy: string | null },
+  ): Promise<InvitationRecord> {
+    const id = newId();
+    const createdAt = this.now();
+    await this.pool.query(
+      `insert into invitations (id, tenant_id, email, role, token, status, invited_by, created_at)
+       values ($1, $2, $3, $4, $5, 'pending', $6, $7)`,
+      [id, tenantId, data.email, data.role, data.token, data.invitedBy, createdAt],
+    );
+    return (await this.getInvitationByToken(data.token)) as InvitationRecord;
+  }
+
+  async getInvitationByToken(token: string): Promise<InvitationRecord | null> {
+    const result = await this.pool.query('select * from invitations where token = $1', [token]);
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? this.invitationFromRow(row) : null;
+  }
+
+  async listInvitations(tenantId: string): Promise<InvitationRecord[]> {
+    const result = await this.pool.query(
+      'select * from invitations where tenant_id = $1 order by created_at, id',
+      [tenantId],
+    );
+    return (result.rows as Record<string, unknown>[]).map((row) => this.invitationFromRow(row));
+  }
+
+  async updateInvitationStatus(
+    tenantId: string,
+    invitationId: string,
+    status: InvitationRecord['status'],
+    acceptedAt: string | null,
+  ): Promise<InvitationRecord | null> {
+    const result = await this.pool.query(
+      'update invitations set status = $3, accepted_at = $4 where tenant_id = $1 and id = $2 returning *',
+      [tenantId, invitationId, status, acceptedAt],
+    );
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    return row ? this.invitationFromRow(row) : null;
+  }
+
+  async addWorkspaceMember(tenantId: string, workspaceId: string, userId: string): Promise<void> {
+    await this.pool.query(
+      `insert into workspace_members (tenant_id, workspace_id, user_id, created_at)
+       values ($1, $2, $3, $4)
+       on conflict (workspace_id, user_id) do nothing`,
+      [tenantId, workspaceId, userId, this.now()],
+    );
+  }
+
+  async removeWorkspaceMember(
+    tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
+    await this.pool.query(
+      'delete from workspace_members where tenant_id = $1 and workspace_id = $2 and user_id = $3',
+      [tenantId, workspaceId, userId],
+    );
+  }
+
+  async listWorkspaceMemberIds(tenantId: string, workspaceId: string): Promise<string[]> {
+    const result = await this.pool.query(
+      'select user_id from workspace_members where tenant_id = $1 and workspace_id = $2 order by user_id',
+      [tenantId, workspaceId],
+    );
+    return (result.rows as { user_id: string }[]).map((r) => r.user_id);
+  }
+
+  async listWorkspaceIdsForMember(tenantId: string, userId: string): Promise<string[]> {
+    const result = await this.pool.query(
+      'select workspace_id from workspace_members where tenant_id = $1 and user_id = $2 order by workspace_id',
+      [tenantId, userId],
+    );
+    return (result.rows as { workspace_id: string }[]).map((r) => r.workspace_id);
   }
 
   private workspaceFromRow(row: Record<string, unknown>): WorkspaceRecord {
@@ -341,6 +526,10 @@ export class PgStore implements Store {
         'delete from jobs where tenant_id = $1 and workspace_id = $2',
         [tenantId, workspaceId],
       );
+      await client.query(
+        'delete from workspace_members where tenant_id = $1 and workspace_id = $2',
+        [tenantId, workspaceId],
+      );
       await client.query('delete from workspaces where tenant_id = $1 and id = $2', [
         tenantId,
         workspaceId,
@@ -363,9 +552,11 @@ export class PgStore implements Store {
       await client.query('begin');
       const runs = await client.query('delete from runs where tenant_id = $1', [tenantId]);
       const jobs = await client.query('delete from jobs where tenant_id = $1', [tenantId]);
+      await client.query('delete from workspace_members where tenant_id = $1', [tenantId]);
       const workspaces = await client.query('delete from workspaces where tenant_id = $1', [
         tenantId,
       ]);
+      await client.query('delete from invitations where tenant_id = $1', [tenantId]);
       await client.query('delete from users where tenant_id = $1', [tenantId]);
       await client.query('delete from tenants where id = $1', [tenantId]);
       await client.query('commit');

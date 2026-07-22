@@ -23,7 +23,7 @@ export function layout(title: string, body: string, csrf?: string): string {
   const authedNav =
     csrf === undefined
       ? ''
-      : ` · <a href="/settings">Settings</a> · <form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
+      : ` · <form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
           csrf,
         )}"><button type="submit">Sign out</button></form>`;
   return `<!doctype html>
@@ -46,6 +46,10 @@ export function layout(title: string, body: string, csrf?: string): string {
   nav { display: flex; gap: 0.5rem; align-items: baseline; }
   .danger { border: 1px solid #a40000; border-radius: 4px; padding: 0.75rem 1rem; margin: 1rem 0; }
   .danger h3 { margin-top: 0; color: #a40000; }
+  .ws { border: 1px solid #ddd; border-radius: 4px; padding: 0.5rem 0.75rem; margin: 0.5rem 0; }
+  .ws h4 { margin: 0 0 0.4rem; }
+  form.inline { display: inline; margin: 0; }
+  code { background: #f4f4f4; padding: 0.1rem 0.3rem; word-break: break-all; }
   .signout { display: inline; margin: 0; }
   .signout button { margin: 0; background: none; border: none; color: #0645ad; cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
 </style>

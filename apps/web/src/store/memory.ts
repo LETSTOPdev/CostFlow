@@ -1,7 +1,9 @@
 import { newId } from '../crypto';
 import type {
   DeletionSummary,
+  InvitationRecord,
   JobRecord,
+  OrgRole,
   RunRecord,
   Store,
   TenantRecord,
@@ -9,6 +11,13 @@ import type {
   WorkspacePatch,
   WorkspaceRecord,
 } from './contract';
+
+interface WorkspaceMember {
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly userId: string;
+  readonly createdAt: string;
+}
 
 /**
  * In-memory Store for tests and local demo. Implements the same contract
@@ -22,17 +31,34 @@ export class MemoryStore implements Store {
   private jobs = new Map<string, JobRecord>();
   private runs = new Map<string, RunRecord>();
   private runViews = new Map<string, string>();
+  private invitations = new Map<string, InvitationRecord>();
+  private workspaceMembers = new Map<string, WorkspaceMember>();
 
   private now(): string {
     return new Date(Date.now()).toISOString();
+  }
+
+  private memberKey(workspaceId: string, userId: string): string {
+    return `${workspaceId}:${userId}`;
   }
 
   async createTenantWithUser(
     email: string,
     saltCiphertext: string,
   ): Promise<{ tenant: TenantRecord; user: UserRecord }> {
-    const tenant: TenantRecord = { id: newId(), saltCiphertext, createdAt: this.now() };
-    const user: UserRecord = { id: newId(), tenantId: tenant.id, email, createdAt: this.now() };
+    const tenant: TenantRecord = {
+      id: newId(),
+      name: null,
+      saltCiphertext,
+      createdAt: this.now(),
+    };
+    const user: UserRecord = {
+      id: newId(),
+      tenantId: tenant.id,
+      email,
+      role: 'owner',
+      createdAt: this.now(),
+    };
     this.tenants.set(tenant.id, tenant);
     this.users.set(user.id, user);
     return { tenant, user };
@@ -44,6 +70,134 @@ export class MemoryStore implements Store {
 
   async getTenant(tenantId: string): Promise<TenantRecord | null> {
     return this.tenants.get(tenantId) ?? null;
+  }
+
+  async updateTenantName(tenantId: string, name: string): Promise<TenantRecord | null> {
+    const tenant = this.tenants.get(tenantId);
+    if (!tenant) return null;
+    const updated: TenantRecord = { ...tenant, name };
+    this.tenants.set(tenantId, updated);
+    return updated;
+  }
+
+  async getUser(tenantId: string, userId: string): Promise<UserRecord | null> {
+    const user = this.users.get(userId);
+    return user && user.tenantId === tenantId ? user : null;
+  }
+
+  async listUsers(tenantId: string): Promise<UserRecord[]> {
+    return [...this.users.values()]
+      .filter((u) => u.tenantId === tenantId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }
+
+  async createUserInTenant(tenantId: string, email: string, role: OrgRole): Promise<UserRecord> {
+    const user: UserRecord = {
+      id: newId(),
+      tenantId,
+      email,
+      role,
+      createdAt: this.now(),
+    };
+    this.users.set(user.id, user);
+    return user;
+  }
+
+  async updateUserRole(
+    tenantId: string,
+    userId: string,
+    role: OrgRole,
+  ): Promise<UserRecord | null> {
+    const existing = await this.getUser(tenantId, userId);
+    if (!existing) return null;
+    const updated: UserRecord = { ...existing, role };
+    this.users.set(userId, updated);
+    return updated;
+  }
+
+  async removeUser(tenantId: string, userId: string): Promise<boolean> {
+    const existing = await this.getUser(tenantId, userId);
+    if (!existing) return false;
+    for (const [key, member] of this.workspaceMembers) {
+      if (member.tenantId === tenantId && member.userId === userId) {
+        this.workspaceMembers.delete(key);
+      }
+    }
+    this.users.delete(userId);
+    return true;
+  }
+
+  async createInvitation(
+    tenantId: string,
+    data: { email: string; role: OrgRole; token: string; invitedBy: string | null },
+  ): Promise<InvitationRecord> {
+    const invitation: InvitationRecord = {
+      id: newId(),
+      tenantId,
+      email: data.email,
+      role: data.role,
+      token: data.token,
+      status: 'pending',
+      invitedBy: data.invitedBy,
+      createdAt: this.now(),
+      acceptedAt: null,
+    };
+    this.invitations.set(invitation.id, invitation);
+    return invitation;
+  }
+
+  async getInvitationByToken(token: string): Promise<InvitationRecord | null> {
+    return [...this.invitations.values()].find((i) => i.token === token) ?? null;
+  }
+
+  async listInvitations(tenantId: string): Promise<InvitationRecord[]> {
+    return [...this.invitations.values()]
+      .filter((i) => i.tenantId === tenantId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }
+
+  async updateInvitationStatus(
+    tenantId: string,
+    invitationId: string,
+    status: InvitationRecord['status'],
+    acceptedAt: string | null,
+  ): Promise<InvitationRecord | null> {
+    const existing = this.invitations.get(invitationId);
+    if (!existing || existing.tenantId !== tenantId) return null;
+    const updated: InvitationRecord = { ...existing, status, acceptedAt };
+    this.invitations.set(invitationId, updated);
+    return updated;
+  }
+
+  async addWorkspaceMember(tenantId: string, workspaceId: string, userId: string): Promise<void> {
+    this.workspaceMembers.set(this.memberKey(workspaceId, userId), {
+      tenantId,
+      workspaceId,
+      userId,
+      createdAt: this.now(),
+    });
+  }
+
+  async removeWorkspaceMember(
+    _tenantId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
+    this.workspaceMembers.delete(this.memberKey(workspaceId, userId));
+  }
+
+  async listWorkspaceMemberIds(tenantId: string, workspaceId: string): Promise<string[]> {
+    return [...this.workspaceMembers.values()]
+      .filter((m) => m.tenantId === tenantId && m.workspaceId === workspaceId)
+      .map((m) => m.userId)
+      .sort();
+  }
+
+  async listWorkspaceIdsForMember(tenantId: string, userId: string): Promise<string[]> {
+    return [...this.workspaceMembers.values()]
+      .filter((m) => m.tenantId === tenantId && m.userId === userId)
+      .map((m) => m.workspaceId)
+      .sort();
   }
 
   async createWorkspace(
@@ -172,6 +326,11 @@ export class MemoryStore implements Store {
         runs += 1;
       }
     }
+    for (const [key, member] of this.workspaceMembers) {
+      if (member.tenantId === tenantId && member.workspaceId === workspaceId) {
+        this.workspaceMembers.delete(key);
+      }
+    }
     this.workspaces.delete(workspaceId);
     return { workspaces: 1, jobs, runs };
   }
@@ -198,6 +357,12 @@ export class MemoryStore implements Store {
         this.runViews.delete(key);
         runs += 1;
       }
+    }
+    for (const [key, member] of this.workspaceMembers) {
+      if (member.tenantId === tenantId) this.workspaceMembers.delete(key);
+    }
+    for (const [id, invitation] of this.invitations) {
+      if (invitation.tenantId === tenantId) this.invitations.delete(id);
     }
     for (const [id, user] of this.users) {
       if (user.tenantId === tenantId) this.users.delete(id);

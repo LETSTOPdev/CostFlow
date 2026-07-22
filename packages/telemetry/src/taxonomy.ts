@@ -128,6 +128,56 @@ export const TELEMETRY_TAXONOMY: readonly TelemetryEventMeta[] = [
     kind: 'interaction',
     description: 'Permanent deletion completed: scope (workspace|org) and cascaded run count.',
   },
+  // P4.4 organization & membership management. All fields are enums/counts —
+  // never emails, org names, tokens, or user ids.
+  {
+    event: 'tm-web-org-renamed',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Organization display name changed (no name value carried).',
+  },
+  {
+    event: 'tm-web-member-invited',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Invitation created for a role (role enum only).',
+  },
+  {
+    event: 'tm-web-invite-accepted',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Invitation accepted at sign-in; joined role (role enum only).',
+  },
+  {
+    event: 'tm-web-invite-revoked',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'Pending invitation revoked.',
+  },
+  {
+    event: 'tm-web-member-role-changed',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'A member role was changed (new role enum only).',
+  },
+  {
+    event: 'tm-web-member-removed',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'A member was removed from the organization.',
+  },
+  {
+    event: 'tm-web-workspace-member-added',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'A member was granted access to a workspace.',
+  },
+  {
+    event: 'tm-web-workspace-member-removed',
+    version: '1.0.0',
+    kind: 'interaction',
+    description: 'A member workspace access grant was revoked.',
+  },
 ];
 
 /** One JSONL line per event, fixed envelope key order — byte-deterministic. */

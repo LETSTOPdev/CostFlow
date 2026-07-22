@@ -285,3 +285,39 @@ response is **withheld (HTTP 500)** rather than emitted, an
 `attribution-guard-blocked {surface, leaked:<count>}` line is logged (count
 only, never the value), and the view is not recorded. This is enforcement,
 not UI convention (doc 06 §15).
+
+## 14. Organizations, roles & permissions (P4.4)
+
+A tenant is an organization. Every user holds one role — **owner > admin >
+member** — resolved live from the store on each request (never trusted from
+the session cookie), so a demotion or removal takes effect immediately. Full
+model and rationale: ADR-0004.
+
+- **Roles.** owner = full control incl. org deletion and owner management;
+  admin = manage members/invitations/workspaces/settings (never owners, never
+  the org lifecycle); member = access only granted workspaces, no management.
+- **Permission enforcement.** A single `preHandler` gates all manager-only
+  paths (onboarding, `/org*`, `/settings`, `/workspaces/*`, `/account/delete`)
+  to owner/admin. Member-visible routes (`/`, `/runs`, `/reports/:id`) filter
+  by workspace membership. Owner-only actions and last-owner protection are
+  enforced in-handler. Every mutation is CSRF-checked.
+- **Invitations.** Owner/admin create an invitation under
+  **Settings → Organization** (`/org`); the UI shows a copyable
+  `/invite/<token>` link. There is **no automated email yet** — share the link
+  out of band. The invitee joins the organization when they sign in with the
+  invited email (the token rides a signed `cf_invite` cookie through sign-in).
+  Revoked/accepted invitations cannot be reused. An email that already belongs
+  to another organization cannot join a second (one org per email).
+- **Workspace membership.** Owners/admins reach every workspace; members reach
+  only workspaces granted on `/org`. Grants/revocations are immediate.
+- **Guardrails.** The organization always keeps ≥1 owner; a user cannot remove
+  themselves; only an owner can manage owners or delete the organization.
+- **Privacy.** Membership telemetry (`tm-web-member-invited`,
+  `-invite-accepted`, `-invite-revoked`, `-member-role-changed`,
+  `-member-removed`, `-workspace-member-added/-removed`, `-org-renamed`)
+  carries role enums and counts only — never emails, org names, tokens, or
+  user ids.
+
+Operator note: support-initiated membership changes run the same store methods
+(`updateUserRole`, `removeUser`, invitation lifecycle) against the tenant;
+there is no separate super-admin surface.

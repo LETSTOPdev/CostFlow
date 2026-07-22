@@ -219,6 +219,114 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
         runs: 0,
       });
     });
+
+    // P4.4 — organization, roles, invitations, workspace membership.
+
+    it('provisions the creator as owner and scopes users by tenant', async () => {
+      const store = await makeStore();
+      const { tenant, user } = await store.createTenantWithUser('boss@org.example', 's');
+      expect(user.role).toBe('owner');
+      expect(tenant.name).toBeNull();
+      expect(await store.getUser(tenant.id, user.id)).toMatchObject({ role: 'owner' });
+      // Foreign tenant cannot resolve the user.
+      const other = (await store.createTenantWithUser('x@org.example', 's')).tenant;
+      expect(await store.getUser(other.id, user.id)).toBeNull();
+      expect((await store.listUsers(tenant.id)).map((u) => u.email)).toEqual(['boss@org.example']);
+    });
+
+    it('renames the organization', async () => {
+      const store = await makeStore();
+      const { tenant } = await store.createTenantWithUser('name@org.example', 's');
+      expect(await store.updateTenantName(tenant.id, 'Acme Inc')).toMatchObject({
+        name: 'Acme Inc',
+      });
+      expect((await store.getTenant(tenant.id))?.name).toBe('Acme Inc');
+    });
+
+    it('adds members with roles, changes roles, and removes members (dropping their workspace access)', async () => {
+      const store = await makeStore();
+      const { tenant } = await store.createTenantWithUser('owner@org.example', 's');
+      const workspace = await store.createWorkspace(tenant.id, {
+        provider: 'jira',
+        site: 'https://o.example',
+        email: 'owner@org.example',
+        tokenCiphertext: 'tok',
+      });
+      const member = await store.createUserInTenant(tenant.id, 'member@org.example', 'member');
+      expect(member.role).toBe('member');
+      await store.addWorkspaceMember(tenant.id, workspace.id, member.id);
+      expect(await store.listWorkspaceMemberIds(tenant.id, workspace.id)).toEqual([member.id]);
+      expect(await store.listWorkspaceIdsForMember(tenant.id, member.id)).toEqual([workspace.id]);
+
+      expect(await store.updateUserRole(tenant.id, member.id, 'admin')).toMatchObject({
+        role: 'admin',
+      });
+      // Removing the member also drops their workspace membership.
+      expect(await store.removeUser(tenant.id, member.id)).toBe(true);
+      expect(await store.getUser(tenant.id, member.id)).toBeNull();
+      expect(await store.listWorkspaceMemberIds(tenant.id, workspace.id)).toEqual([]);
+      // Idempotent.
+      expect(await store.removeUser(tenant.id, member.id)).toBe(false);
+    });
+
+    it('manages invitations by token, tenant-scoped for lifecycle updates', async () => {
+      const store = await makeStore();
+      const { tenant, user } = await store.createTenantWithUser('inv@org.example', 's');
+      const invitation = await store.createInvitation(tenant.id, {
+        email: 'new@org.example',
+        role: 'member',
+        token: 'tok-123',
+        invitedBy: user.id,
+      });
+      expect(invitation.status).toBe('pending');
+      expect(await store.getInvitationByToken('tok-123')).toMatchObject({
+        email: 'new@org.example',
+        role: 'member',
+      });
+      expect((await store.listInvitations(tenant.id)).length).toBe(1);
+      // A foreign tenant cannot update this invitation's lifecycle.
+      const other = (await store.createTenantWithUser('z@org.example', 's')).tenant;
+      expect(
+        await store.updateInvitationStatus(other.id, invitation.id, 'revoked', null),
+      ).toBeNull();
+      const accepted = await store.updateInvitationStatus(
+        tenant.id,
+        invitation.id,
+        'accepted',
+        '2026-07-22T00:00:00Z',
+      );
+      expect(accepted).toMatchObject({ status: 'accepted', acceptedAt: '2026-07-22T00:00:00Z' });
+    });
+
+    it('deletes org-management rows on workspace and tenant erasure', async () => {
+      const store = await makeStore();
+      const { tenant, user } = await store.createTenantWithUser('del2@org.example', 's');
+      const workspace = await store.createWorkspace(tenant.id, {
+        provider: 'jira',
+        site: 'https://d2.example',
+        email: 'del2@org.example',
+        tokenCiphertext: 'tok',
+      });
+      const member = await store.createUserInTenant(tenant.id, 'm2@org.example', 'member');
+      await store.addWorkspaceMember(tenant.id, workspace.id, member.id);
+      await store.createInvitation(tenant.id, {
+        email: 'p@org.example',
+        role: 'member',
+        token: 'tok-del',
+        invitedBy: user.id,
+      });
+
+      // Workspace erasure clears its memberships.
+      await store.deleteWorkspace(tenant.id, workspace.id);
+      expect(await store.listWorkspaceMemberIds(tenant.id, workspace.id)).toEqual([]);
+      expect(await store.listWorkspaceIdsForMember(tenant.id, member.id)).toEqual([]);
+
+      // Tenant erasure clears invitations and users.
+      await store.deleteTenantData(tenant.id);
+      expect(await store.getInvitationByToken('tok-del')).toBeNull();
+      expect(await store.getUser(tenant.id, member.id)).toBeNull();
+      expect(await store.listInvitations(tenant.id)).toEqual([]);
+    });
   });
 }
 

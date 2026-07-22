@@ -19,7 +19,15 @@ export type WebTelemetryEventName =
   | 'tm-web-assumptions-confirmed'
   | 'tm-web-run'
   | 'tm-web-report-viewed'
-  | 'tm-web-data-deleted';
+  | 'tm-web-data-deleted'
+  | 'tm-web-org-renamed'
+  | 'tm-web-member-invited'
+  | 'tm-web-invite-accepted'
+  | 'tm-web-invite-revoked'
+  | 'tm-web-member-role-changed'
+  | 'tm-web-member-removed'
+  | 'tm-web-workspace-member-added'
+  | 'tm-web-workspace-member-removed';
 
 export function webEvent(
   event: WebTelemetryEventName,

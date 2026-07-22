@@ -1770,3 +1770,93 @@ Committed as `46f0ce5` and deployed (Railway; `/settings` → 302 `/login`,
 P4.3 is **fully closed**. The only non-fabricated open item is the
 against-real-Postgres cascade run (needs Railway console/CLI credentials),
 recorded honestly, to run at next Railway access.
+
+## Phase 2 / P4.4 — Organization & Workspace Management (authorized 2026-07-22)
+
+Objectives (all delivered): organization management, team invitations, member
+management, owner/admin/member roles, workspace membership, organization
+settings, permission enforcement across all routes, multi-workspace
+foundations, UI, comprehensive tests, documentation, validation. Engine,
+detectors, pricing, simulations, and goldens untouched.
+
+### What shipped
+
+1. **Data model (tenant = organization).** `tenants.name` (org display name);
+   `users.role` (owner|admin|member, existing users backfill to owner); new
+   `invitations` and `workspace_members` tables. All additive; schema ALTERs
+   use `add column if not exists` so migration is idempotent on the deployed
+   DB. FKs carry `on delete cascade` for fresh installs; the adapters delete
+   child rows in-transaction for the already-deployed DB (ADR-0003).
+2. **Contract + both adapters (memory & Postgres), contract-tested.**
+   `updateTenantName`, `getUser`, `listUsers`, `createUserInTenant`,
+   `updateUserRole`, `removeUser` (drops the user's workspace memberships);
+   invitation CRUD (`createInvitation`, `getInvitationByToken`,
+   `listInvitations`, `updateInvitationStatus`); workspace membership
+   (`addWorkspaceMember`, `removeWorkspaceMember`, `listWorkspaceMemberIds`,
+   `listWorkspaceIdsForMember`). `deleteWorkspace`/`deleteTenantData` extended
+   to erase memberships/invitations in the same transaction.
+3. **Roles & permissions (ADR-0004).** A single Fastify `preHandler` gates
+   every manager-only path (onboarding, `/org*`, `/settings`, `/workspaces/*`,
+   `/account/delete`) to owner/admin; member-visible surfaces (`/`, `/runs`,
+   `/reports/:id`) apply a workspace-membership filter instead. Roles are
+   resolved LIVE from the store per request (never from the cookie), so
+   revocation is immediate. Fine-grained handler rules: org-erasure is
+   owner-only; only owners manage owners or grant the owner role; the last
+   owner cannot be demoted or removed; a user cannot remove themselves.
+4. **Invitations as capability tokens.** Admin/owner create an invitation
+   (opaque token); the copyable `/invite/:token` link stashes the token in a
+   signed `cf_invite` cookie and it is honored at sign-in — a new email joins
+   the inviting org with the invited role; an email already in another org
+   falls through to its own org and the invite stays pending. No email
+   delivery yet (surfaced link only — not faked).
+5. **Workspace membership (multi-workspace foundation).** Owners/admins reach
+   all workspaces; members reach only granted workspaces. `/runs` and
+   `/reports/:id` are filtered; a member opening a non-granted report gets 404.
+6. **UI.** `/org` (owner/admin): rename org, member table with role controls +
+   remove, invitation table with copyable links + revoke, create-invitation
+   form, per-workspace member grants. `/invite/:token` public landing.
+   Dashboard links to Organization + Settings; the authenticated header stays
+   minimal (Home · Runs · Sign out) so members never see manager links.
+7. **Telemetry (additive, enum/count-only):** `tm-web-org-renamed`,
+   `tm-web-member-invited {role}`, `tm-web-invite-accepted {role}`,
+   `tm-web-invite-revoked`, `tm-web-member-role-changed {role}`,
+   `tm-web-member-removed`, `tm-web-workspace-member-added`,
+   `tm-web-workspace-member-removed`. No emails, org names, tokens, or user ids.
+
+### Proofs (all in the suite)
+
+- **Store contract (both adapters):** creator-is-owner + tenant-scoped users;
+  org rename; add/change-role/remove member (removal drops workspace
+  memberships); invitation lifecycle with tenant-scoped updates + token
+  lookup; workspace/tenant erasure clears memberships and invitations.
+- **Routes (`org-management.test.ts`, 10 cases):** invited email joins the
+  existing org at sign-in (no second org created); stale/revoked invite
+  provisions nothing; a member is 403 on manager routes and is routed to
+  `/runs`; workspace membership gates member run/report access (grant → visible
+  → revoke → 404); admin cannot delete the org / grant owner / modify an owner;
+  last-owner demotion & self-removal blocked (400); owner changes a role and
+  removes a member; org mutations require CSRF; cross-tenant admin action is
+  404; membership telemetry carries only role enums/counts (no email/org
+  name/token).
+
+### Invariants held
+
+- Engine, detectors, cost-engine, analysis, reporting, telemetry `derive.ts`,
+  and ALL goldens byte-identical to `e3c86e6` (git diff empty on those trees).
+  The only `packages` change is additive taxonomy registry entries.
+- Existing P4.1–P4.3 journeys unchanged (regression suite green): the creator
+  is provisioned as owner, so onboarding still works untouched.
+- Security/privacy: every new mutation is CSRF-checked; permission checks are
+  server-side and live; no credential, email, org name, or token appears in
+  any added log or telemetry event; the deferred logout defect (D-19) is not
+  touched.
+
+### Honest limits, named
+
+- **No email delivery** for invitations — the link is surfaced for out-of-band
+  sharing (needs SMTP/provider config; not faked).
+- **One organization per email** — joining a second org via invite is not
+  supported in this model; documented in ADR-0004, a future multi-org item.
+- The against-real-Postgres run for the new tables/cascades is proven by the
+  contract suite (memory always; Postgres when `COSTFLOW_TEST_DATABASE_URL` is
+  bound) and executes at deploy time — not fabricated here.

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { encryptSecret, newId, newSalt, signValue, verifyValue } from './crypto';
-import type { Store } from './store/contract';
+import type { OrgRole, Store } from './store/contract';
 
 /**
  * Authentication (doc 09 P4.1 plan §1). CostFlow never stores passwords.
@@ -12,6 +12,8 @@ import type { Store } from './store/contract';
  */
 
 export const SESSION_COOKIE = 'cf_session';
+/** Signed cookie carrying a pending invitation token through the sign-in hop. */
+export const INVITE_COOKIE = 'cf_invite';
 
 export interface Session {
   readonly userId: string;
@@ -102,6 +104,50 @@ export async function signInByEmail(
   return { userId: user.id, tenantId: user.tenantId, csrf: newId() };
 }
 
+/**
+ * Sign in, honoring a pending invitation token when present (P4.4). If the
+ * token matches a PENDING invitation for THIS exact email, the invitee joins
+ * the inviting organization with the invited role:
+ *  - a brand-new email is provisioned into that org (no new org is created);
+ *  - an email already in that same org just has its invite marked accepted.
+ * A mismatched/expired token, or an email that already belongs to a DIFFERENT
+ * organization, falls through to normal create-or-find-own-org sign-in and the
+ * invitation stays pending — a user belongs to exactly one org in this model.
+ */
+export async function signInWithOptionalInvite(
+  store: Store,
+  credentialKey: Buffer,
+  email: string,
+  inviteToken: string | undefined,
+): Promise<{ session: Session; acceptedRole: OrgRole | null }> {
+  if (inviteToken) {
+    const invitation = await store.getInvitationByToken(inviteToken);
+    if (invitation && invitation.status === 'pending' && invitation.email === email) {
+      const nowIso = new Date(Date.now()).toISOString();
+      const existing = await store.findUserByEmail(email);
+      if (!existing) {
+        const user = await store.createUserInTenant(invitation.tenantId, email, invitation.role);
+        await store.updateInvitationStatus(invitation.tenantId, invitation.id, 'accepted', nowIso);
+        return {
+          session: { userId: user.id, tenantId: user.tenantId, csrf: newId() },
+          acceptedRole: invitation.role,
+        };
+      }
+      if (existing.tenantId === invitation.tenantId) {
+        await store.updateInvitationStatus(invitation.tenantId, invitation.id, 'accepted', nowIso);
+        return {
+          session: { userId: existing.id, tenantId: existing.tenantId, csrf: newId() },
+          acceptedRole: existing.role,
+        };
+      }
+      // Email already belongs to another org — cannot join a second. Fall
+      // through; the invitation remains pending.
+    }
+  }
+  const session = await signInByEmail(store, credentialKey, email);
+  return { session, acceptedRole: null };
+}
+
 interface OidcDiscovery {
   authorization_endpoint?: string;
   token_endpoint?: string;
@@ -113,7 +159,35 @@ export function registerAuthRoutes(
   config: AuthConfig,
   store: Store,
   onSignIn: (ok: boolean) => void,
+  onInviteAccepted?: (role: OrgRole) => void,
 ): void {
+  const readInviteToken = (request: FastifyRequest): string | undefined =>
+    verifyValue<{ token: string }>(request.cookies[INVITE_COOKIE], config.sessionKey)?.token;
+  const clearInvite = (reply: FastifyReply): void => {
+    reply.clearCookie(INVITE_COOKIE, {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: config.secureCookies === true,
+    });
+  };
+  const completeSignIn = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+    email: string,
+  ): Promise<void> => {
+    const { session, acceptedRole } = await signInWithOptionalInvite(
+      store,
+      config.credentialKey,
+      email,
+      readInviteToken(request),
+    );
+    setSession(reply, session, config.sessionKey, config.secureCookies === true);
+    clearInvite(reply);
+    onSignIn(true);
+    if (acceptedRole && onInviteAccepted) onInviteAccepted(acceptedRole);
+  };
+
   if (config.mode === 'dev') {
     app.get('/login', async (_request, reply) => {
       return reply.type('text/html').send(
@@ -131,9 +205,7 @@ export function registerAuthRoutes(
         onSignIn(false);
         return reply.code(400).send('Email required.');
       }
-      const session = await signInByEmail(store, config.credentialKey, email);
-      setSession(reply, session, config.sessionKey, config.secureCookies === true);
-      onSignIn(true);
+      await completeSignIn(request, reply, email);
       return reply.redirect('/');
     });
     return;
@@ -209,9 +281,7 @@ export function registerAuthRoutes(
       onSignIn(false);
       return reply.code(502).send('Identity provider returned no email.');
     }
-    const session = await signInByEmail(store, config.credentialKey, email);
-    setSession(reply, session, config.sessionKey, config.secureCookies === true);
-    onSignIn(true);
+    await completeSignIn(request, reply, email);
     return reply.redirect('/');
   });
 }

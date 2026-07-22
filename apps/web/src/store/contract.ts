@@ -9,8 +9,21 @@ import type { AssumptionSet, StageKind } from '@costflow/domain';
  * is available).
  */
 
+/**
+ * Organization roles (P4.4). A tenant IS an organization; every user holds
+ * exactly one role in exactly one organization. owner > admin > member.
+ *  - owner: full control, incl. delete-org and managing admins;
+ *  - admin: manage members/invitations/workspaces/org settings;
+ *  - member: access only the workspaces they belong to; no org management.
+ */
+export type OrgRole = 'owner' | 'admin' | 'member';
+
+export const ORG_ROLES: readonly OrgRole[] = ['owner', 'admin', 'member'];
+
 export interface TenantRecord {
   readonly id: string;
+  /** Organization display name; null until the owner sets one. */
+  readonly name: string | null;
   readonly saltCiphertext: string;
   readonly createdAt: string;
 }
@@ -19,7 +32,21 @@ export interface UserRecord {
   readonly id: string;
   readonly tenantId: string;
   readonly email: string;
+  readonly role: OrgRole;
   readonly createdAt: string;
+}
+
+export interface InvitationRecord {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly email: string;
+  readonly role: OrgRole;
+  /** Opaque capability token carried in the accept link (never logged). */
+  readonly token: string;
+  readonly status: 'pending' | 'accepted' | 'revoked';
+  readonly invitedBy: string | null;
+  readonly createdAt: string;
+  readonly acceptedAt: string | null;
 }
 
 export type OnboardingState =
@@ -120,6 +147,39 @@ export interface Store {
   ): Promise<{ tenant: TenantRecord; user: UserRecord }>;
   findUserByEmail(email: string): Promise<UserRecord | null>;
   getTenant(tenantId: string): Promise<TenantRecord | null>;
+  /** Organization display name (P4.4 org settings); returns null if renamed away. */
+  updateTenantName(tenantId: string, name: string): Promise<TenantRecord | null>;
+
+  // Membership & roles (P4.4). All tenant-scoped by the tenancy law.
+  getUser(tenantId: string, userId: string): Promise<UserRecord | null>;
+  listUsers(tenantId: string): Promise<UserRecord[]>;
+  /** Provision a NEW email into an EXISTING org (invitation accept). */
+  createUserInTenant(tenantId: string, email: string, role: OrgRole): Promise<UserRecord>;
+  updateUserRole(tenantId: string, userId: string, role: OrgRole): Promise<UserRecord | null>;
+  /** Remove a member from the org; also drops their workspace memberships. */
+  removeUser(tenantId: string, userId: string): Promise<boolean>;
+
+  // Invitations (P4.4).
+  createInvitation(
+    tenantId: string,
+    data: { email: string; role: OrgRole; token: string; invitedBy: string | null },
+  ): Promise<InvitationRecord>;
+  /** By opaque token — NOT tenant-scoped; the token is the capability. */
+  getInvitationByToken(token: string): Promise<InvitationRecord | null>;
+  listInvitations(tenantId: string): Promise<InvitationRecord[]>;
+  updateInvitationStatus(
+    tenantId: string,
+    invitationId: string,
+    status: InvitationRecord['status'],
+    acceptedAt: string | null,
+  ): Promise<InvitationRecord | null>;
+
+  // Workspace membership (P4.4 multi-workspace foundation). Members see only
+  // the workspaces they belong to; owners/admins see all in the org.
+  addWorkspaceMember(tenantId: string, workspaceId: string, userId: string): Promise<void>;
+  removeWorkspaceMember(tenantId: string, workspaceId: string, userId: string): Promise<void>;
+  listWorkspaceMemberIds(tenantId: string, workspaceId: string): Promise<string[]>;
+  listWorkspaceIdsForMember(tenantId: string, userId: string): Promise<string[]>;
 
   createWorkspace(
     tenantId: string,

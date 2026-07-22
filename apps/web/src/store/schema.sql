@@ -16,6 +16,8 @@ create table if not exists tenants (
   salt_ciphertext text not null,
   created_at timestamptz not null
 );
+-- P4.4: organization display name (nullable until set).
+alter table tenants add column if not exists name text;
 
 create table if not exists users (
   id uuid primary key,
@@ -24,6 +26,9 @@ create table if not exists users (
   created_at timestamptz not null
 );
 create index if not exists users_tenant on users (tenant_id);
+-- P4.4: organization role. Existing users predate multi-member orgs and are
+-- the org creators, so they backfill to 'owner'.
+alter table users add column if not exists role text not null default 'owner';
 
 create table if not exists workspaces (
   id uuid primary key,
@@ -69,3 +74,30 @@ create table if not exists runs (
   viewed_at timestamptz,
   primary key (tenant_id, id)
 );
+
+-- P4.4 organization management.
+create table if not exists invitations (
+  id uuid primary key,
+  tenant_id uuid not null references tenants (id) on delete cascade,
+  email text not null,
+  role text not null,
+  token text not null unique,
+  status text not null default 'pending',
+  invited_by uuid references users (id) on delete set null,
+  created_at timestamptz not null,
+  accepted_at timestamptz
+);
+create index if not exists invitations_tenant on invitations (tenant_id);
+create index if not exists invitations_token on invitations (token);
+
+-- P4.4 workspace membership (multi-workspace foundation). Owners/admins reach
+-- every workspace in the org; members reach only the workspaces listed here.
+create table if not exists workspace_members (
+  tenant_id uuid not null references tenants (id) on delete cascade,
+  workspace_id uuid not null references workspaces (id) on delete cascade,
+  user_id uuid not null references users (id) on delete cascade,
+  created_at timestamptz not null,
+  primary key (workspace_id, user_id)
+);
+create index if not exists workspace_members_tenant on workspace_members (tenant_id);
+create index if not exists workspace_members_user on workspace_members (tenant_id, user_id);
