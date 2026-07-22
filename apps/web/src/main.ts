@@ -37,6 +37,7 @@ async function main(): Promise<void> {
     telemetry: fileTelemetrySink(),
     production: config.production,
     trustProxy: config.trustProxy,
+    adminEmails: config.adminEmails,
   });
   // Bind all interfaces in production (the platform proxies in); localhost otherwise.
   const host = config.production ? '0.0.0.0' : '127.0.0.1';

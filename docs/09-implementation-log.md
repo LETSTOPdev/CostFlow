@@ -1997,3 +1997,61 @@ verification: `/healthz` 200, `/readyz` 200; the new `/reports/:id`,
 `/reports/:id/print`, `/reports/:id/raw` routes all 302→`/login`; `/org`,
 `/settings`, `/jobs/:id` gated (302); `/invite/<bad>` 200; CSP/HSTS/X-Frame
 headers present. **P5 is live and healthy.**
+
+## Phase 2 / v1 — Public beta readiness (authorized 2026-07-22)
+
+Founder decisions: Jira-only wedge; free public beta; billing, team
+invitations/email, and multi-provider deferred; D-19 logout stays deferred
+unless shown to affect normal browsers. Smallest plan to a true public v1 —
+no major new features; the engine/detectors/pricing/simulations/goldens are
+byte-identical to `e3c86e6`.
+
+### What shipped
+
+- **Public marketing landing** (`apps/web/src/landing.ts`) at `GET /` for
+  logged-out visitors: value proposition, primary CTA (→ sign in), "view sample
+  report" link, how-it-works, trust section, FAQ, and a footer linking Terms,
+  Privacy, the sample, and support. Authenticated `/` behavior unchanged.
+- **Public demo report** at `GET /demo` — the P5 structured report rendered
+  from a committed snapshot of the demo-jira golden `run.json`
+  (`apps/web/src/demo/demo-run.json`, shipped in the image since Docker copies
+  `apps/`). No login required; renders the real hand-computed figures
+  (1,062 / 342 / 297) with a sign-in CTA, so a prospect understands the product
+  before connecting Jira. Falls back gracefully if the snapshot can't render.
+- **Terms & Privacy** public pages (`GET /terms`, `/privacy`) — honest,
+  plain-language beta content (data handling, pseudonymization, deletion
+  rights, support contact) with an explicit note that counsel review precedes
+  general availability.
+- **Activation-funnel analytics** — `funnelStats()` on the store contract
+  (both adapters, contract-tested): aggregate counts of DISTINCT organizations
+  reaching each stage (signup → connect → analysis → report-viewed), derived
+  from existing tables with no new writes and no identifiers. A founder-only
+  `GET /admin` page (gated by `COSTFLOW_ADMIN_EMAILS`; non-admins get 404, no
+  disclosure) renders the funnel with per-stage conversion.
+
+### Proofs
+
+`v1-public.test.ts` (7 cases): landing serves CTA/FAQ/legal links; Terms &
+Privacy public; demo renders the golden figures publicly with no raw identity;
+funnelStats counts distinct orgs per stage; `/admin` shows the funnel to an
+allow-listed founder, 404s a non-admin, redirects the unauthenticated.
+`store-contract.test.ts` adds funnelStats parity (both adapters).
+`security.test.ts` updated: unauthenticated `/` now serves the landing (200)
+while the app routes still redirect to `/login`. Full gate green — **320
+passed / 1 skipped**, 0 boundary violations (138 modules), engine/goldens
+byte-identical.
+
+### Privacy & security
+
+Public pages are self-contained within the strict CSP (inline styles only, no
+scripts/external assets). Funnel analytics carry aggregate counts only — no
+emails, identities, or customer content (consistent with the P3 telemetry
+law). `/admin` is allow-listed; the manager gate and attribution guard are
+unchanged. The demo uses pseudonymized golden data (no raw individuals).
+
+### Not in the app — the one founder step to open the doors
+
+Self-serve signup is an **Auth0 dashboard change** (enable sign-ups, remove the
+invited-testers allowlist). The app already provisions a new organization for
+any authenticated email, so it is launch-ready; see docs/16 §2b. Also set
+`COSTFLOW_ADMIN_EMAILS` and confirm the `support@fbx1.com` mailbox.

@@ -5,6 +5,7 @@ import pg from 'pg';
 import { newId } from '../crypto';
 import type {
   DeletionSummary,
+  FunnelStats,
   InvitationRecord,
   JobRecord,
   OrgRole,
@@ -571,6 +572,21 @@ export class PgStore implements Store {
     } finally {
       client.release();
     }
+  }
+
+  async funnelStats(): Promise<FunnelStats> {
+    const count = async (sql: string): Promise<number> => {
+      const result = await this.pool.query<{ n: string }>(sql);
+      return Number(result.rows[0]?.n ?? 0);
+    };
+    return {
+      organizations: await count('select count(*) as n from tenants'),
+      connectedWorkspaces: await count('select count(distinct tenant_id) as n from workspaces'),
+      analysesRun: await count('select count(distinct tenant_id) as n from runs'),
+      reportsViewed: await count(
+        'select count(distinct tenant_id) as n from runs where viewed_at is not null',
+      ),
+    };
   }
 
   async ping(): Promise<void> {

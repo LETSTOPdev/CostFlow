@@ -140,6 +140,18 @@ export interface DeletionSummary {
   readonly runs: number;
 }
 
+/**
+ * Activation-funnel counts (v1 founder analytics). Aggregate counts of DISTINCT
+ * organizations reaching each stage — no identities, emails, or customer
+ * content. Derived from existing tables (no separate event log).
+ */
+export interface FunnelStats {
+  readonly organizations: number;
+  readonly connectedWorkspaces: number;
+  readonly analysesRun: number;
+  readonly reportsViewed: number;
+}
+
 export interface Store {
   createTenantWithUser(
     email: string,
@@ -229,6 +241,9 @@ export interface Store {
 
   /** Startup recovery (plan §3): jobs left 'running' by a crash → failed/interrupted. */
   markInterruptedJobs(nowIso: string): Promise<number>;
+
+  /** Aggregate activation-funnel counts (v1). Distinct orgs per stage; no identities. */
+  funnelStats(): Promise<FunnelStats>;
 
   /** Readiness probe (P4.2 §4): resolves iff the backing store is reachable. */
   ping(): Promise<void>;

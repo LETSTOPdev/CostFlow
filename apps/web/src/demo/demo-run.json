@@ -1,0 +1,808 @@
+{
+  "runId": "golden-demo-jira",
+  "engineVersions": {
+    "analysis": "0.4.0",
+    "signals": {
+      "f2-aging": "1.0.0",
+      "f1-queue-wait": "1.0.0",
+      "f3-overdue": "1.0.0"
+    },
+    "contextSignals": {
+      "c6-wip-load": "1.0.0"
+    },
+    "costModels": {
+      "cm-aging-attention": "1.0.0",
+      "cm-overdue-attention": "1.0.0",
+      "cm-queue-wait-attention": "1.0.0"
+    }
+  },
+  "now": "2026-07-20T00:00:00Z",
+  "pricingPolicy": "report",
+  "batch": {
+    "id": "batch-golden-demo-jira",
+    "provider": "jira",
+    "mappingTemplateId": "jira-ops-project",
+    "mappingTemplateVersion": "1",
+    "importedAt": "2026-07-20T00:00:00Z",
+    "counts": {
+      "totalRows": 3,
+      "imported": 3,
+      "dropped": 0
+    },
+    "diagnostics": [],
+    "capability": {
+      "hasEventHistory": true,
+      "hasDueDates": true,
+      "hasLastUpdated": true,
+      "hasActors": true
+    },
+    "pseudonymizationScope": "costflow-golden",
+    "items": [
+      {
+        "id": "OPS-1",
+        "sourceId": "OPS-1",
+        "title": "Renew data processing agreement",
+        "stage": {
+          "name": "Review",
+          "kind": "review"
+        },
+        "actor": {
+          "kind": "role",
+          "roleRef": "Legal"
+        },
+        "createdAt": "2026-06-20T00:00:00.000+0000",
+        "dueAt": "2026-07-10",
+        "lastUpdatedAt": "2026-07-15T00:00:00.000+0000"
+      },
+      {
+        "id": "OPS-2",
+        "sourceId": "OPS-2",
+        "title": "Vendor risk review",
+        "stage": {
+          "name": "In Progress",
+          "kind": "active"
+        },
+        "actor": {
+          "kind": "unknown",
+          "pseudonym": "anon-c9f47420cfad"
+        },
+        "createdAt": "2026-06-22T00:00:00.000+0000",
+        "dueAt": null,
+        "lastUpdatedAt": "2026-07-18T00:00:00.000+0000"
+      },
+      {
+        "id": "OPS-3",
+        "sourceId": "OPS-3",
+        "title": "Quarterly access audit",
+        "stage": {
+          "name": "To Do",
+          "kind": "queue"
+        },
+        "actor": {
+          "kind": "role",
+          "roleRef": "Ops"
+        },
+        "createdAt": "2026-06-01T00:00:00.000+0000",
+        "dueAt": "2026-07-01",
+        "lastUpdatedAt": "2026-06-25T00:00:00.000+0000"
+      }
+    ],
+    "events": [
+      {
+        "workItemId": "OPS-1",
+        "from": null,
+        "to": {
+          "name": "To Do",
+          "kind": "queue"
+        },
+        "at": "2026-06-20T00:00:00.000+0000"
+      },
+      {
+        "workItemId": "OPS-1",
+        "from": {
+          "name": "To Do",
+          "kind": "queue"
+        },
+        "to": {
+          "name": "In Progress",
+          "kind": "active"
+        },
+        "at": "2026-06-25T00:00:00.000+0000"
+      },
+      {
+        "workItemId": "OPS-1",
+        "from": {
+          "name": "In Progress",
+          "kind": "active"
+        },
+        "to": {
+          "name": "Review",
+          "kind": "review"
+        },
+        "at": "2026-07-08T00:00:00.000+0000"
+      },
+      {
+        "workItemId": "OPS-2",
+        "from": null,
+        "to": {
+          "name": "To Do",
+          "kind": "queue"
+        },
+        "at": "2026-06-22T00:00:00.000+0000"
+      },
+      {
+        "workItemId": "OPS-2",
+        "from": {
+          "name": "To Do",
+          "kind": "queue"
+        },
+        "to": {
+          "name": "In Progress",
+          "kind": "active"
+        },
+        "at": "2026-07-02T00:00:00.000+0000"
+      },
+      {
+        "workItemId": "OPS-3",
+        "from": null,
+        "to": {
+          "name": "To Do",
+          "kind": "queue"
+        },
+        "at": "2026-06-01T00:00:00.000+0000"
+      }
+    ]
+  },
+  "assumptions": {
+    "id": "demo-jira-assumptions",
+    "version": "1",
+    "currency": "USD",
+    "rates": [
+      {
+        "roleRef": "Legal",
+        "hourlyRate": "120",
+        "provenance": "customer-customized"
+      },
+      {
+        "roleRef": "Ops",
+        "hourlyRate": "90",
+        "provenance": "customer-customized"
+      }
+    ],
+    "defaultRate": {
+      "hourlyRate": "30",
+      "provenance": "customer-customized"
+    },
+    "parameters": {
+      "agingThresholdDays": {
+        "value": 14,
+        "provenance": "customer-customized"
+      },
+      "attentionHoursPerDay": {
+        "range": {
+          "low": "0.15",
+          "expected": "0.3",
+          "high": "0.6"
+        },
+        "provenance": "customer-customized"
+      },
+      "queueWaitAttentionHoursPerDay": {
+        "range": {
+          "low": "0.1",
+          "expected": "0.2",
+          "high": "0.4"
+        },
+        "provenance": "customer-customized"
+      },
+      "overdueAttentionHoursPerDay": {
+        "range": {
+          "low": "0.1",
+          "expected": "0.2",
+          "high": "0.4"
+        },
+        "provenance": "customer-accepted"
+      }
+    }
+  },
+  "detectors": [
+    {
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "signalName": "Aging / stagnation",
+      "status": "ran",
+      "instanceCount": 1
+    },
+    {
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "signalName": "Queue wait",
+      "status": "ran",
+      "instanceCount": 2
+    },
+    {
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "signalName": "Overdue exposure",
+      "status": "ran",
+      "instanceCount": 2
+    }
+  ],
+  "frictions": [
+    {
+      "id": "f2-aging:to-do",
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "frictionType": "aging",
+      "location": {
+        "stage": {
+          "name": "To Do",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-beyond-threshold",
+        "value": 11
+      },
+      "evidence": [
+        {
+          "workItemId": "OPS-3",
+          "title": "Quarterly access audit",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Ops"
+          },
+          "lastUpdatedAt": "2026-06-25T00:00:00.000+0000",
+          "agingDays": 25,
+          "excessDays": 11
+        }
+      ]
+    },
+    {
+      "id": "f1-queue-wait:to-do",
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "frictionType": "queue-wait",
+      "location": {
+        "stage": {
+          "name": "To Do",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-hours-waiting",
+        "value": 1536
+      },
+      "evidence": [
+        {
+          "workItemId": "OPS-3",
+          "title": "Quarterly access audit",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Ops"
+          },
+          "waitHours": 1176,
+          "visits": 1,
+          "openAtAnalysisTime": true
+        },
+        {
+          "workItemId": "OPS-2",
+          "title": "Vendor risk review",
+          "actor": {
+            "kind": "unknown",
+            "pseudonym": "anon-c9f47420cfad"
+          },
+          "waitHours": 240,
+          "visits": 1,
+          "openAtAnalysisTime": false
+        },
+        {
+          "workItemId": "OPS-1",
+          "title": "Renew data processing agreement",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "waitHours": 120,
+          "visits": 1,
+          "openAtAnalysisTime": false
+        }
+      ]
+    },
+    {
+      "id": "f1-queue-wait:review",
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "frictionType": "queue-wait",
+      "location": {
+        "stage": {
+          "name": "Review",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-hours-waiting",
+        "value": 288
+      },
+      "evidence": [
+        {
+          "workItemId": "OPS-1",
+          "title": "Renew data processing agreement",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "waitHours": 288,
+          "visits": 1,
+          "openAtAnalysisTime": true
+        }
+      ]
+    },
+    {
+      "id": "f3-overdue:to-do",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "To Do",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 19
+      },
+      "evidence": [
+        {
+          "workItemId": "OPS-3",
+          "title": "Quarterly access audit",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Ops"
+          },
+          "dueAt": "2026-07-01",
+          "overdueDays": 19,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
+    },
+    {
+      "id": "f3-overdue:review",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "Review",
+          "kind": "review"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 10
+      },
+      "evidence": [
+        {
+          "workItemId": "OPS-1",
+          "title": "Renew data processing agreement",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "dueAt": "2026-07-10",
+          "overdueDays": 10,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "frictionInstanceId": "f2-aging:to-do",
+      "status": "priced",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:to-do",
+      "status": "priced",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:review",
+      "status": "priced",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:to-do",
+      "status": "priced",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:review",
+      "status": "priced",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0"
+    }
+  ],
+  "estimates": [
+    {
+      "frictionInstanceId": "f2-aging:to-do",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "148.5",
+        "expected": "297",
+        "high": "594"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "B",
+        "reasons": [
+          "B: Durations inferred from snapshot dates, not event history."
+        ]
+      },
+      "assumptionSetId": "demo-jira-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated attention cost of 1 item(s) aging beyond 14 days in stage \"To Do\".",
+        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "aging-attention",
+            "workItemId": "OPS-3",
+            "excessDays": 11,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "90",
+            "rateSource": "rates.Ops",
+            "subtotal": {
+              "low": "148.5",
+              "expected": "297",
+              "high": "594"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.agingThresholdDays",
+            "value": "14 days",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "parameters.attentionHoursPerDay",
+            "value": "0.15–0.6 h/day (expected 0.3)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Ops",
+            "value": "90 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "OPS-3"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:to-do",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "531",
+        "expected": "1062",
+        "high": "2124"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "C",
+        "reasons": [
+          "C: Default hourly rate applied to unmapped (pseudonymized) actor(s).",
+          "B: Includes open stage intervals measured to the analysis time."
+        ]
+      },
+      "assumptionSetId": "demo-jira-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated follow-up cost of 3 item(s) waiting in stage \"To Do\", observed from event history.",
+        "formula": "Σ over items: waitDays × queueWaitAttentionHoursPerDay × hourlyRate(role); waitDays = observed waitHours ÷ 24; low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "OPS-3",
+            "waitHours": 1176,
+            "waitDays": "49",
+            "visits": 1,
+            "openAtAnalysisTime": true,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "90",
+            "rateSource": "rates.Ops",
+            "subtotal": {
+              "low": "441",
+              "expected": "882",
+              "high": "1764"
+            }
+          },
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "OPS-2",
+            "waitHours": 240,
+            "waitDays": "10",
+            "visits": 1,
+            "openAtAnalysisTime": false,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "30",
+            "rateSource": "defaultRate:unmapped-actor",
+            "subtotal": {
+              "low": "30",
+              "expected": "60",
+              "high": "120"
+            }
+          },
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "OPS-1",
+            "waitHours": 120,
+            "waitDays": "5",
+            "visits": 1,
+            "openAtAnalysisTime": false,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "60",
+              "expected": "120",
+              "high": "240"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "defaultRate:unmapped-actor",
+            "value": "30 USD/h",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "parameters.queueWaitAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Ops",
+            "value": "90 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "OPS-3",
+            "OPS-2",
+            "OPS-1"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f1-queue-wait:review",
+      "costModelId": "cm-queue-wait-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "144",
+        "expected": "288",
+        "high": "576"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "B",
+        "reasons": [
+          "B: Includes open stage intervals measured to the analysis time."
+        ]
+      },
+      "assumptionSetId": "demo-jira-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated follow-up cost of 1 item(s) waiting in stage \"Review\", observed from event history.",
+        "formula": "Σ over items: waitDays × queueWaitAttentionHoursPerDay × hourlyRate(role); waitDays = observed waitHours ÷ 24; low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "queue-wait-attention",
+            "workItemId": "OPS-1",
+            "waitHours": 288,
+            "waitDays": "12",
+            "visits": 1,
+            "openAtAnalysisTime": true,
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "144",
+              "expected": "288",
+              "high": "576"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.queueWaitAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "OPS-1"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f3-overdue:to-do",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "171",
+        "expected": "342",
+        "high": "684"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "A",
+        "reasons": []
+      },
+      "assumptionSetId": "demo-jira-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated chasing cost of 1 item(s) past their own due dates in stage \"To Do\".",
+        "formula": "Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "overdue-attention",
+            "workItemId": "OPS-3",
+            "overdueDays": 19,
+            "dueAt": "2026-07-01",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "90",
+            "rateSource": "rates.Ops",
+            "subtotal": {
+              "low": "171",
+              "expected": "342",
+              "high": "684"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.overdueAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-accepted"
+          },
+          {
+            "ref": "rates.Ops",
+            "value": "90 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "OPS-3"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f3-overdue:review",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "120",
+        "expected": "240",
+        "high": "480"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "A",
+        "reasons": []
+      },
+      "assumptionSetId": "demo-jira-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated chasing cost of 1 item(s) past their own due dates in stage \"Review\".",
+        "formula": "Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "overdue-attention",
+            "workItemId": "OPS-1",
+            "overdueDays": 10,
+            "dueAt": "2026-07-10",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "120",
+              "expected": "240",
+              "high": "480"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.overdueAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-accepted"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "OPS-1"
+          ]
+        }
+      }
+    }
+  ],
+  "context": [
+    {
+      "signalId": "c6-wip-load",
+      "signalVersion": "1.0.0",
+      "signalName": "Work-in-flight load",
+      "statement": "2 of 3 in-flight items (67%) sit in queue- or review-kind stages; the largest single pool is stage \"In Progress\" (1 items).",
+      "facts": {
+        "inFlight": 3,
+        "queueKind": 1,
+        "reviewKind": 1,
+        "activeKind": 1,
+        "blockedKind": 0,
+        "waitingSharePercent": 67
+      }
+    }
+  ]
+}

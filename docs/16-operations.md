@@ -21,6 +21,7 @@ performed from the development environment and must not be simulated.
 | `COSTFLOW_OIDC_REDIRECT_URI` | oidc | `https://app.fbx1.com/auth/callback` |
 | `DATABASE_URL` | prod | Railway Postgres connection string (from the plugin) |
 | `PORT` | platform | set by Railway; the app binds `0.0.0.0:$PORT` in production |
+| `COSTFLOW_ADMIN_EMAILS` | optional | comma-separated founder emails allowed to view `/admin` (activation funnel). Unset = `/admin` 404s for everyone |
 
 Generate a key: `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"`.
 
@@ -53,6 +54,26 @@ missing or malformed — the server never limps.
    `/healthz`; readiness is `/readyz`.
 7. **DNS**: point `app.fbx1.com` at the Railway service; Railway issues the
    TLS certificate. Confirm HTTPS and that `/healthz` returns `{"status":"ok"}`.
+
+## 2b. Going public (v1 free beta)
+
+The app is public-ready in code: logged-out visitors get the marketing landing
+(`/`), a no-login sample report (`/demo`), and Terms/Privacy (`/terms`,
+`/privacy`); any authenticated email is provisioned its own organization. To
+actually open the doors:
+
+1. **Enable self-serve signup in Auth0** — allow sign-ups on the connection and
+   remove the invited-testers allowlist / gating Action. (This is the ONE step
+   that is not in the app; the app already provisions new orgs.) Keep email
+   verification on.
+2. **Set `COSTFLOW_ADMIN_EMAILS`** to the founder email(s) so `/admin` shows the
+   activation funnel (signup → connect → analysis → report-viewed). These are
+   aggregate distinct-org counts only — no customer content.
+3. **Confirm the support mailbox** `support@fbx1.com` (referenced on the landing,
+   Terms, and Privacy) exists or forwards.
+4. Deferred by founder decision for v1: billing, team invitations/email delivery,
+   multi-provider onboarding, and the D-19 logout defect (revisit only if it is
+   shown to affect normal, non-automated browsers).
 
 ## 3. Migrations
 

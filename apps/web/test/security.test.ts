@@ -3,13 +3,21 @@ import { GatewayError } from '../src/jira-gateway';
 import { TOKEN, get, makeApp, post, signIn } from './helpers';
 
 describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', () => {
-  it('unauthenticated requests are redirected to sign-in', async () => {
+  it('unauthenticated app routes are redirected to sign-in', async () => {
     const t = makeApp();
-    for (const url of ['/', '/connect', '/assumptions', '/runs', '/dashboard']) {
+    for (const url of ['/connect', '/assumptions', '/runs', '/dashboard']) {
       const response = await t.app.inject({ method: 'GET', url });
       expect(response.statusCode, url).toBe(302);
       expect(response.headers['location']).toBe('/login');
     }
+  });
+
+  it('the public landing serves logged-out visitors at / (v1 beta)', async () => {
+    const t = makeApp();
+    const response = await t.app.inject({ method: 'GET', url: '/' });
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain('Get started free');
+    expect(response.body).toContain('/demo'); // sample-report CTA
   });
 
   it('cross-tenant ids resolve to not-found, never to another tenant’s rows', async () => {

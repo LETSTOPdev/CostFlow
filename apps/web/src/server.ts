@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
@@ -19,6 +22,7 @@ import {
 import type { AnalysisRun } from '@costflow/analysis';
 import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
 import { esc, layout, METHODOLOGY_APPENDIX, printLayout, STEPS_NAV } from './html';
+import { renderLanding, renderPrivacy, renderTerms } from './landing';
 import { parseRun, renderReportBody } from './report-view';
 import { executeJob } from './jobs';
 import { GatewayError, type JiraGateway } from './jira-gateway';
@@ -56,7 +60,18 @@ export interface ServerDeps {
   readonly trustProxy?: boolean;
   /** Injected structured log sink (tests capture it); defaults to stdout JSON. */
   readonly logSink?: (line: Record<string, unknown>) => void;
+  /** Emails allowed to view the founder analytics page (v1). */
+  readonly adminEmails?: string[];
 }
+
+// Committed snapshot of the demo-jira golden run.json, shipped in the image
+// (Docker copies apps/, not tools/). Public /demo renders it so a visitor
+// understands the product before connecting Jira. A static sample is fine — it
+// never needs to match the live engine byte-for-byte.
+const DEMO_RUN_JSON = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'demo', 'demo-run.json'),
+  'utf8',
+);
 
 const PROVENANCE_LABEL: Record<Provenance, string> = {
   'vendor-suggested': 'vendor suggested — not used in pricing until you accept or customize it',
@@ -305,14 +320,64 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // ---------- home / dashboard ----------
 
   app.get('/', async (request, reply) => {
-    const session = requireSession(request, reply);
-    if (!session) return;
+    const session = sessionFrom(request, auth.sessionKey);
+    // Logged-out visitors get the public marketing landing (v1 free beta).
+    if (!session) return reply.type('text/html').send(renderLanding());
     const user = await currentUser(session);
     // Members don't onboard — they land on the runs they can see.
     if (!isManager(user)) return reply.redirect('/runs');
     const workspace = await soleWorkspace(session);
     if (!workspace) return reply.redirect('/connect');
     return reply.redirect(nextStepPath(workspace));
+  });
+
+  // Public pages (no session): sample report, Terms, Privacy.
+  app.get('/demo', async (_request, reply) => {
+    const banner =
+      '<p class="note" style="background:#eef6ff;border:1px solid #bcd;padding:0.6rem 0.9rem;border-radius:6px;">' +
+      'This is a <strong>sample report</strong> from demo data. <a href="/login">Sign in</a> to run one on your own Jira — free.</p>';
+    let body: string;
+    try {
+      body = renderReportBody(parseRun(DEMO_RUN_JSON), { runId: 'demo' });
+    } catch {
+      body = '<p class="error">The sample report is temporarily unavailable.</p>';
+    }
+    return reply
+      .type('text/html')
+      .send(layout('Sample report — CostFlow', `${banner}${body}<p><a href="/">← Home</a></p>`));
+  });
+
+  app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms()));
+  app.get('/privacy', async (_request, reply) => reply.type('text/html').send(renderPrivacy()));
+
+  // Founder-only activation-funnel analytics. Gated by an email allowlist
+  // (COSTFLOW_ADMIN_EMAILS); a non-admin session gets 404 (no disclosure).
+  app.get('/admin', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    const user = await currentUser(session);
+    const admins = (deps.adminEmails ?? []).map((email) => email.toLowerCase());
+    if (!user || !admins.includes(user.email.toLowerCase())) {
+      return reply.code(404).send('Not found.');
+    }
+    const stats = await store.funnelStats();
+    const pct = (n: number, d: number): string => (d === 0 ? '—' : `${Math.round((n / d) * 100)}%`);
+    const row = (label: string, n: number): string =>
+      `<tr><td>${label}</td><td>${n}</td><td>${pct(n, stats.organizations)}</td></tr>`;
+    return reply.type('text/html').send(
+      page(
+        session,
+        'Admin — activation funnel',
+        `<h2>Activation funnel</h2>
+         <table><tr><th>Stage</th><th>Organizations</th><th>of signups</th></tr>
+           ${row('Signed up', stats.organizations)}
+           ${row('Connected a workspace', stats.connectedWorkspaces)}
+           ${row('Ran an analysis', stats.analysesRun)}
+           ${row('Viewed a report', stats.reportsViewed)}
+         </table>
+         <p class="note">Aggregate counts of distinct organizations reaching each step. No customer content, emails, or identities.</p>`,
+      ),
+    );
   });
 
   app.get('/dashboard', async (request, reply) => {

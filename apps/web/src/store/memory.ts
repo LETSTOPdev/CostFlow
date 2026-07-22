@@ -1,6 +1,7 @@
 import { newId } from '../crypto';
 import type {
   DeletionSummary,
+  FunnelStats,
   InvitationRecord,
   JobRecord,
   OrgRole,
@@ -369,6 +370,20 @@ export class MemoryStore implements Store {
     }
     this.tenants.delete(tenantId);
     return { workspaces, jobs, runs };
+  }
+
+  async funnelStats(): Promise<FunnelStats> {
+    const distinct = (tenantIds: Iterable<string>): number => new Set(tenantIds).size;
+    return {
+      organizations: this.tenants.size,
+      connectedWorkspaces: distinct([...this.workspaces.values()].map((w) => w.tenantId)),
+      analysesRun: distinct([...this.runs.values()].map((r) => r.tenantId)),
+      reportsViewed: distinct(
+        [...this.runs.values()]
+          .filter((r) => this.runViews.has(`${r.tenantId}:${r.id}`))
+          .map((r) => r.tenantId),
+      ),
+    };
   }
 
   async ping(): Promise<void> {

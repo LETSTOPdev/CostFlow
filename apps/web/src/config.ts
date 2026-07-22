@@ -16,6 +16,8 @@ export interface AppConfig {
   readonly useMemoryStore: boolean;
   readonly secureCookies: boolean;
   readonly trustProxy: boolean;
+  /** Emails allowed to view the founder analytics page (COSTFLOW_ADMIN_EMAILS). */
+  readonly adminEmails: string[];
 }
 
 export type Env = Record<string, string | undefined>;
@@ -104,6 +106,11 @@ export function loadConfig(env: Env): AppConfig {
     throw new Error('DATABASE_URL is required (or COSTFLOW_STORE=memory for a throwaway demo).');
   }
 
+  const adminEmails = (env['COSTFLOW_ADMIN_EMAILS'] ?? '')
+    .split(',')
+    .map((email) => email.trim().toLowerCase())
+    .filter((email) => email !== '');
+
   return {
     port: Number(env['PORT'] ?? 3000),
     production,
@@ -112,5 +119,6 @@ export function loadConfig(env: Env): AppConfig {
     useMemoryStore,
     secureCookies,
     trustProxy,
+    adminEmails,
   };
 }

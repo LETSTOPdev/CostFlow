@@ -327,6 +327,45 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       expect(await store.getUser(tenant.id, member.id)).toBeNull();
       expect(await store.listInvitations(tenant.id)).toEqual([]);
     });
+
+    it('reports aggregate activation-funnel counts by distinct org (v1)', async () => {
+      const store = await makeStore();
+      // Org 1: connects + runs + views.
+      const one = (await store.createTenantWithUser('f1@z.example', 's')).tenant;
+      const ws1 = await store.createWorkspace(one.id, {
+        provider: 'jira',
+        site: 'https://f1.example',
+        email: 'f1@z.example',
+        tokenCiphertext: 'tok',
+      });
+      await store.createRun({
+        id: 'fr-1',
+        tenantId: one.id,
+        workspaceId: ws1.id,
+        createdAt: '2026-07-20T00:00:00Z',
+        runJson: '{}',
+        reportMd: '# r',
+        telemetryJsonl: '',
+      });
+      await store.markRunViewed(one.id, 'fr-1', '2026-07-20T01:00:00Z');
+      // Org 2: connects only.
+      const two = (await store.createTenantWithUser('f2@z.example', 's')).tenant;
+      await store.createWorkspace(two.id, {
+        provider: 'jira',
+        site: 'https://f2.example',
+        email: 'f2@z.example',
+        tokenCiphertext: 'tok',
+      });
+      // Org 3: signs up only.
+      await store.createTenantWithUser('f3@z.example', 's');
+
+      expect(await store.funnelStats()).toEqual({
+        organizations: 3,
+        connectedWorkspaces: 2,
+        analysesRun: 1,
+        reportsViewed: 1,
+      });
+    });
   });
 }
 
