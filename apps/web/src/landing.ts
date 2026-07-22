@@ -86,15 +86,6 @@ const productMockup = `
       </main>
     </div>
   </div>
-
-  <div class="lp-fc lp-fc-a" aria-hidden="true">
-    <span class="lp-fc-ic lp-fc-ok"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg></span>
-    <div><div class="lp-fc-t">Fully traceable</div><div class="lp-fc-s">Confidence A · formula shown</div></div>
-  </div>
-  <div class="lp-fc lp-fc-b" aria-hidden="true">
-    <div class="lp-fc-mono">queue_wait_days × rate × attn/day</div>
-    <div class="lp-fc-s">1,536 item-hours → <b>$1,062</b></div>
-  </div>
 </div>`;
 
 /* ------------------------------------------------------------------ *
@@ -104,30 +95,20 @@ const productMockup = `
 const hero = `
 <section class="lp-hero">
   <div class="lp-aurora" aria-hidden="true"></div>
-  <div class="lp-grid-bg" aria-hidden="true"></div>
   <div class="container lp-hero-inner">
     <a class="lp-badge" href="/demo"><span class="lp-badge-dot"></span> Free during beta · see a live report first →</a>
     <h1 class="lp-h1">See what delays in your Jira<br><span class="lp-grad">are costing you — in dollars.</span></h1>
-    <p class="lp-sub">Connect your board and CostFlow turns delays, queues, and overdue work into an
-      itemized, ranked cost report — in about a minute, every figure traceable to its formula.</p>
+    <p class="lp-sub">Connect Jira. Get an itemized, ranked cost report in about a minute —
+      every figure traceable to its formula.</p>
     <div class="lp-cta">
       <a class="btn btn-lg" href="/login">Get started free</a>
       <a class="btn btn-ghost btn-lg" href="/demo">See a sample report</a>
     </div>
     <div class="lp-trust">
-      <span>✓ Free during beta</span><span>✓ No credit card</span><span>✓ Read-only — never writes to your board</span><span>✓ Ready in ~1 minute</span>
+      <span>✓ No credit card</span><span>✓ Read-only</span><span>✓ Ready in ~1 minute</span>
     </div>
   </div>
   ${productMockup}
-  <div class="container lp-logos">
-    <p class="lp-logos-label">Connects with the tools your team already runs on</p>
-    <div class="lp-logos-row">
-      <span class="lp-logo on">Jira <b>Available</b></span>
-      <span class="lp-logo">Monday</span>
-      <span class="lp-logo">Asana</span>
-      <span class="lp-logo">CSV import</span>
-    </div>
-  </div>
 </section>`;
 
 const how = `
@@ -136,7 +117,6 @@ const how = `
     <div class="lp-shead">
       <p class="lp-kicker">How it works</p>
       <h2 class="lp-h2">Your first report in about a minute</h2>
-      <p class="lp-lead">No spreadsheets, no consultants, no install. Three steps from a read-only token to a priced report.</p>
     </div>
     <div class="lp-steps">
       <div class="lp-step">
@@ -147,7 +127,7 @@ const how = `
         </div>
         <div class="lp-step-num">01</div>
         <h3>Connect Jira</h3>
-        <p>Paste a read-only API token. CostFlow reads your board and never writes back to it.</p>
+        <p>Paste a read-only API token. We never write to your board.</p>
       </div>
       <div class="lp-step">
         <div class="lp-step-viz lp-viz-map">
@@ -180,13 +160,8 @@ const traceable = `
     <div class="lp-split-copy">
       <p class="lp-kicker">Defensible by design</p>
       <h2 class="lp-h2">Every number opens up<br>into <span class="lp-grad">exactly how it was computed.</span></h2>
-      <p class="lp-lead">No black box. Each cost expands into its claim, its formula, the exact work items,
-        and the assumptions used — with their provenance. Walk any figure back to its source in one click.</p>
-      <ul class="lp-checks">
-        <li><span class="lp-ck">✓</span> Claim, formula, inputs and assumptions for every cost</li>
-        <li><span class="lp-ck">✓</span> Unconfirmed assumptions stay <em>unpriced</em> — never invented</li>
-        <li><span class="lp-ck">✓</span> Confidence tier on every friction, with the reason</li>
-      </ul>
+      <p class="lp-lead">No black box. Every figure expands into its formula, inputs, and assumptions —
+        and unconfirmed assumptions stay <em>unpriced</em>, never invented.</p>
     </div>
     <div class="lp-split-viz">
       <div class="lp-trace-card">
@@ -212,10 +187,6 @@ const midCta = `
 </div></section>`;
 
 const ICONS = {
-  trace:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg>',
-  scale:
-    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M7 7h10M5 7l-2.5 6a3 3 0 0 0 5 0L5 7ZM19 7l-2.5 6a3 3 0 0 0 5 0L19 7Z"/></svg>',
   people:
     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0M16 5.5a3 3 0 0 1 0 5.5M21 20a6 6 0 0 0-4-5.6"/></svg>',
   lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
@@ -225,23 +196,15 @@ const trust = `
 <section class="lp-section">
   <div class="container">
     <div class="lp-shead">
-      <p class="lp-kicker">Built to be trusted</p>
-      <h2 class="lp-h2">Intelligence you can defend</h2>
-      <p class="lp-lead">Not just numbers you hope are right.</p>
+      <h2 class="lp-h2">Built to be trusted</h2>
     </div>
     <div class="lp-feat-grid">
-      <div class="lp-feat"><span class="lp-feat-ic">${ICONS.trace}</span>
-        <h3>Every number is traceable</h3>
-        <p>Each cost expands into its claim, formula, exact work items, and assumptions — with provenance.</p></div>
-      <div class="lp-feat"><span class="lp-feat-ic">${ICONS.scale}</span>
-        <h3>Honest by construction</h3>
-        <p>Unconfirmed assumptions stay unpriced. We tell you what to confirm rather than inventing a number.</p></div>
       <div class="lp-feat"><span class="lp-feat-ic">${ICONS.people}</span>
         <h3>People are never scored</h3>
-        <p>Cost is attributed to processes and stages — never to named individuals. Identities are pseudonymized.</p></div>
+        <p>Cost is attributed to processes and stages — never to named individuals.</p></div>
       <div class="lp-feat"><span class="lp-feat-ic">${ICONS.lock}</span>
         <h3>Your data, your control</h3>
-        <p>Credentials are encrypted at rest; delete a workspace or your whole organization at any time.</p></div>
+        <p>Credentials encrypted at rest. Delete everything, anytime.</p></div>
     </div>
   </div>
 </section>`;
@@ -270,7 +233,7 @@ function faq(): string {
     ],
   ];
   return `<section class="lp-section"><div class="container">
-    <div class="lp-shead"><p class="lp-kicker">FAQ</p><h2 class="lp-h2">Questions, answered</h2></div>
+    <div class="lp-shead"><h2 class="lp-h2">FAQ</h2></div>
     <div class="lp-faq">${items
       .map(([q, a]) => `<details><summary>${q}</summary><p class="note">${a}</p></details>`)
       .join('')}</div>
@@ -282,9 +245,7 @@ const ctaBand = `
   <div class="lp-cta-band">
     <div class="lp-cta-glow" aria-hidden="true"></div>
     <div class="lp-cta-inner">
-      <p class="lp-kicker" style="color:#c4b5fd">Free during beta</p>
       <h2 class="lp-cta-h">Find out what your delays<br>are really costing you.</h2>
-      <p class="lp-cta-sub">Connect Jira and get your itemized, ranked cost report in about a minute.</p>
       <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="/login">Get started free</a>
         <a class="lp-cta-link" href="/demo">or see a sample report →</a></div>
       <p class="lp-cta-fine">No credit card · read-only access · delete your data anytime</p>
@@ -313,7 +274,6 @@ const LANDING_STYLE = `
 @keyframes lp-rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
 @keyframes lp-rise-mock{from{opacity:0;transform:translateY(46px) scale(.98)}to{opacity:1;transform:none}}
 @keyframes lp-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-11px)}}
-@keyframes lp-float-b{0%,100%{transform:translateY(0)}50%{transform:translateY(9px)}}
 @keyframes lp-glow{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:.9;transform:scale(1.06)}}
 @keyframes lp-shine{to{background-position:220% center}}
 @keyframes lp-badgepulse{0%,100%{box-shadow:0 0 0 0 rgba(139,92,246,.5)}50%{box-shadow:0 0 0 6px rgba(139,92,246,0)}}
@@ -329,11 +289,6 @@ const LANDING_STYLE = `
     radial-gradient(36% 40% at 72% 26%,rgba(168,85,247,.40),transparent 60%),
     radial-gradient(46% 40% at 50% 8%,rgba(59,130,246,.30),transparent 60%);
   filter:blur(58px);animation:lp-glow 9s ease-in-out infinite}
-.lp-grid-bg{position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.5;
-  background-image:linear-gradient(color-mix(in srgb,var(--ink) 7%,transparent) 1px,transparent 1px),
-    linear-gradient(90deg,color-mix(in srgb,var(--ink) 7%,transparent) 1px,transparent 1px);
-  background-size:56px 56px;-webkit-mask-image:radial-gradient(75% 55% at 50% 24%,#000,transparent 72%);
-  mask-image:radial-gradient(75% 55% at 50% 24%,#000,transparent 72%)}
 .lp-hero-inner{position:relative;text-align:center;max-width:52rem;margin-inline:auto}
 .lp-badge{display:inline-flex;align-items:center;gap:.55rem;font-size:.82rem;font-weight:560;color:var(--ink);
   padding:.42rem .9rem .42rem .7rem;border-radius:999px;text-decoration:none;
@@ -352,8 +307,8 @@ const LANDING_STYLE = `
 .lp-hero-inner{padding-bottom:.5rem}
 
 /* Product mockup */
-.lp-stage{position:relative;max-width:64rem;margin:clamp(3.5rem,2rem+4vw,6rem) auto 0;padding-inline:clamp(1.15rem,4vw,2rem);
-  animation:lp-rise-mock .9s var(--ease) .28s both}
+.lp-stage{position:relative;max-width:64rem;margin-inline:auto;margin-top:clamp(3.5rem,2rem+4vw,6rem);
+  padding-inline:clamp(1.15rem,4vw,2rem);animation:lp-rise-mock .9s var(--ease) .28s both}
 .lp-glow{position:absolute;left:50%;top:8%;width:78%;height:78%;transform:translateX(-50%);z-index:-1;pointer-events:none;
   background:radial-gradient(closest-side,rgba(139,92,246,.5),rgba(99,102,241,.28),transparent 72%);filter:blur(56px);
   animation:lp-glow 8s ease-in-out infinite}
@@ -405,41 +360,16 @@ const LANDING_STYLE = `
 .lp-pill-B{color:#f4c36b;background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.34)}
 .lp-pill-C{color:#f79a9d;background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.34)}
 
-/* Floating glass accent cards */
-.lp-fc{position:absolute;z-index:2;display:flex;align-items:center;gap:.7rem;padding:.7rem .9rem;border-radius:14px;
-  background:color-mix(in srgb,var(--surface) 72%,transparent);border:1px solid var(--line);
-  -webkit-backdrop-filter:blur(16px) saturate(180%);backdrop-filter:blur(16px) saturate(180%);
-  box-shadow:var(--sh-3)}
-.lp-fc-a{top:14%;right:max(-.5rem,-2%);animation:lp-float 6.5s ease-in-out .3s infinite}
-.lp-fc-b{bottom:11%;left:max(-.5rem,-1%);flex-direction:column;align-items:flex-start;gap:.3rem;animation:lp-float-b 7.5s ease-in-out infinite}
-.lp-fc-t{font-size:.86rem;font-weight:660;color:var(--ink)}
-.lp-fc-s{font-size:.76rem;color:var(--muted)}
-.lp-fc-s b{color:var(--ink)}
-.lp-fc-ic{width:2rem;height:2rem;flex:none;border-radius:9px;display:grid;place-items:center;color:#fff}
-.lp-fc-ok{background:linear-gradient(135deg,#10b981,#0ea371)}
-.lp-fc-mono{font-family:var(--mono);font-size:.72rem;color:var(--primary);background:var(--grad-soft);
-  border:1px solid color-mix(in srgb,var(--primary) 20%,transparent);padding:.28rem .55rem;border-radius:8px}
-
-/* Logo strip */
-.lp-logos{text-align:center;margin-top:clamp(2.5rem,1.5rem+4vw,4rem)}
-.lp-logos-label{font-size:.82rem;color:var(--faint);font-weight:500;margin:0 0 1rem}
-.lp-logos-row{display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap}
-.lp-logo{display:inline-flex;align-items:center;gap:.45rem;font-size:.92rem;font-weight:620;color:var(--muted);
-  padding:.5rem .9rem;border-radius:11px;border:1px solid var(--line);background:var(--surface);box-shadow:var(--sh-1)}
-.lp-logo.on{color:var(--ink)}
-.lp-logo b{font-size:.66rem;font-weight:640;color:var(--pos-ink);background:var(--pos-bg);border:1px solid var(--pos-line);
-  padding:.1rem .4rem;border-radius:999px}
-
 /* Sections */
 .lp-section{padding:clamp(3rem,2rem+4vw,6rem) 0}
 .lp-section-alt{background:var(--bg-2);border-block:1px solid var(--line)}
-.lp-shead{text-align:center;max-width:42rem;margin:0 auto clamp(2.2rem,1.5rem+2vw,3.2rem)}
+.lp-shead{text-align:center;max-width:42rem;margin-inline:auto;margin-bottom:clamp(2.2rem,1.5rem+2vw,3.2rem)}
 .lp-kicker{display:inline-block;font-size:.76rem;font-weight:680;letter-spacing:.1em;text-transform:uppercase;color:var(--primary);margin:0 0 .7rem}
 .lp-h2{font-size:clamp(1.7rem,1.2rem+2vw,2.7rem);line-height:1.1;letter-spacing:-.03em;font-weight:660;margin:0}
 .lp-lead{font-size:clamp(1.02rem,1rem+.4vw,1.2rem);color:var(--muted);margin:.8rem auto 0;line-height:1.55}
 
-/* How-it-works steps */
-.lp-steps{display:grid;gap:1.4rem;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))}
+/* How-it-works steps — fixed 3 columns so the third never orphans */
+.lp-steps{display:grid;gap:1.4rem;grid-template-columns:repeat(3,minmax(0,1fr))}
 .lp-step{position:relative;padding:1.5rem;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--sh-1);
   transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease)}
 .lp-step:hover{transform:translateY(-4px);box-shadow:var(--sh-2);border-color:color-mix(in srgb,var(--primary) 24%,var(--line))}
@@ -465,9 +395,6 @@ const LANDING_STYLE = `
 /* Split storytelling */
 .lp-split{display:grid;gap:clamp(2rem,1rem+3vw,4rem);grid-template-columns:1fr 1fr;align-items:center}
 .lp-split-copy .lp-h2{text-align:left}
-.lp-checks{list-style:none;padding:0;margin:1.5rem 0 0;display:flex;flex-direction:column;gap:.7rem}
-.lp-checks li{display:flex;align-items:flex-start;gap:.6rem;color:var(--ink-2);font-size:.98rem}
-.lp-ck{flex:none;width:1.3rem;height:1.3rem;border-radius:50%;display:grid;place-items:center;font-size:.75rem;color:#fff;background:linear-gradient(135deg,#10b981,#0ea371);margin-top:.05rem}
 .lp-split-viz{position:relative}
 .lp-trace-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:1.4rem;box-shadow:var(--sh-3);
   transition:transform .3s var(--ease)}
@@ -484,8 +411,8 @@ const LANDING_STYLE = `
 .lp-tc-line b{color:var(--ink);font-weight:560}
 .lp-tc-line code{font-family:var(--mono);font-size:.78rem;background:var(--grad-soft);color:var(--primary);border:1px solid color-mix(in srgb,var(--primary) 18%,transparent);padding:.14rem .4rem;border-radius:6px}
 
-/* Feature grid */
-.lp-feat-grid{display:grid;gap:1.3rem;grid-template-columns:repeat(auto-fit,minmax(15rem,1fr))}
+/* Feature grid — two cards, centered (2 / 1) */
+.lp-feat-grid{display:grid;gap:1.3rem;grid-template-columns:repeat(2,minmax(0,1fr));max-width:46rem;margin-inline:auto}
 .lp-feat{padding:1.6rem;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--sh-1);
   transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease)}
 .lp-feat:hover{transform:translateY(-4px);box-shadow:var(--sh-2);border-color:color-mix(in srgb,var(--primary) 22%,var(--line))}
@@ -505,7 +432,6 @@ const LANDING_STYLE = `
   background:radial-gradient(closest-side,rgba(139,92,246,.55),rgba(99,102,241,.25),transparent 72%);filter:blur(50px);animation:lp-glow 8s ease-in-out infinite}
 .lp-cta-inner{position:relative;z-index:1}
 .lp-cta-h{font-size:clamp(1.7rem,1.2rem+2.4vw,2.9rem);line-height:1.08;letter-spacing:-.03em;font-weight:680;color:#fff;margin:.6rem 0 0}
-.lp-cta-sub{color:#b9bcd0;font-size:1.08rem;margin:.9rem auto 0;max-width:34rem}
 .lp-cta-actions{display:flex;gap:1rem;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:1.8rem}
 a.lp-cta-btn,.lp-cta-btn{background:#fff;color:#4c43d6}
 a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:#4c43d6;filter:brightness(1.02)}
@@ -528,18 +454,18 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:#4c43d6;filter:bright
 .lp-foot-fine{color:var(--faint);font-size:.86rem;margin:1.2rem 0 0}
 
 @media (max-width:860px){
-  .lp-fc{display:none}
+  .lp-steps{grid-template-columns:1fr;max-width:26rem;margin-inline:auto}
   .lp-split{grid-template-columns:1fr}
   .lp-split-copy .lp-h2{text-align:center}
   .lp-split-copy .lp-shead,.lp-split-copy{text-align:center}
-  .lp-checks{max-width:26rem;margin-inline:auto}
 }
 @media (max-width:560px){
   .lp-side{display:none}
   .lp-cta .btn{width:100%}
+  .lp-feat-grid{grid-template-columns:1fr;max-width:26rem;margin-inline:auto}
 }
 @media (prefers-reduced-motion:reduce){
-  .lp *,.lp-window,.lp-fc,.lp-glow,.lp-aurora,.lp-cta-glow,.lp-grad,.lp-badge-dot{animation:none!important}
+  .lp *,.lp-window,.lp-glow,.lp-aurora,.lp-cta-glow,.lp-grad,.lp-badge-dot{animation:none!important}
 }
 `;
 
