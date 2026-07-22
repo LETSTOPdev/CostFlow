@@ -232,7 +232,7 @@ export function renderTrend(current: AnalysisRun, previous: AnalysisRun | null):
     })
     .join('');
   return `<section><h2>Change since previous run</h2>
-    <div class="table-wrap"><table><tr><th>Friction</th><th>Previous (expected)</th><th>Current (expected)</th><th>Δ expected</th><th></th></tr>${rows}</table></div></section>`;
+    <div class="table-wrap"><table><tr><th>Friction</th><th>Previous (expected)</th><th>Current (expected)</th><th>Δ expected</th><th>Change</th></tr>${rows}</table></div></section>`;
 }
 
 /** The report body (to be wrapped in the page shell). `previous` enables trend. */

@@ -74,6 +74,7 @@ h4{font-size:1rem}
 p{margin:0 0 1rem;text-wrap:pretty}
 a{color:var(--primary);text-decoration:none;transition:color .15s var(--ease),opacity .15s var(--ease)}
 a:hover{color:var(--primary-2)}
+a:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:4px}
 strong{color:var(--ink);font-weight:620}
 hr{border:none;border-top:1px solid var(--line);margin:2rem 0}
 ::selection{background:rgba(139,92,246,.22)}
@@ -445,7 +446,7 @@ export function stepsNav(current?: (typeof ONBOARDING_STEPS)[number]): string {
   const parts = ONBOARDING_STEPS.map((s, i) => {
     const state = currentIdx < 0 ? '' : i < currentIdx ? 'done' : i === currentIdx ? 'cur' : '';
     const mark = state === 'done' ? '✓' : String(i + 1);
-    return `<span class="stp ${state}"><span class="dot">${mark}</span>${s}</span>`;
+    return `<span class="stp ${state}"${state === 'cur' ? ' aria-current="step"' : ''}><span class="dot">${mark}</span>${s}</span>`;
   }).join('');
   return `<nav class="stepper" aria-label="Onboarding progress">${parts}</nav>`;
 }

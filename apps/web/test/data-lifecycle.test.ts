@@ -55,7 +55,7 @@ describe('P4.3 workspace deletion (FR-22)', () => {
 
     const res = await post(t, cookie, `/workspaces/${workspaceId}/delete`, { confirm: 'DELETE' });
     expect(res.statusCode).toBe(302);
-    expect(res.headers['location']).toBe('/settings');
+    expect(res.headers['location']).toBe('/settings?done=workspace');
 
     // Workspace + its derived run/jobs are gone; the report 404s.
     expect(await t.store.getWorkspace(tenantId, workspaceId)).toBeNull();

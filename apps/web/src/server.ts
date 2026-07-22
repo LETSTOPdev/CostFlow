@@ -80,6 +80,15 @@ const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const OG_IMAGE = readFileSync(join(ASSETS_DIR, 'og.jpg'));
 const APPLE_TOUCH_ICON = readFileSync(join(ASSETS_DIR, 'apple-touch-icon.png'));
 
+// Styled body for a CSRF mismatch (stale tab, expired session): explains what
+// happened instead of a bare "Invalid CSRF token." line.
+const csrfErrorBody = `<div class="empty" style="max-width:34rem;margin:2.5rem auto">
+  <h3>That form has expired</h3>
+  <p>Invalid CSRF token. This usually means the page was open for a while or your session changed —
+  nothing was saved. Go back, refresh, and try again.</p>
+  <a class="btn" href="/">Back to CostFlow</a>
+</div>`;
+
 const PROVENANCE_LABEL: Record<Provenance, string> = {
   'vendor-suggested': 'vendor suggested — not used in pricing until you accept or customize it',
   'customer-accepted': 'accepted by you',
@@ -142,7 +151,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       csrf_match: session ? bodyCsrf === session.csrf : null,
     });
     if (session && bodyCsrf !== session.csrf) {
-      return reply.code(403).send('Invalid CSRF token.');
+      return reply.code(403).type('text/html').send(layout('Session expired', csrfErrorBody));
     }
     // Invalidate the local CostFlow session FIRST — always, before any
     // external redirect — so the app cookie is gone regardless of what the
@@ -184,7 +193,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const checkCsrf = (request: FastifyRequest, session: Session, reply: FastifyReply): boolean => {
     const token = (request.body as { csrf?: string })?.csrf;
     if (token !== session.csrf) {
-      void reply.code(403).send('Invalid CSRF token.');
+      void reply.code(403).type('text/html').send(layout('Session expired', csrfErrorBody));
       return false;
     }
     return true;
@@ -532,37 +541,53 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // ---------- step 1: connect ----------
 
+  // One renderer for first visit AND failed submits: an error never strands the
+  // user on a dead-end page — the form re-renders with their values preserved
+  // (never the token) and the reason on top.
+  const connectPage = (
+    session: Session,
+    opts: { site?: string; email?: string; error?: string; connectedNote?: string },
+  ): string =>
+    page(
+      session,
+      'Connect Jira',
+      `${stepsNav('connect')}
+       <p class="eyebrow">Step 1 · Connect</p>
+       <h1 style="margin-top:.6rem">Connect your Jira workspace</h1>
+       <p class="lead">CostFlow reads your Jira with a personal API token — read-only, encrypted at
+       rest, and never shown again. It takes about a minute.</p>
+       <div class="panel" style="max-width:38rem;margin-top:1.5rem">
+         ${opts.error ? `<div class="error" role="alert">${opts.error}</div>` : ''}
+         ${opts.connectedNote ?? ''}
+         <form method="post" action="/connect">${csrfField(session)}
+           <label>Jira site URL <input name="site" placeholder="https://your-org.atlassian.net" required value="${esc(opts.site ?? '')}"></label>
+           <label>Account email <input name="email" type="email" placeholder="you@company.com" required value="${esc(opts.email ?? '')}"></label>
+           <label>API token <input name="token" type="password" required autocomplete="off" placeholder="paste your Atlassian API token"></label>
+           <button type="submit">Validate &amp; connect</button>
+         </form>
+         <details style="margin-top:1.25rem">
+           <summary>How to get your Jira API token</summary>
+           <ol class="note">
+             <li>Open <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer">id.atlassian.com → API tokens</a>.</li>
+             <li>Click <strong>Create API token</strong>, name it "CostFlow", and copy it.</li>
+             <li>Paste it above along with your Jira site URL and the email for that Atlassian account.</li>
+           </ol>
+         </details>
+       </div>`,
+    );
+
   app.get('/connect', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
     const workspace = await soleWorkspace(session);
     return reply.type('text/html').send(
-      page(
-        session,
-        'Connect Jira',
-        `${stepsNav('connect')}
-         <p class="eyebrow">Step 1 · Connect</p>
-         <h1 style="margin-top:.6rem">Connect your Jira workspace</h1>
-         <p class="lead">CostFlow reads your Jira with a personal API token — read-only, encrypted at
-         rest, and never shown again. It takes about a minute.</p>
-         <div class="panel" style="max-width:38rem;margin-top:1.5rem">
-           ${workspace ? `<div class="info">Connected to <strong>${esc(workspace.site)}</strong> as ${esc(workspace.email)}. Submitting replaces the stored credentials.</div>` : ''}
-           <form method="post" action="/connect">${csrfField(session)}
-             <label>Jira site URL <input name="site" placeholder="https://your-org.atlassian.net" required value="${esc(workspace?.site ?? '')}"></label>
-             <label>Account email <input name="email" type="email" placeholder="you@company.com" required value="${esc(workspace?.email ?? '')}"></label>
-             <label>API token <input name="token" type="password" required autocomplete="off" placeholder="paste your Atlassian API token"></label>
-             <button type="submit">Validate &amp; connect</button>
-           </form>
-           <details style="margin-top:1.25rem">
-             <summary>How to get your Jira API token</summary>
-             <ol class="note">
-               <li>Open <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer">id.atlassian.com → API tokens</a>.</li>
-               <li>Click <strong>Create API token</strong>, name it "CostFlow", and copy it.</li>
-               <li>Paste it above along with your Jira site URL and the email for that Atlassian account.</li>
-             </ol>
-           </details>
-         </div>`,
-      ),
+      connectPage(session, {
+        site: workspace?.site ?? '',
+        email: workspace?.email ?? '',
+        connectedNote: workspace
+          ? `<div class="info">Connected to <strong>${esc(workspace.site)}</strong> as ${esc(workspace.email)}. Submitting replaces the stored credentials.</div>`
+          : '',
+      }),
     );
   });
 
@@ -586,11 +611,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         .code(400)
         .type('text/html')
         .send(
-          page(
-            session,
-            'Connect Jira',
-            `<p class="error">Site (https URL), email, and token are all required.</p>`,
-          ),
+          connectPage(session, {
+            site,
+            email,
+            error:
+              'All three fields are required, and the site must be an https:// URL — for example <code>https://your-org.atlassian.net</code>.',
+          }),
         );
     }
     try {
@@ -600,17 +626,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       telemetry(
         webEvent('tm-web-workspace-connected', { provider: 'jira', ok: false, errorClass }),
       );
+      // Shape only (class + optional HTTP status) — the raw gateway message is
+      // never echoed, matching the /scope import-error policy.
+      const status = error instanceof GatewayError && error.status ? `, HTTP ${error.status}` : '';
       return reply
         .code(400)
         .type('text/html')
         .send(
-          page(
-            session,
-            'Connect Jira',
-            `<p class="error">Connection failed (${esc(errorClass)}): ${esc(
-              error instanceof GatewayError ? error.message : 'unexpected error',
-            )}</p><p><a href="/connect">Try again</a></p>`,
-          ),
+          connectPage(session, {
+            site,
+            email,
+            error: `We couldn't validate this connection (${esc(errorClass)}${status}). Check the site URL, the account email, and that the API token was copied completely, then try again.`,
+          }),
         );
     }
     const tokenCiphertext = encryptSecret(token, auth.credentialKey);
@@ -698,7 +725,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const index = Number((request.body as { project?: string }).project);
     const project = projects[index];
     if (!project) {
-      return reply.code(400).send('Unknown project selection.');
+      return reply
+        .code(400)
+        .type('text/html')
+        .send(
+          page(
+            session,
+            'Choose scope',
+            `<div class="error" role="alert">That project selection is no longer valid — the project list may have changed.</div>
+             <p><a class="btn btn-ghost" href="/scope">Back to project selection</a></p>`,
+          ),
+        );
     }
     let observed;
     try {
@@ -776,7 +813,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       if (!STAGE_KINDS.includes(kind as StageKind)) {
         return reply
           .code(400)
-          .send(`Every status needs a stage kind (missing: position ${index}).`);
+          .type('text/html')
+          .send(
+            page(
+              session,
+              'Map statuses',
+              `<div class="error" role="alert">Every status needs a stage kind — one selection is missing.</div>
+               <p><a class="btn btn-ghost" href="/mapping/statuses">Back to status mapping</a></p>`,
+            ),
+          );
       }
       statusMap[status] = kind as StageKind;
     }
@@ -881,10 +926,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     };
   };
 
+  // Client-side guard: the browser rejects malformed numbers before submit, so
+  // nobody loses their edits to the server-side backstop.
+  const decimalAttrs =
+    'inputmode="decimal" pattern="\\d+(\\.\\d+)?" title="Non-negative decimal, e.g. 0.5"';
   const rangeInputs = (name: string, range: RangeSpec): string =>
-    `<input name="${name}_low" size="6" value="${esc(range.low)}"> –
-     <input name="${name}_expected" size="6" value="${esc(range.expected)}"> –
-     <input name="${name}_high" size="6" value="${esc(range.high)}"> h/day`;
+    `<input name="${name}_low" size="6" ${decimalAttrs} value="${esc(range.low)}"> –
+     <input name="${name}_expected" size="6" ${decimalAttrs} value="${esc(range.expected)}"> –
+     <input name="${name}_high" size="6" ${decimalAttrs} value="${esc(range.high)}"> h/day`;
 
   const acceptBox = (name: string, provenance: Provenance): string =>
     provenance === 'vendor-suggested'
@@ -922,7 +971,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
                row(
                  `Hourly rate — ${rate.roleRef}`,
                  rate.provenance,
-                 `<input name="rate${index}" size="8" value="${esc(rate.hourlyRate)}"> ${esc(current.currency)}/h`,
+                 `<input name="rate${index}" size="8" ${decimalAttrs} value="${esc(rate.hourlyRate)}"> ${esc(current.currency)}/h`,
                  `rate${index}`,
                ),
              )
@@ -930,13 +979,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
            ${row(
              'Default hourly rate (unmapped people, roles without a rate)',
              current.defaultRate.provenance,
-             `<input name="defaultRate" size="8" value="${esc(current.defaultRate.hourlyRate)}"> ${esc(current.currency)}/h`,
+             `<input name="defaultRate" size="8" ${decimalAttrs} value="${esc(current.defaultRate.hourlyRate)}"> ${esc(current.currency)}/h`,
              'defaultRate',
            )}
            ${row(
              'Aging threshold (days untouched before an item counts as aging)',
              current.parameters.agingThresholdDays.provenance,
-             `<input name="agingThresholdDays" size="4" value="${current.parameters.agingThresholdDays.value}"> days`,
+             `<input name="agingThresholdDays" size="4" inputmode="numeric" pattern="\\d+" title="Whole number of days" value="${current.parameters.agingThresholdDays.value}"> days`,
              'agingThresholdDays',
            )}
            ${row(
@@ -1387,6 +1436,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
          <h1 style="margin-top:.6rem">Data &amp; privacy</h1>
          <p class="lead">You control your data. Deleting is permanent and cascades to every
          derived analysis (GDPR erasure). CostFlow keeps no copy.</p>
+         ${
+           (request.query as { done?: string }).done === 'workspace'
+             ? '<div class="info" role="status">Workspace data permanently deleted, including every derived run and report.</div>'
+             : ''
+         }
          ${workspaces.length === 0 ? '<p class="note">No workspaces connected.</p>' : workspaceCards}
          ${
            actor?.role === 'owner'
@@ -1427,7 +1481,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const summary = await store.deleteWorkspace(session.tenantId, workspaceId);
     if (!summary) return notFound(reply);
     telemetry(webEvent('tm-web-data-deleted', { scope: 'workspace', cascadedRuns: summary.runs }));
-    return reply.redirect('/settings');
+    return reply.redirect('/settings?done=workspace');
   });
 
   app.post('/account/delete', async (request, reply) => {
@@ -1539,9 +1593,26 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     );
   });
 
+  // Post-action confirmations (no-JS success states): redirects land back here
+  // with ?done=<key>; only keys from this fixed map ever render.
+  const ORG_DONE: Record<string, string> = {
+    renamed: 'Organization name saved.',
+    invited: 'Invitation created — share the invite link from the table below.',
+    revoked: 'Invitation revoked.',
+    role: 'Member role updated.',
+    removed: 'Member removed from the organization.',
+    granted: 'Workspace access granted.',
+    ungranted: 'Workspace access removed.',
+  };
+
   app.get('/org', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
+    const doneKey = (request.query as { done?: string }).done;
+    const doneBanner =
+      doneKey && ORG_DONE[doneKey]
+        ? `<div class="info" role="status">${ORG_DONE[doneKey]}</div>`
+        : '';
     const tenant = await store.getTenant(session.tenantId);
     const users = await store.listUsers(session.tenantId);
     const invitations = await store.listInvitations(session.tenantId);
@@ -1587,21 +1658,24 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         const memberIds = memberIdsByWs.get(w.id) ?? [];
         const memberList =
           memberIds.length === 0
-            ? '<span class="note">No explicit members — owners and admins always have access.</span>'
+            ? '<p class="note" style="margin:.4rem 0 .8rem">No explicit members — owners and admins always have access.</p>'
             : memberIds
                 .map((uid) => {
                   const mu = userById.get(uid);
-                  return `${esc(mu?.email ?? uid)} <form method="post" action="/workspaces/${esc(w.id)}/members/${esc(uid)}/remove" class="inline">${csrfField(session)}<button type="submit">remove</button></form>`;
+                  return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--line-2)">
+                    <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${esc(mu?.email ?? uid)}</span>
+                    <form method="post" action="/workspaces/${esc(w.id)}/members/${esc(uid)}/remove" class="inline">${csrfField(session)}<button type="submit">Remove</button></form>
+                  </div>`;
                 })
-                .join('; ');
+                .join('');
         const addable = users.filter((u) => !memberIds.includes(u.id));
         const addForm =
           addable.length === 0
             ? ''
-            : `<form method="post" action="/workspaces/${esc(w.id)}/members" class="inline">${csrfField(session)}
+            : `<form method="post" action="/workspaces/${esc(w.id)}/members" class="inline" style="margin-top:.9rem">${csrfField(session)}
                  <select name="userId">${addable.map((u) => `<option value="${esc(u.id)}">${esc(u.email)}</option>`).join('')}</select>
                  <button type="submit">Grant access</button></form>`;
-        return `<div class="ws"><h4>${esc(w.projectName ?? 'Unconfigured workspace')} (${esc(w.projectKey ?? w.provider)})</h4><p>${memberList}</p>${addForm}</div>`;
+        return `<div class="ws"><h4>${esc(w.projectName ?? 'Unconfigured workspace')} (${esc(w.projectKey ?? w.provider)})</h4>${memberList}${addForm}</div>`;
       })
       .join('');
 
@@ -1612,6 +1686,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         `<p class="eyebrow">Organization</p>
          <h1 style="margin-top:.6rem">Organization &amp; members</h1>
          <p class="lead">Signed in as <strong>${esc(actor?.email ?? '')}</strong> · ${esc(actor?.role ?? '')}.</p>
+         ${doneBanner}
 
          <div class="panel">
            <h3 style="margin-top:0">Name</h3>
@@ -1662,7 +1737,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     await store.updateTenantName(session.tenantId, name);
     telemetry(webEvent('tm-web-org-renamed', {}));
-    return reply.redirect('/org');
+    return reply.redirect('/org?done=renamed');
   });
 
   app.post('/org/invitations', async (request, reply) => {
@@ -1690,7 +1765,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       invitedBy: session.userId,
     });
     telemetry(webEvent('tm-web-member-invited', { role }));
-    return reply.redirect('/org');
+    return reply.redirect('/org?done=invited');
   });
 
   app.post('/org/invitations/:id/revoke', async (request, reply) => {
@@ -1701,7 +1776,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const updated = await store.updateInvitationStatus(session.tenantId, id, 'revoked', null);
     if (!updated) return notFound(reply);
     telemetry(webEvent('tm-web-invite-revoked', {}));
-    return reply.redirect('/org');
+    return reply.redirect('/org?done=revoked');
   });
 
   app.post('/org/members/:id/role', async (request, reply) => {
@@ -1728,7 +1803,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     await store.updateUserRole(session.tenantId, targetId, newRole);
     telemetry(webEvent('tm-web-member-role-changed', { role: newRole }));
-    return reply.redirect('/org');
+    return reply.redirect('/org?done=role');
   });
 
   app.post('/org/members/:id/remove', async (request, reply) => {
@@ -1750,7 +1825,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     await store.removeUser(session.tenantId, targetId);
     telemetry(webEvent('tm-web-member-removed', {}));
-    return reply.redirect('/org');
+    return reply.redirect('/org?done=removed');
   });
 
   app.post('/workspaces/:workspaceId/members', async (request, reply) => {
@@ -1765,7 +1840,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!member) return orgBadRequest(session, reply, 'Unknown member.');
     await store.addWorkspaceMember(session.tenantId, workspaceId, userId);
     telemetry(webEvent('tm-web-workspace-member-added', {}));
-    return reply.redirect('/org');
+    return reply.redirect('/org?done=granted');
   });
 
   app.post('/workspaces/:workspaceId/members/:userId/remove', async (request, reply) => {
@@ -1777,7 +1852,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (!workspace) return notFound(reply);
     await store.removeWorkspaceMember(session.tenantId, workspaceId, userId);
     telemetry(webEvent('tm-web-workspace-member-removed', {}));
-    return reply.redirect('/org');
+    return reply.redirect('/org?done=ungranted');
   });
 
   return app;
