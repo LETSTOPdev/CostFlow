@@ -74,6 +74,12 @@ const DEMO_RUN_JSON = readFileSync(
   'utf8',
 );
 
+// Social-sharing assets (committed binaries, served with long-lived caching):
+// the 1200×630 Open Graph card and the iOS home-screen icon.
+const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'assets');
+const OG_IMAGE = readFileSync(join(ASSETS_DIR, 'og.jpg'));
+const APPLE_TOUCH_ICON = readFileSync(join(ASSETS_DIR, 'apple-touch-icon.png'));
+
 const PROVENANCE_LABEL: Record<Provenance, string> = {
   'vendor-suggested': 'vendor suggested — not used in pricing until you accept or customize it',
   'customer-accepted': 'accepted by you',
@@ -425,6 +431,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // CostFlow mark the app header uses (one identity across product + sign-in).
   app.get('/brand/logo.svg', async (_request, reply) =>
     reply.type('image/svg+xml').header('cache-control', 'public, max-age=86400').send(LOGO_SVG),
+  );
+
+  // Social preview card (absolute HTTPS URL in og:image) + iOS icon. Served
+  // from memory; crawlers (WhatsApp/X/LinkedIn/Slack/…) fetch these directly.
+  app.get('/og.jpg', async (_request, reply) =>
+    reply.type('image/jpeg').header('cache-control', 'public, max-age=86400').send(OG_IMAGE),
+  );
+  app.get('/apple-touch-icon.png', async (_request, reply) =>
+    reply.type('image/png').header('cache-control', 'public, max-age=86400').send(APPLE_TOUCH_ICON),
   );
 
   app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms()));

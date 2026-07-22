@@ -29,6 +29,37 @@ describe('v1 public pages', () => {
     expect(res.body).toContain('/demo');
   });
 
+  it('carries complete social-sharing metadata with absolute HTTPS asset URLs', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/' });
+    expect(res.body).toContain('property="og:type" content="website"');
+    expect(res.body).toContain('property="og:url" content="https://app.fbx1.com/"');
+    expect(res.body).toContain('property="og:title"');
+    expect(res.body).toContain('property="og:description"');
+    expect(res.body).toContain('property="og:image" content="https://app.fbx1.com/og.jpg"');
+    expect(res.body).toContain('property="og:image:width" content="1200"');
+    expect(res.body).toContain('property="og:image:height" content="630"');
+    expect(res.body).toContain('name="twitter:card" content="summary_large_image"');
+    expect(res.body).toContain('name="twitter:image" content="https://app.fbx1.com/og.jpg"');
+    expect(res.body).toContain('rel="icon"');
+    expect(res.body).toContain('rel="apple-touch-icon"');
+    expect(res.body).toContain('name="theme-color"');
+  });
+
+  it('serves the Open Graph card and apple-touch-icon as cacheable images', async () => {
+    const t = makeApp();
+    const og = await t.app.inject({ method: 'GET', url: '/og.jpg' });
+    expect(og.statusCode).toBe(200);
+    expect(og.headers['content-type']).toContain('image/jpeg');
+    expect(String(og.headers['cache-control'])).toContain('max-age');
+    expect(og.rawPayload.length).toBeGreaterThan(10_000); // a real image, not a stub
+    expect(og.rawPayload.length).toBeLessThan(300_000); // stays under WhatsApp's reliable limit
+    const icon = await t.app.inject({ method: 'GET', url: '/apple-touch-icon.png' });
+    expect(icon.statusCode).toBe(200);
+    expect(icon.headers['content-type']).toContain('image/png');
+    expect(icon.rawPayload.length).toBeGreaterThan(1_000);
+  });
+
   it('serves the CostFlow brand logo publicly for Auth0 to use', async () => {
     const t = makeApp();
     const res = await t.app.inject({ method: 'GET', url: '/brand/logo.svg' });
