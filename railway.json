@@ -5,9 +5,10 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "startCommand": "pnpm --filter @costflow/web migrate && pnpm --filter @costflow/web start",
+    "preDeployCommand": "pnpm --filter @costflow/web migrate",
+    "startCommand": "pnpm --filter @costflow/web start",
     "healthcheckPath": "/healthz",
-    "healthcheckTimeout": 30,
+    "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 3
   }

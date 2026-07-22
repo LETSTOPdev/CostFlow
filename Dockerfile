@@ -24,9 +24,9 @@ USER costflow
 
 EXPOSE 3000
 # The platform sets PORT, DATABASE_URL, COSTFLOW_* secrets, COSTFLOW_ENV=production.
-# Run the idempotent migration before serving so schema changes (e.g. P4.4's
-# additive columns/tables) are applied on every deploy — the app never serves
-# on a stale schema. schema.sql is `create ... if not exists` / `add column if
-# not exists`, so this is safe to run on every boot. railway.json's
-# startCommand mirrors this; keep them in sync.
-CMD ["sh", "-c", "pnpm --filter @costflow/web migrate && pnpm --filter @costflow/web start"]
+# Start the server ONLY. The idempotent migration runs as Railway's separate
+# pre-deploy phase (railway.json `preDeployCommand`), not chained into start —
+# chaining `migrate && start` once hung after migrate and starved the
+# healthcheck (no server bound), failing every deploy. Keeping them separate
+# lets the server bind promptly and the healthcheck pass.
+CMD ["pnpm", "--filter", "@costflow/web", "start"]

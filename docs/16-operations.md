@@ -58,14 +58,18 @@ missing or malformed — the server never limps.
 
 - Schema lives in `apps/web/src/store/schema.sql`, applied by
   `pnpm --filter @costflow/web migrate`.
-- **Migration runs automatically on every deploy (P4.4).** The Railway
-  `startCommand` and the Docker `CMD` are
-  `pnpm --filter @costflow/web migrate && pnpm --filter @costflow/web start`,
-  so schema changes are applied before the app serves traffic — it never runs
-  on a stale schema. (Previously migration was a manual pre-deploy step; P4.4
-  added `users.role`, `tenants.name`, and the `invitations`/`workspace_members`
-  tables, which every authenticated request now reads, so the migration is now
-  part of boot.)
+- **Migration runs automatically on every deploy as a separate PRE-DEPLOY
+  phase.** `railway.json` sets
+  `deploy.preDeployCommand = "pnpm --filter @costflow/web migrate"` and
+  `deploy.startCommand = "pnpm --filter @costflow/web start"` (the Docker `CMD`
+  is start-only). Railway runs the pre-deploy command in a one-off container on
+  the new image before promoting it; only then does the server start and the
+  healthcheck probe it. This decouples migration from the healthcheck window.
+  > **Do NOT chain migration into the start command** (`migrate && start`). We
+  > tried that (commit 19250ff) and it failed every deploy: the migrate process
+  > did not exit promptly, so `&& start` never fired, no server bound, and the
+  > Railway healthcheck timed out. `migrate.ts` now also calls `process.exit`
+  > on both paths so the pre-deploy phase always terminates cleanly.
 - All statements are idempotent — `create ... if not exists` and
   `alter table ... add column if not exists` — safe to re-run, and safe under
   concurrent instance boots (Postgres DDL locks; each is a no-op once applied).
