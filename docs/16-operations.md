@@ -129,6 +129,16 @@ missing or malformed — the server never limps.
 - Logs are a single sanitized line per request: `{method, path, status,
   durationMs}`. No bodies, headers, tokens, emails, titles, actor values, or
   assumption values ever reach the log (asserted by `hardening.test.ts`).
+- **Path redaction (P4 hardening).** The logged `path` is redacted: the
+  invitation capability token rides in the URL path (`/invite/<token>`) and is
+  collapsed to `/invite/:token`, and internal UUID ids collapse to `:id`, so a
+  secret token or an identifier never appears in a log line (asserted by
+  `production-hardening.test.ts`).
+- **Global error boundary (P4 hardening).** A single `setErrorHandler` returns
+  a GENERIC response for any uncaught error and logs only the error class name
+  (`{msg:'request-error', error:'<Name>'}`) plus the redacted path — never the
+  error message, which could carry a DB detail or a decrypt failure. Clients
+  see "Something went wrong," not internals.
 - Telemetry stays LOCAL by default (P3): derived events live in each run's
   artifacts; interaction/funnel events append to the container-local
   `.costflow/interactions.jsonl` (or `COSTFLOW_TELEMETRY_DIR`). Nothing is

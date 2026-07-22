@@ -16,6 +16,19 @@ export interface SecurityContext {
   readonly logSink?: (line: Record<string, unknown>) => void;
 }
 
+const UUID_RE = /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/g;
+
+/**
+ * Sanitize a URL path for logging. Two rules:
+ *  - the invitation capability token rides in the PATH (`/invite/<token>`);
+ *    it is a secret and must never be logged — collapse to `/invite/:token`;
+ *  - internal UUID ids (users, workspaces, invitations) collapse to `:id` so
+ *    logs carry route shapes, not identifiers.
+ */
+export function redactPath(path: string): string {
+  return path.replace(/^\/invite\/[^/]+/, '/invite/:token').replace(UUID_RE, ':id');
+}
+
 export function securityHeaders(production: boolean): Record<string, string> {
   const headers: Record<string, string> = {
     'Content-Security-Policy': [
@@ -52,19 +65,44 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
     return payload;
   });
 
-  // Sanitized operational logging (plan §5): method, path (no query string —
-  // it could otherwise capture ids), status, duration. NEVER bodies, headers,
-  // tokens, emails, or customer vocabulary.
+  // Sanitized operational logging (plan §5): method, path (query stripped and
+  // the path itself redacted — invite tokens live in the path, ids collapsed),
+  // status, duration. NEVER bodies, headers, tokens, emails, or customer
+  // vocabulary.
   app.addHook('onResponse', async (request, reply) => {
-    const path = request.url.split('?')[0];
     log({
       level: 'info',
       msg: 'request',
       method: request.method,
-      path,
+      path: redactPath(request.url.split('?')[0] ?? request.url),
       status: reply.statusCode,
       durationMs: Math.round(reply.elapsedTime),
     });
+  });
+
+  // Global error boundary: any uncaught error in a handler or hook returns a
+  // GENERIC response — never the error message, which could carry a DB detail,
+  // a decrypt failure, or other internals. The error name (a class, not a
+  // value) is logged server-side for diagnosis; the redacted path locates it.
+  app.setErrorHandler((error: Error & { statusCode?: number }, request, reply) => {
+    const raw = typeof error.statusCode === 'number' ? error.statusCode : 500;
+    const status = raw >= 400 && raw < 500 ? raw : 500;
+    log({
+      level: 'error',
+      msg: 'request-error',
+      method: request.method,
+      path: redactPath(request.url.split('?')[0] ?? request.url),
+      status,
+      error: error.name,
+    });
+    return reply
+      .code(status)
+      .type('text/html')
+      .send(
+        status === 500
+          ? '<!doctype html><title>Error — CostFlow</title><p>Something went wrong on our end. Please try again.</p>'
+          : '<!doctype html><title>Error — CostFlow</title><p>That request could not be processed.</p>',
+      );
   });
 
   // Liveness: the process is up. No dependencies — a failing DB must not make

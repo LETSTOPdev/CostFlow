@@ -84,6 +84,18 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     (role) => telemetry(webEvent('tm-web-invite-accepted', { role })),
   );
 
+  // Clear every auth-bearing cookie (session + in-flight OIDC state). Used by
+  // both sign-out and organization erasure so the two paths cannot drift.
+  const clearAuthCookies = (reply: FastifyReply): void => {
+    clearSession(reply, auth.secureCookies === true);
+    reply.clearCookie('cf_oidc_state', {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: auth.secureCookies === true,
+    });
+  };
+
   app.post('/logout', async (request, reply) => {
     const session = sessionFrom(request, auth.sessionKey);
     const bodyCsrf = (request.body as { csrf?: string })?.csrf;
@@ -104,13 +116,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // Invalidate the local CostFlow session FIRST — always, before any
     // external redirect — so the app cookie is gone regardless of what the
     // IdP does next.
-    clearSession(reply, auth.secureCookies === true);
-    reply.clearCookie('cf_oidc_state', {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: auth.secureCookies === true,
-    });
+    clearAuthCookies(reply);
     // In OIDC mode, RP-initiated logout: send the browser to Auth0's
     // /oidc/logout to terminate the tenant SSO session, then return to the
     // public /logged-out page. Without this, a protected route silently
@@ -172,6 +178,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const managerPath = (method: string, pathname: string): boolean => {
     if (pathname === '/org' || pathname.startsWith('/org/')) return true;
     if (pathname.startsWith('/workspaces/')) return true;
+    if (pathname.startsWith('/jobs/')) return true;
     if (pathname === '/settings' || pathname === '/account/delete') return true;
     const onboardingPost = [
       '/connect',
@@ -480,7 +487,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const workspace = await requireStep(session, reply, 'connected');
     if (!workspace) return;
     const conn = connection(workspace);
-    const projects = await gateway.listProjects(conn);
+    let projects;
+    try {
+      projects = await gateway.listProjects(conn);
+    } catch (error) {
+      const f = jiraFailure(error);
+      logLine({ level: 'warn', msg: 'jira-list-projects-failed', ...f });
+      return reply
+        .code(400)
+        .type('text/html')
+        .send(page(session, 'Choose scope', importErrorHtml(f)));
+    }
     const index = Number((request.body as { project?: string }).project);
     const project = projects[index];
     if (!project) {
@@ -1060,6 +1077,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/settings', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
+    const actor = await currentUser(session);
     const workspaces = await store.listWorkspaces(session.tenantId);
     const workspaceCards = workspaces
       .map(
@@ -1082,15 +1100,20 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
          <p class="note">You control your data. Deleting is permanent and cascades to every
          derived analysis (GDPR erasure). CostFlow keeps no copy.</p>
          ${workspaces.length === 0 ? '<p class="note">No workspaces connected.</p>' : workspaceCards}
-         <div class="danger">
+         ${
+           actor?.role === 'owner'
+             ? `<div class="danger">
            <h3>Delete everything</h3>
            <p class="note">Permanently erase your entire organization: all workspaces, runs, jobs,
-           your account, and the organization itself. You will be signed out. This cannot be undone.</p>
+           every member, and the organization itself. You will be signed out. This cannot be undone.</p>
            <form method="post" action="/account/delete">${csrfField(session)}
              <label>Type <strong>${DELETE_ACCOUNT_PHRASE}</strong> to confirm <input name="confirm" autocomplete="off" required></label>
              <button type="submit">Delete my entire organization</button>
            </form>
-         </div>`,
+         </div>`
+             : '<p class="note">Only the organization owner can delete the entire organization.</p>'
+         }
+         <p><a href="/org">Organization &amp; members</a></p>`,
       ),
     );
   });
@@ -1155,13 +1178,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // The tenant and user rows are gone; the signed session cookie now points
     // at nothing. Clear it so no dangling session survives, then land on the
     // public post-logout page (local session only — no IdP round-trip here).
-    clearSession(reply, auth.secureCookies === true);
-    reply.clearCookie('cf_oidc_state', {
-      path: '/',
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: auth.secureCookies === true,
-    });
+    clearAuthCookies(reply);
     return reply.redirect('/logged-out');
   });
 

@@ -1860,3 +1860,49 @@ detectors, pricing, simulations, and goldens untouched.
 - The against-real-Postgres run for the new tables/cascades is proven by the
   contract suite (memory always; Postgres when `COSTFLOW_TEST_DATABASE_URL` is
   bound) and executes at deploy time — not fabricated here.
+
+## Phase 2 / P4 — Production-readiness hardening pass (2026-07-22)
+
+A whole-product review of the self-serve web app (P4.1–P4.4) as if preparing
+for real customer onboarding. No new features; only defects fixed that
+clearly belong to P4. Engine/detectors/pricing/simulations/goldens untouched.
+
+Fixed:
+
+1. **Invitation-token log leak (privacy).** The invitation capability token
+   rides in the URL path (`/invite/<token>`); the sanitized request logger
+   logged the path verbatim, so tokens reached logs. Added `redactPath` —
+   `/invite/<token>` → `/invite/:token`, internal UUIDs → `:id` — applied to
+   the request log and the error log.
+2. **Global error boundary (security).** Added `setErrorHandler`: any uncaught
+   error returns a GENERIC response and logs only the error class name + the
+   redacted path — never `error.message` (which could carry a DB detail or a
+   decrypt failure). Previously Fastify's default handler echoed the message.
+3. **Job-surface authorization (authz).** `GET /jobs/:jobId` was not in the
+   manager-gate; a member could view a job page. Added `/jobs/` to the
+   manager-only paths.
+4. **Graceful gateway failure on `/scope` (error handling).** `POST /scope`
+   called `gateway.listProjects` outside a try/catch → a 500 on a provider
+   failure. Now returns the same sanitized 400 import error as the rest of the
+   onboarding flow.
+5. **Least-privilege `/settings` UI.** The "delete entire organization"
+   control was rendered for admins (who get a 403 on submit — owner-only).
+   It is now shown only to the owner, with a clear note otherwise; added an
+   `/org` link to remove a navigation dead-end.
+6. **De-duplication (debt).** Extracted the repeated auth-cookie clearing
+   (session + OIDC state) into one `clearAuthCookies` helper used by both
+   sign-out and org erasure, so the two paths cannot drift.
+
+Tests: `production-hardening.test.ts` (6 cases) — path redaction; token absent
+from logs; error boundary returns generic 500 and logs the class only;
+member 403 on `/jobs/:id`; `/scope` gateway failure → 400; owner-only
+org-erase UI. Full gate green — **305 passed / 1 skipped**, 0 boundary
+violations, engine/goldens byte-identical to `e3c86e6`.
+
+Reviewed and found acceptable (no change needed): CSRF present on every
+mutation; roles resolved live; last-owner protection; tenant-scoping on all
+store reads/writes; append-only runs; deletion transactionality (ADR-0003);
+attribution guard (ADR-0002); local-only telemetry with enum/count-only
+fields; idempotent migrate-on-boot. Named residual (not P4): no automated
+invite email; one-org-per-email; invite double-accept race resolves to a
+clean sanitized 500 (rare).
