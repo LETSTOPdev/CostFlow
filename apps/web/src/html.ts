@@ -341,8 +341,14 @@ export function layout(
   title: string,
   body: string,
   csrf?: string,
-  opts: { bleed?: boolean } = {},
+  opts: { bleed?: boolean; canonical?: string; noindex?: boolean; jsonLd?: string } = {},
 ): string {
+  // Canonical host is app.fbx1.com (see docs/BIBLE §fbx1). SEO tags are opt-in
+  // per page so authenticated/dynamic pages stay out of the index.
+  const seoHead =
+    (opts.canonical ? `<link rel="canonical" href="${esc(opts.canonical)}">` : '') +
+    (opts.noindex ? '<meta name="robots" content="noindex,follow">' : '') +
+    (opts.jsonLd ? `<script type="application/ld+json">${opts.jsonLd}</script>` : '');
   const nav =
     csrf === undefined
       ? `<span class="nav-extra"><a href="/demo">Sample report</a><a href="/login">Sign in</a></span><a class="btn btn-sm" href="/signup">Get started</a>`
@@ -378,6 +384,7 @@ export function layout(
 <meta name="twitter:title" content="CostFlow — see what workflow friction is costing your team">
 <meta name="twitter:description" content="Connect Jira and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
 <meta name="twitter:image" content="https://app.fbx1.com/og.jpg">
+${seoHead}
 <style>${STYLES}</style>
 </head>
 <body>
@@ -433,6 +440,80 @@ export function loadingPage(): string {
     <h1>Analysing your workflow…</h1>
     <p>Importing work items and pricing friction. This usually takes a few seconds — the page refreshes on its own.</p>
     <div class="bar"></div>
+  </div>
+</body>
+</html>`;
+}
+
+/**
+ * Interactive Demo "analyzing…" page. No JS (CSP), so the staged sequence is a
+ * pure-CSS timeline that checks off each step, then `<meta refresh>` hands off
+ * to the generated report. Deliberately ~8s, not 45s: a forced no-JS blank
+ * wait is anti-conversion; this feels substantial without wasting the visitor.
+ */
+export function demoAnalyzingPage(seed: number): string {
+  const stages = [
+    'Connecting to Jira',
+    'Reading projects & issues',
+    'Building the work timeline',
+    'Detecting bottlenecks',
+    'Pricing hidden costs',
+    'Generating the executive report',
+  ];
+  const total = stages.length;
+  const per = 1.15; // seconds per stage
+  const wait = Math.ceil(per * total + 0.4);
+  const rows = stages
+    .map((s, i) => {
+      const delay = (i * per).toFixed(2);
+      return `<li class="dstg" style="animation-delay:${delay}s">
+        <span class="dspin" style="animation-delay:${delay}s"></span>
+        <span class="dchk" style="animation-delay:${(i * per + per * 0.85).toFixed(2)}s">✓</span>
+        <span class="dlbl">${esc(s)}</span></li>`;
+    })
+    .join('');
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta http-equiv="refresh" content="${wait}; url=/try/report?seed=${seed}">
+<title>Analysing a live company… — CostFlow</title>
+<style>
+  :root{--ink:#0d0e14;--muted:#5c5f6e;--faint:#8a8d9b;--line:#e9e9f0;--bg:#ffffff;--surface:#ffffff;--primary:#5b54e6;--pos:#0ea371;
+    --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);--sh:0 24px 50px -14px rgba(30,24,74,.22);
+    --font:'Inter','SF Pro Text',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+  @media (prefers-color-scheme:dark){:root{--ink:#f4f5fb;--muted:#9a9db2;--faint:#71748c;--line:#242634;--bg:#0a0b11;--surface:#12141d;--primary:#8b87f5;--sh:0 26px 52px -14px rgba(0,0,0,.72)}}
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);display:flex;align-items:center;justify-content:center;padding:1.5rem;-webkit-font-smoothing:antialiased}
+  .box{width:100%;max-width:30rem;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:2.4rem 2.2rem;box-shadow:var(--sh)}
+  .top{display:flex;align-items:center;gap:.7rem;margin-bottom:.4rem}
+  .top svg{width:26px;height:26px;display:block}
+  .top b{font-size:1.15rem;letter-spacing:-.02em}
+  h1{font-size:1.15rem;letter-spacing:-.02em;margin:.6rem 0 .2rem}
+  p{color:var(--muted);margin:0 0 1.3rem;font-size:.92rem}
+  .bar{height:5px;border-radius:999px;overflow:hidden;background:color-mix(in srgb,var(--primary) 14%,transparent);margin-bottom:1.4rem}
+  .bar i{display:block;height:100%;width:0;border-radius:999px;background:var(--grad);animation:fill ${wait}s linear forwards}
+  @keyframes fill{to{width:100%}}
+  ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.7rem}
+  .dstg{display:flex;align-items:center;gap:.7rem;font-size:.95rem;color:var(--faint);opacity:.45;position:relative;animation:wake .3s ease forwards}
+  @keyframes wake{to{opacity:1;color:var(--ink)}}
+  .dspin{width:1.05rem;height:1.05rem;flex:none;border-radius:50%;border:2px solid color-mix(in srgb,var(--primary) 30%,transparent);border-top-color:var(--primary);animation:spin .8s linear infinite,hide .01s linear forwards;opacity:0}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes hide{to{opacity:1}}
+  .dchk{position:absolute;left:0;width:1.05rem;height:1.05rem;flex:none;display:grid;place-items:center;border-radius:50%;background:var(--pos);color:#fff;font-size:.7rem;font-weight:800;opacity:0;animation:pop .3s ease forwards}
+  @keyframes pop{to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.dspin{animation:hide .01s forwards}.bar i{animation-duration:${wait}s}}
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="top"><svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="dg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs><rect width="120" height="120" rx="28" fill="url(#dg)"/><g fill="#fff"><rect x="30" y="34" width="60" height="11" rx="5.5"/><rect x="40" y="55" width="40" height="11" rx="5.5"/><rect x="50" y="76" width="20" height="11" rx="5.5"/></g><circle cx="60" cy="99" r="4.5" fill="#34e5b0"/></svg><b>CostFlow</b></div>
+    <h1>Analysing a live company…</h1>
+    <p>Generating a realistic workspace and running the real CostFlow engine on it.</p>
+    <div class="bar"><i></i></div>
+    <ul>${rows}</ul>
   </div>
 </body>
 </html>`;

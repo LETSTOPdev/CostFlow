@@ -96,13 +96,13 @@ const hero = `
 <section class="lp-hero">
   <div class="lp-aurora" aria-hidden="true"></div>
   <div class="container lp-hero-inner">
-    <a class="lp-badge" href="/demo"><span class="lp-badge-dot"></span> Free during beta · see a live report first →</a>
+    <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Free during beta · try a live demo — no signup →</a>
     <h1 class="lp-h1">See what delays in your Jira<br><span class="lp-grad">are costing you — in dollars.</span></h1>
     <p class="lp-sub">Connect Jira. Get an itemized, ranked cost report in about a minute —
       every figure traceable to its formula.</p>
     <div class="lp-cta">
       <a class="btn btn-lg" href="/signup">Get started free</a>
-      <a class="btn btn-ghost btn-lg" href="/demo">See a sample report</a>
+      <a class="btn btn-ghost btn-lg" href="/try">Try a live demo</a>
     </div>
     <div class="lp-trust">
       <span>✓ No credit card</span><span>✓ Read-only</span><span>✓ Ready in ~1 minute</span>
@@ -209,35 +209,85 @@ const trust = `
   </div>
 </section>`;
 
+/** Single source of truth for the FAQ — rendered as HTML and as FAQPage JSON-LD. */
+const FAQ_ITEMS: readonly [string, string][] = [
+  [
+    'Is it really free? What is the catch?',
+    'No catch. CostFlow is a free public beta — no credit card, no trial clock. Paid plans come later; nothing you do now will cost you.',
+  ],
+  [
+    'Will you change anything in my Jira?',
+    'Never. CostFlow is read-only — a personal API token, used only to read. No comments, no status changes, nothing written back.',
+  ],
+  [
+    'How are the numbers calculated?',
+    'From your imported work items and the rates you confirm. Every figure drills down to its formula and inputs — open the sample report to see exactly how.',
+  ],
+  [
+    'What about privacy and my data?',
+    `Credentials are encrypted; individuals are pseudonymized before analysis; you can export or permanently delete everything anytime. See <a href="/privacy">Privacy</a>, or email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.`,
+  ],
+  [
+    'Which tools do you support?',
+    'Jira today. Monday, Asana, and CSV import are proven in our engine and coming to the product soon.',
+  ],
+];
+
 function faq(): string {
-  const items: [string, string][] = [
-    [
-      'Is it really free? What is the catch?',
-      'No catch. CostFlow is a free public beta — no credit card, no trial clock. Paid plans come later; nothing you do now will cost you.',
-    ],
-    [
-      'Will you change anything in my Jira?',
-      'Never. CostFlow is read-only — a personal API token, used only to read. No comments, no status changes, nothing written back.',
-    ],
-    [
-      'How are the numbers calculated?',
-      'From your imported work items and the rates you confirm. Every figure drills down to its formula and inputs — open the sample report to see exactly how.',
-    ],
-    [
-      'What about privacy and my data?',
-      `Credentials are encrypted; individuals are pseudonymized before analysis; you can export or permanently delete everything anytime. See <a href="/privacy">Privacy</a>, or email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.`,
-    ],
-    [
-      'Which tools do you support?',
-      'Jira today. Monday, Asana, and CSV import are proven in our engine and coming to the product soon.',
-    ],
-  ];
   return `<section class="lp-section"><div class="container">
     <div class="lp-shead"><h2 class="lp-h2">FAQ</h2></div>
-    <div class="lp-faq">${items
-      .map(([q, a]) => `<details><summary>${q}</summary><p class="note">${a}</p></details>`)
-      .join('')}</div>
+    <div class="lp-faq">${FAQ_ITEMS.map(
+      ([q, a]) => `<details><summary>${q}</summary><p class="note">${a}</p></details>`,
+    ).join('')}</div>
   </div></section>`;
+}
+
+/** Structured data for the landing (SoftwareApplication + Organization + FAQ + WebSite). */
+function landingJsonLd(): string {
+  const strip = (html: string): string => html.replace(/<[^>]+>/g, '');
+  const graph = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'Organization',
+        '@id': 'https://app.fbx1.com/#org',
+        name: 'CostFlow',
+        url: 'https://app.fbx1.com/',
+        logo: 'https://app.fbx1.com/brand/logo.svg',
+        description:
+          'Business Friction Intelligence — price the cost of workflow friction from Jira.',
+      },
+      {
+        '@type': 'WebSite',
+        '@id': 'https://app.fbx1.com/#website',
+        url: 'https://app.fbx1.com/',
+        name: 'CostFlow',
+        publisher: { '@id': 'https://app.fbx1.com/#org' },
+      },
+      {
+        '@type': 'SoftwareApplication',
+        name: 'CostFlow',
+        applicationCategory: 'BusinessApplication',
+        operatingSystem: 'Web',
+        url: 'https://app.fbx1.com/',
+        description:
+          'Connect Jira and CostFlow turns delays, queues, and overdue work into an itemized, ranked cost report — every figure traceable to its formula.',
+        offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+        publisher: { '@id': 'https://app.fbx1.com/#org' },
+      },
+      {
+        '@type': 'FAQPage',
+        mainEntity: FAQ_ITEMS.map(([q, a]) => ({
+          '@type': 'Question',
+          name: strip(q),
+          acceptedAnswer: { '@type': 'Answer', text: strip(a) },
+        })),
+      },
+    ],
+  };
+  // Escape the one XSS vector in a JSON-LD block (a literal </script>); our copy
+  // has none, but keep the invariant explicit.
+  return JSON.stringify(graph).replace(/</g, '\\u003c');
 }
 
 const ctaBand = `
@@ -247,7 +297,7 @@ const ctaBand = `
     <div class="lp-cta-inner">
       <h2 class="lp-cta-h">Find out what your delays<br>are really costing you.</h2>
       <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>
-        <a class="lp-cta-link" href="/demo">or see a sample report →</a></div>
+        <a class="lp-cta-link" href="/try">or try a live demo →</a></div>
       <p class="lp-cta-fine">No credit card · read-only access · delete your data anytime</p>
     </div>
   </div>
@@ -476,13 +526,19 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:#4c43d6;filter:bright
 /** Marketing landing shown to logged-out visitors at `/`. */
 export function renderLanding(): string {
   const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero}${how}${traceable}${midCta}${trust}${faq()}${ctaBand}${footer}</div>`;
-  return layout('CostFlow — see what friction costs your team', body, undefined, { bleed: true });
+  return layout('CostFlow — see what friction costs your team', body, undefined, {
+    bleed: true,
+    canonical: 'https://app.fbx1.com/',
+    jsonLd: landingJsonLd(),
+  });
 }
 
 /** Shared shell for the legal/long-form pages (Terms, Privacy). */
-function legalPage(title: string, inner: string): string {
+function legalPage(title: string, inner: string, path: string): string {
   const body = `<article class="panel" style="max-width:46rem;margin-inline:auto">${inner}</article>`;
-  return layout(`${title} — CostFlow`, body);
+  return layout(`${title} — CostFlow`, body, undefined, {
+    canonical: `https://app.fbx1.com${path}`,
+  });
 }
 
 export function renderTerms(): string {
@@ -514,6 +570,7 @@ export function renderTerms(): string {
     <p class="note">This beta agreement is intended to be clear and fair; it is not a substitute for
     legal advice and will be reviewed by counsel before general availability.</p>
     <p style="margin-top:1.5rem"><a href="/">← Home</a> &nbsp;·&nbsp; <a href="/privacy">Privacy</a></p>`,
+    '/terms',
   );
 }
 
@@ -549,5 +606,6 @@ export function renderPrivacy(): string {
     <p class="note">This notice is written to be honest and complete for the beta; it will be reviewed by
     counsel before general availability.</p>
     <p style="margin-top:1.5rem"><a href="/">← Home</a> &nbsp;·&nbsp; <a href="/terms">Terms</a></p>`,
+    '/privacy',
   );
 }

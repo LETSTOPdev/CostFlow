@@ -59,6 +59,16 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
   const log = context.logSink ?? ((line) => console.log(JSON.stringify(line)));
   const headers = securityHeaders(context.production);
 
+  // Canonical host is app.fbx1.com. If apex/www traffic reaches this app (once
+  // fbx1.com DNS points here), 301 to the canonical host, preserving path +
+  // query. Only fires for those exact hosts, so app.fbx1.com never loops.
+  app.addHook('onRequest', async (request, reply) => {
+    const host = (request.headers.host ?? '').toLowerCase().split(':')[0];
+    if (host === 'fbx1.com' || host === 'www.fbx1.com') {
+      return reply.code(301).redirect(`https://app.fbx1.com${request.url}`);
+    }
+  });
+
   app.addHook('onSend', async (request, reply, payload) => {
     for (const [name, value] of Object.entries(headers)) {
       reply.header(name, value);

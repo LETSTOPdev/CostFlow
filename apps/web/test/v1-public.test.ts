@@ -186,3 +186,48 @@ describe('v1 founder admin page', () => {
     expect(res.headers['location']).toBe('/login');
   });
 });
+
+describe('SEO + canonical host', () => {
+  it('serves robots.txt and sitemap.xml pointing at the canonical host', async () => {
+    const { makeApp } = await import('./helpers');
+    const t = makeApp();
+    const robots = await t.app.inject({ method: 'GET', url: '/robots.txt' });
+    expect(robots.statusCode).toBe(200);
+    expect(robots.headers['content-type']).toContain('text/plain');
+    expect(robots.body).toContain('Sitemap: https://app.fbx1.com/sitemap.xml');
+    expect(robots.body).toContain('Disallow: /try/report');
+    expect(robots.body).toContain('Disallow: /admin');
+    const sitemap = await t.app.inject({ method: 'GET', url: '/sitemap.xml' });
+    expect(sitemap.statusCode).toBe(200);
+    expect(sitemap.headers['content-type']).toContain('xml');
+    expect(sitemap.body).toContain('<loc>https://app.fbx1.com/</loc>');
+    expect(sitemap.body).toContain('<loc>https://app.fbx1.com/try</loc>');
+  });
+
+  it('landing carries canonical + JSON-LD structured data', async () => {
+    const { makeApp } = await import('./helpers');
+    const res = await makeApp().app.inject({ method: 'GET', url: '/' });
+    expect(res.body).toContain('<link rel="canonical" href="https://app.fbx1.com/">');
+    expect(res.body).toContain('application/ld+json');
+    expect(res.body).toContain('SoftwareApplication');
+    expect(res.body).toContain('FAQPage');
+  });
+
+  it('301-redirects apex/www to the canonical host, preserving path + query', async () => {
+    const { makeApp } = await import('./helpers');
+    const t = makeApp();
+    const r1 = await t.app.inject({
+      method: 'GET',
+      url: '/pricing?x=1',
+      headers: { host: 'fbx1.com' },
+    });
+    expect(r1.statusCode).toBe(301);
+    expect(r1.headers['location']).toBe('https://app.fbx1.com/pricing?x=1');
+    const r2 = await t.app.inject({ method: 'GET', url: '/', headers: { host: 'www.fbx1.com' } });
+    expect(r2.statusCode).toBe(301);
+    expect(r2.headers['location']).toBe('https://app.fbx1.com/');
+    // The canonical host itself never redirects (no loop).
+    const ok = await t.app.inject({ method: 'GET', url: '/', headers: { host: 'app.fbx1.com' } });
+    expect(ok.statusCode).toBe(200);
+  });
+});

@@ -21,7 +21,16 @@ import {
 } from './auth';
 import type { AnalysisRun } from '@costflow/analysis';
 import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
-import { esc, layout, loadingPage, METHODOLOGY_APPENDIX, printLayout, stepsNav } from './html';
+import {
+  demoAnalyzingPage,
+  esc,
+  layout,
+  loadingPage,
+  METHODOLOGY_APPENDIX,
+  printLayout,
+  stepsNav,
+} from './html';
+import { randomDemoSeed, renderDemoCompany } from './demo-live';
 import { LOGO_SVG } from './brand';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
 import { parseRun, renderReportBody, runSummary } from './report-view';
@@ -445,6 +454,59 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       );
   });
 
+  // ---------- Interactive Demo Mode (no signup, no Jira, no auth) ----------
+  // "Try CostFlow" → an animated analysis of a RANDOM realistic company, run
+  // through the real engine. Every visit generates a different company.
+
+  app.get('/try', async (_request, reply) => {
+    const seed = randomDemoSeed();
+    return reply
+      .type('text/html')
+      .header('cache-control', 'no-store')
+      .send(demoAnalyzingPage(seed));
+  });
+
+  app.get('/try/report', async (request, reply) => {
+    const raw = (request.query as { seed?: string }).seed;
+    // Seed is a bounded positive integer that only feeds a PRNG — no injection
+    // surface. An invalid/absent seed just gets a fresh random company.
+    const parsed = raw !== undefined && /^\d{1,10}$/.test(raw) ? Number(raw) : randomDemoSeed();
+    const seed = parsed >= 1 && parsed <= 2_147_483_646 ? parsed : randomDemoSeed();
+    let demo;
+    try {
+      demo = renderDemoCompany(seed);
+    } catch {
+      return reply
+        .type('text/html')
+        .send(
+          layout(
+            'Demo — CostFlow',
+            '<div class="empty" style="max-width:34rem;margin:2.5rem auto"><h3>The demo hiccuped</h3><p>Please <a href="/try">try another company</a>.</p></div>',
+          ),
+        );
+    }
+    const banner = `<div class="info">You just analysed <strong>${esc(demo.companyName)}</strong> — a simulated ${esc(demo.industry)} (${demo.issueCount} issues, ${demo.teamSize}-person team) generated for this demo and run through the real CostFlow engine. <a href="/try">Generate a different company →</a></div>`;
+    const cta =
+      '<div class="cta-band" style="margin-top:2.5rem">' +
+      '<h2>Now do it for your own team.</h2>' +
+      '<p class="lead">Connect your Jira in about a minute and get this report on your real board — free, read-only.</p>' +
+      '<div class="hero-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>' +
+      '<a class="lp-cta-link" href="/try">or try another company →</a></div>' +
+      '</div>';
+    return reply
+      .type('text/html')
+      .header('cache-control', 'public, max-age=1800')
+      .send(
+        layout(
+          `Demo — ${demo.companyName}`,
+          `${banner}${demo.reportBody}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
+          undefined,
+          // Infinite seed space — canonicalise crawlers to /try, don't index each.
+          { canonical: 'https://app.fbx1.com/try', noindex: true },
+        ),
+      );
+  });
+
   // Public brand logo — served so Auth0 Universal Login can render the same
   // CostFlow mark the app header uses (one identity across product + sign-in).
   app.get('/brand/logo.svg', async (_request, reply) =>
@@ -459,6 +521,65 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/apple-touch-icon.png', async (_request, reply) =>
     reply.type('image/png').header('cache-control', 'public, max-age=86400').send(APPLE_TOUCH_ICON),
   );
+
+  // ---------- SEO: robots + sitemap (canonical host app.fbx1.com) ----------
+  // Crawl the public marketing/demo surface; keep the app and per-seed demo
+  // reports out of the index (auth-gated or infinite seed space).
+  app.get('/robots.txt', async (_request, reply) =>
+    reply
+      .type('text/plain')
+      .header('cache-control', 'public, max-age=86400')
+      .send(
+        `User-agent: *
+Allow: /$
+Allow: /demo
+Allow: /try$
+Allow: /terms
+Allow: /privacy
+Disallow: /try/report
+Disallow: /dashboard
+Disallow: /runs
+Disallow: /reports
+Disallow: /jobs
+Disallow: /connect
+Disallow: /scope
+Disallow: /mapping
+Disallow: /assumptions
+Disallow: /org
+Disallow: /settings
+Disallow: /admin
+Disallow: /auth
+Disallow: /login
+Disallow: /signup
+Disallow: /invite
+
+Sitemap: https://app.fbx1.com/sitemap.xml
+`,
+      ),
+  );
+
+  app.get('/sitemap.xml', async (_request, reply) => {
+    const urls: [string, string][] = [
+      ['/', '1.0'],
+      ['/try', '0.9'],
+      ['/demo', '0.8'],
+      ['/privacy', '0.3'],
+      ['/terms', '0.3'],
+    ];
+    const body =
+      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+      urls
+        .map(
+          ([loc, pri]) =>
+            `  <url><loc>https://app.fbx1.com${loc}</loc><changefreq>weekly</changefreq><priority>${pri}</priority></url>`,
+        )
+        .join('\n') +
+      `\n</urlset>\n`;
+    return reply
+      .type('application/xml')
+      .header('cache-control', 'public, max-age=86400')
+      .send(body);
+  });
 
   app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms()));
   app.get('/privacy', async (_request, reply) => reply.type('text/html').send(renderPrivacy()));
