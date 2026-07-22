@@ -127,6 +127,12 @@ formula traces (the four E1 questions as interactive surfaces, not markdown),
 executive export (doc 08 M3's strip-test PDF). Confidence tiers and
 provenance labels rendered as first-class UI, not footnotes.
 
+> **Delivered (2026-07-22, doc 09 P5):** structured report view over the
+> immutable `run.json` — ranked frictions, headline total, confidence/provenance
+> as first-class UI, formula-trace drill-downs, coverage, context, run-over-run
+> trend, and a print-to-PDF executive export (native PDF binary deferred). Pure
+> presentation; engine/goldens byte-identical.
+
 ### P6 — Scenario engine + simulation experience
 
 Doc 07 §3's counterfactual replay, starting with the percentage-reduction

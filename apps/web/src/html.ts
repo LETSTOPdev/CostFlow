@@ -51,6 +51,17 @@ export function layout(title: string, body: string, csrf?: string): string {
   form.inline { display: inline; margin: 0; }
   code { background: #f4f4f4; padding: 0.1rem 0.3rem; word-break: break-all; }
   .signout { display: inline; margin: 0; }
+  .figure { font-size: 1.15rem; font-weight: 600; margin: 0.25rem 0; }
+  .figure.big { font-size: 1.6rem; }
+  .friction { border: 1px solid #e0e0e0; border-radius: 6px; padding: 0.6rem 1rem; margin: 0.75rem 0; }
+  .friction h3 { margin: 0.2rem 0; font-size: 1.05rem; }
+  details summary { cursor: pointer; color: #0645ad; margin: 0.4rem 0; }
+  .tier { display: inline-block; font-size: 0.8rem; padding: 0.05rem 0.4rem; border-radius: 3px; border: 1px solid #999; }
+  .tier-A { background: #e6f4ea; border-color: #34a853; }
+  .tier-B { background: #fef7e0; border-color: #f9ab00; }
+  .tier-C { background: #fce8e6; border-color: #ea4335; }
+  .up { color: #a40000; font-weight: 600; }
+  .down { color: #137333; font-weight: 600; }
   .signout button { margin: 0; background: none; border: none; color: #0645ad; cursor: pointer; padding: 0; font: inherit; text-decoration: underline; }
 </style>
 </head>
@@ -63,3 +74,52 @@ ${body}
 
 export const STEPS_NAV =
   '<p class="steps">Onboarding: connect → scope → statuses → roles → assumptions → run</p>';
+
+/**
+ * Standalone print/export document (P5): no app chrome, print-optimized CSS,
+ * drill-downs rendered expanded by the caller. The user prints to PDF from the
+ * browser — no server-side PDF binary dependency.
+ */
+export function printLayout(title: string, body: string): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${esc(title)} — CostFlow</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 55rem; margin: 1.5rem auto; padding: 0 1rem; color: #111; }
+  h1 { font-size: 1.4rem; } h2 { font-size: 1.1rem; border-bottom: 1px solid #ccc; padding-bottom: 0.2rem; }
+  table { border-collapse: collapse; width: 100%; margin: 0.5rem 0; }
+  th, td { border: 1px solid #ccc; padding: 0.3rem 0.5rem; text-align: left; font-size: 0.85rem; }
+  .figure { font-size: 1.15rem; font-weight: 600; } .figure.big { font-size: 1.6rem; }
+  .friction { border: 1px solid #ddd; border-radius: 6px; padding: 0.5rem 0.9rem; margin: 0.6rem 0; break-inside: avoid; }
+  .note { color: #555; font-size: 0.85rem; } .error { color: #a40000; }
+  .tier { display: inline-block; font-size: 0.8rem; padding: 0.05rem 0.4rem; border-radius: 3px; border: 1px solid #999; }
+  .up { color: #a40000; font-weight: 600; } .down { color: #137333; font-weight: 600; }
+  code { background: #f4f4f4; padding: 0.1rem 0.3rem; }
+  details > summary { display: none; }
+  .appendix { margin-top: 1.5rem; font-size: 0.85rem; color: #333; border-top: 1px solid #ccc; padding-top: 0.75rem; }
+  @media print { a[href]::after { content: ""; } .noprint { display: none; } }
+</style>
+</head>
+<body>
+<p class="noprint note">Use your browser's Print → Save as PDF to export this report.</p>
+${body}
+</body>
+</html>`;
+}
+
+/** Fixed methodology appendix for the executive export (P5). */
+export const METHODOLOGY_APPENDIX = `<section class="appendix">
+  <h2>Methodology</h2>
+  <p>Every figure is an estimate expressed as a range: <em>low – high (expected)</em>. Frictions are
+  ranked by expected cost, computed deterministically from the imported work items and your stated
+  assumptions — the same numbers are reproducible from the run's saved inputs.</p>
+  <p><strong>Confidence tiers:</strong> A (fully observed data and customer-confirmed assumptions),
+  B and C (progressively more inference or missing inputs — each drill-down states why).</p>
+  <p><strong>Assumption provenance:</strong> vendor-suggested (unconfirmed — never priced in report
+  mode), accepted by customer, customized by customer, or measured by customer.</p>
+  <p><strong>Attribution:</strong> cost is attributed to processes, stages, and roles — never to
+  named individuals. Individual identities are pseudonymized before analysis.</p>
+</section>`;

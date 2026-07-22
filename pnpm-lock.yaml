@@ -68,6 +68,9 @@ importers:
       '@costflow/analysis':
         specifier: workspace:*
         version: link:../../packages/analysis
+      '@costflow/cost-engine':
+        specifier: workspace:*
+        version: link:../../packages/cost-engine
       '@costflow/domain':
         specifier: workspace:*
         version: link:../../packages/domain

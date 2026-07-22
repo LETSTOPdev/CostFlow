@@ -16,8 +16,10 @@ import {
   type AuthConfig,
   type Session,
 } from './auth';
+import type { AnalysisRun } from '@costflow/analysis';
 import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
-import { esc, layout, STEPS_NAV } from './html';
+import { esc, layout, METHODOLOGY_APPENDIX, printLayout, STEPS_NAV } from './html';
+import { parseRun, renderReportBody } from './report-view';
 import { executeJob } from './jobs';
 import { GatewayError, type JiraGateway } from './jira-gateway';
 import { registerSecurity } from './security';
@@ -26,6 +28,7 @@ import {
   ORG_ROLES,
   type OrgRole,
   type OnboardingState,
+  type RunRecord,
   type Store,
   type UserRecord,
   type WorkspaceRecord,
@@ -1025,48 +1028,129 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       );
   });
 
+  // Load a run the session may view (tenant-scoped + member workspace check).
+  const loadViewableRun = async (
+    session: Session,
+    runId: string,
+    reply: FastifyReply,
+  ): Promise<{ record: RunRecord; workspace: WorkspaceRecord | null } | null> => {
+    const record = await store.getRun(session.tenantId, runId);
+    if (!record) {
+      void reply.code(404).send('Not found.');
+      return null;
+    }
+    const viewer = await currentUser(session);
+    const allowed = await accessibleWorkspaceIds(session, viewer);
+    if (allowed && !allowed.has(record.workspaceId)) {
+      void reply.code(404).send('Not found.');
+      return null;
+    }
+    const workspace = await store.getWorkspace(session.tenantId, record.workspaceId);
+    return { record, workspace };
+  };
+
+  // FR-17 attribution guard (the single reporting-layer choke point, ADR-0002).
+  // A correct report is pseudonymized and never names a person; if a raw
+  // identity reached the rendered bytes, withhold the whole response. Returns
+  // true iff the body is clean (safe to send).
+  const attributionOk = (
+    body: string,
+    workspace: WorkspaceRecord | null,
+    session: Session,
+    reply: FastifyReply,
+  ): boolean => {
+    const leaked = findIndividualAttribution(body, workspace?.observedActors ?? []);
+    if (leaked.length === 0) return true;
+    logLine({
+      level: 'error',
+      msg: 'attribution-guard-blocked',
+      surface: 'report',
+      leaked: leaked.length,
+    });
+    void reply
+      .code(500)
+      .type('text/html')
+      .send(
+        page(
+          session,
+          'Report withheld',
+          `<p class="error">This report was withheld: it would attribute cost to a named individual, which CostFlow never does. Nothing was changed. Please contact support.</p>`,
+        ),
+      );
+    return false;
+  };
+
+  // The immediately-older run for the same workspace (for the trend section).
+  const previousRunFor = async (
+    session: Session,
+    record: RunRecord,
+  ): Promise<AnalysisRun | null> => {
+    const runs = await store.listRuns(session.tenantId); // newest first
+    const sameWorkspace = runs.filter((r) => r.workspaceId === record.workspaceId);
+    const index = sameWorkspace.findIndex((r) => r.id === record.id);
+    const older = index >= 0 ? sameWorkspace[index + 1] : undefined;
+    return older ? parseRun(older.runJson) : null;
+  };
+
+  // Primary: the structured, explorable report view (P5) built from run.json.
   app.get('/reports/:runId', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
     const runId = (request.params as { runId: string }).runId;
-    const run = await store.getRun(session.tenantId, runId);
-    if (!run) return reply.code(404).send('Not found.');
-    // Members may open only reports for workspaces they belong to.
-    const viewer = await currentUser(session);
-    const allowed = await accessibleWorkspaceIds(session, viewer);
-    if (allowed && !allowed.has(run.workspaceId)) return reply.code(404).send('Not found.');
-    const html = await marked.parse(run.reportMd);
-    // FR-17 attribution guard — the single reporting-layer choke point. A
-    // correct report is pseudonymized at ingestion and never names a person;
-    // if a raw individual identity nonetheless reached the rendered output,
-    // withhold the whole response rather than emit it. Fail closed, log a
-    // count only (never the leaking value), and do NOT count it as a view.
-    const workspace = await store.getWorkspace(session.tenantId, run.workspaceId);
-    const leaked = findIndividualAttribution(html, workspace?.observedActors ?? []);
-    if (leaked.length > 0) {
-      logLine({
-        level: 'error',
-        msg: 'attribution-guard-blocked',
-        surface: 'report',
-        leaked: leaked.length,
-      });
-      return reply
-        .code(500)
-        .type('text/html')
-        .send(
-          page(
-            session,
-            'Report withheld',
-            `<p class="error">This report was withheld: it would attribute cost to a named individual, which CostFlow never does. Nothing was changed. Please contact support.</p>`,
-          ),
-        );
+    const loaded = await loadViewableRun(session, runId, reply);
+    if (!loaded) return;
+    // Structured view from run.json; on a malformed/legacy artifact, degrade
+    // gracefully to the always-present stored markdown rather than error.
+    let body: string;
+    let title = `Report ${runId}`;
+    try {
+      const run = parseRun(loaded.record.runJson);
+      const previous = await previousRunFor(session, loaded.record);
+      body = renderReportBody(run, { runId: loaded.record.id, previous, printLinks: true });
+      title = `Report ${run.runId}`;
+    } catch {
+      logLine({ level: 'warn', msg: 'report-render-fallback', surface: 'report' });
+      body = `<article>${await marked.parse(loaded.record.reportMd)}</article>`;
     }
+    if (!attributionOk(body, loaded.workspace, session, reply)) return;
     const nowIso = new Date(Date.now()).toISOString();
     const firstView = await store.markRunViewed(session.tenantId, runId, nowIso);
     telemetry(webEvent('tm-web-report-viewed', { firstView }));
-    return reply
-      .type('text/html')
-      .send(page(session, `Report ${run.id}`, `<article>${html}</article>`));
+    return reply.type('text/html').send(page(session, title, body));
+  });
+
+  // Raw markdown rendering (the engine's report.md), kept as a fallback view.
+  app.get('/reports/:runId/raw', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    const runId = (request.params as { runId: string }).runId;
+    const loaded = await loadViewableRun(session, runId, reply);
+    if (!loaded) return;
+    const html = await marked.parse(loaded.record.reportMd);
+    const body = `<p class="note"><a href="/reports/${esc(loaded.record.id)}">← Structured report</a></p><article>${html}</article>`;
+    if (!attributionOk(body, loaded.workspace, session, reply)) return;
+    return reply.type('text/html').send(page(session, `Report ${runId} (raw)`, body));
+  });
+
+  // Executive print/export: standalone, chrome-free, drill-downs expanded, with
+  // a methodology appendix. The user prints to PDF — no PDF binary dependency.
+  app.get('/reports/:runId/print', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    const runId = (request.params as { runId: string }).runId;
+    const loaded = await loadViewableRun(session, runId, reply);
+    if (!loaded) return;
+    let body: string;
+    try {
+      const run = parseRun(loaded.record.runJson);
+      const previous = await previousRunFor(session, loaded.record);
+      body = `${renderReportBody(run, { runId: loaded.record.id, previous, open: true })}${METHODOLOGY_APPENDIX}`;
+    } catch {
+      logLine({ level: 'warn', msg: 'report-render-fallback', surface: 'print' });
+      body = `<article>${await marked.parse(loaded.record.reportMd)}</article>${METHODOLOGY_APPENDIX}`;
+    }
+    if (!attributionOk(body, loaded.workspace, session, reply)) return;
+    return reply.type('text/html').send(printLayout(`Friction report ${runId}`, body));
   });
 
   // ---------- settings: data & privacy (FR-22 deletion, P4.3) ----------

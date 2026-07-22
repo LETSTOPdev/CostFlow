@@ -1906,3 +1906,71 @@ attribution guard (ADR-0002); local-only telemetry with enum/count-only
 fields; idempotent migrate-on-boot. Named residual (not P4): no automated
 invite email; one-org-per-email; invite double-accept race resolves to a
 clean sanitized 500 (rare).
+
+## Phase 2 / P5 — Reporting experience (authorized 2026-07-22)
+
+Objective: turn the flat `report.md` into an explorable executive artifact —
+the single highest-impact surface for customer adoption. All P5 work is pure
+presentation of the IMMUTABLE `run.json` artifact; no number is re-derived and
+the engine/detectors/pricing/simulations/goldens are byte-identical to
+`e3c86e6`.
+
+### What shipped
+
+- **Structured report view** (`apps/web/src/report-view.ts`, new) rendered by
+  `GET /reports/:runId`. Reuses `buildReportModel(run)` from `@costflow/reporting`
+  (the SAME deterministic ranking/partitioning the markdown uses), so the view
+  can never diverge from the goldens. Money is formatted only through the
+  engine's `formatWholeMoney`; the only monetary arithmetic is range
+  summation (`addRanges`) for the headline total and expected-delta
+  subtraction via the engine's `Decimal.minus` — never a float. Added
+  `@costflow/cost-engine` to `apps/web` deps.
+- **First-class confidence & provenance UI** — confidence tier badges (A/B/C,
+  colored) and provenance labels (vendor-suggested/accepted/customized/measured)
+  rendered inline, not footnotes.
+- **Formula-trace drill-downs** — the four E1 questions (claim, substituted
+  formula, contributing work items with per-item math, assumptions used with
+  provenance) inside CSP-safe `<details>` (no client JS; script-src stays none).
+- **Headline total, ranked frictions, unpriced section, context, coverage** —
+  coverage assembled from `batch.counts`/`capability`/`diagnostics` +
+  `detectors[]` (there is no `coverage` field in the artifact).
+- **Run-over-run trend** — `GET /reports/:runId` shows "Change since previous
+  run" when an older run exists for the same workspace: per-friction match by
+  stable instance id, previous→current expected + Δ + new/resolved/▲/▼.
+- **Executive print export** — `GET /reports/:runId/print`: standalone,
+  chrome-free, drill-downs expanded, with a methodology appendix; the user
+  prints to PDF (no server-side PDF binary dependency). `GET /reports/:runId/raw`
+  keeps the markdown view as a fallback.
+- **Graceful degradation** — a malformed/legacy `run.json` falls back to the
+  always-present stored markdown (logged `report-render-fallback`) instead of
+  erroring; a customer never sees a 500 for a report that exists.
+- **FR-17 guard preserved** — every report surface (structured, raw, print)
+  passes through the same attribution choke point (ADR-0002); a rendered field
+  matching a raw identity withholds the whole response.
+
+### Proofs
+
+`report-view.test.ts` (5 cases) seeds the real `demo-jira` golden `run.json`:
+the structured view renders the P1 hand-computed figures (1,062 / 342 / 297)
+with tier badges, provenance labels, drill-downs, coverage, and context; the
+print export carries the methodology appendix + expanded drill-downs and is
+chrome-free; the raw view renders the markdown with a back-link; the trend
+section appears only when a previous run exists; and the attribution guard
+withholds the structured view when a rendered field matches a registered raw
+identity. Full gate green — **311 passed / 1 skipped**, 0 boundary violations
+(136 modules), engine/goldens byte-identical.
+
+### Access & privacy
+
+Report routes stay member-visible but tenant- and workspace-membership-scoped
+(a member opening a non-granted report gets 404); managers see all. Titles are
+the customer's own data shown only to their authenticated session; no raw
+individual identity is ever rendered (pseudonymized at ingestion + guarded).
+
+### Honest limits, named
+
+- **Print-to-PDF, not a PDF binary** — a native PDF renderer (puppeteer/pdfkit)
+  is a heavy dependency deliberately avoided; the print view is the v1 path.
+- Trend matches by friction instance id (stable per stage/type); a renamed
+  stage starts a fresh series. No multi-run charting yet (single previous-run
+  comparison).
