@@ -38,7 +38,8 @@ describe('health + readiness probes (doc 09 P4.2 §4)', () => {
     const t = makeApp();
     const response = await t.app.inject({ method: 'GET', url: '/healthz' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok' });
+    // `commit` is Railway's build SHA; null outside Railway (tests, local dev).
+    expect(response.json()).toEqual({ status: 'ok', commit: null });
   });
 
   it('/readyz reflects store reachability (200 ready, 503 when the store is down)', async () => {

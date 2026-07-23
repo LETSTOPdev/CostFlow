@@ -158,9 +158,13 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
   });
 
   // Liveness: the process is up. No dependencies — a failing DB must not make
-  // the platform kill a pod that could still recover.
+  // the platform kill a pod that could still recover. `commit` echoes the SHA
+  // Railway injects at build time (null outside Railway) so "which commit is
+  // production running?" is answerable without dashboard access.
   app.get('/healthz', async (_request, reply) => {
-    return reply.header('cache-control', 'no-store').send({ status: 'ok' });
+    return reply
+      .header('cache-control', 'no-store')
+      .send({ status: 'ok', commit: process.env['RAILWAY_GIT_COMMIT_SHA'] ?? null });
   });
 
   // Readiness: dependencies are reachable. 503 sheds traffic until the DB is
