@@ -1,0 +1,13 @@
+{
+  "name": "CostFlow",
+  "short_name": "CostFlow",
+  "description": "See what workflow friction is costing your team.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0b11",
+  "theme_color": "#0a0b11",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/brand/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

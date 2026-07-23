@@ -17,9 +17,8 @@
   .wrap { position:relative; z-index:1; height:100%; padding:64px 72px; display:flex; gap:56px; }
 
   .left { width:560px; display:flex; flex-direction:column; }
-  .brand { display:flex; align-items:center; gap:18px; }
-  .brand svg { display:block; }
-  .brand span { font-size:38px; font-weight:700; letter-spacing:-0.02em; }
+  .brand { display:flex; align-items:center; }
+  .brand img { display:block; height:68px; width:auto; }
   h1 { margin-top:88px; font-size:63px; line-height:1.08; letter-spacing:-0.03em; font-weight:700; }
   h1 .grad { background:linear-gradient(100deg,#8b8cf7,#a78bfa 55%,#c084fc);
     -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
@@ -58,8 +57,8 @@
   <div class="wrap">
     <div class="left">
       <div class="brand">
-        <svg width="64" height="64" viewBox="0 0 120 120"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs><rect width="120" height="120" rx="28" fill="url(#g)"/><g fill="#fff"><rect x="30" y="34" width="60" height="11" rx="5.5" fill-opacity="0.96"/><rect x="40" y="55" width="40" height="11" rx="5.5" fill-opacity="0.88"/><rect x="50" y="76" width="20" height="11" rx="5.5" fill-opacity="0.8"/></g><circle cx="60" cy="99" r="4.5" fill="#34e5b0"/></svg>
-        <span>CostFlow</span>
+        <!-- Official full logo, white-wordmark variant (dark card background). -->
+        <img src="./logo-dark.png" alt="CostFlow">
       </div>
       <h1>See what workflow friction is <span class="grad">costing your team.</span></h1>
       <div class="foot"><b>app.fbx1.com</b> &nbsp;·&nbsp; Free during beta</div>

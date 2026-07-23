@@ -30,7 +30,6 @@ import {
   stepsNav,
 } from './html';
 import { randomDemoSeed, renderDemoCompany } from './demo-live';
-import { LOGO_SVG } from './brand';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
 import { renderDashboard } from './dashboard-view';
 import { parseRun, renderReportBody, runSummary } from './report-view';
@@ -93,11 +92,25 @@ const DEMO_RUN_JSON = readFileSync(
   'utf8',
 );
 
-// Social-sharing assets (committed binaries, served with long-lived caching):
-// the 1200×630 Open Graph card and the iOS home-screen icon.
+// Brand + social-sharing assets (committed binaries, served with long-lived
+// caching): the official CostFlow logo set (icon + full wordmark logo, one
+// variant per theme), the favicon set, the 1200×630 Open Graph card and the
+// iOS home-screen icon. All derived from the official logo masters.
 const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'assets');
 const OG_IMAGE = readFileSync(join(ASSETS_DIR, 'og.jpg'));
 const APPLE_TOUCH_ICON = readFileSync(join(ASSETS_DIR, 'apple-touch-icon.png'));
+const FAVICON_ICO = readFileSync(join(ASSETS_DIR, 'favicon.ico'));
+const ICON_192 = readFileSync(join(ASSETS_DIR, 'icon-192.png'));
+const ICON_512 = readFileSync(join(ASSETS_DIR, 'icon-512.png'));
+const LOGO_DARK = readFileSync(join(ASSETS_DIR, 'logo-dark.png'));
+const LOGO_LIGHT = readFileSync(join(ASSETS_DIR, 'logo-light.png'));
+const WEB_MANIFEST = readFileSync(join(ASSETS_DIR, 'site.webmanifest'));
+
+// The official icon wrapped as SVG. `/brand/logo.svg` is a public URL contract
+// (Auth0 Universal Login renders it, and it serves as the scalable favicon), so
+// the path and content type stay stable while the artwork inside is the new
+// official mark. The icon is theme-neutral (no white), safe on any background.
+const BRAND_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="CostFlow"><image width="192" height="192" href="data:image/png;base64,${ICON_192.toString('base64')}"/></svg>`;
 
 // Styled body for a CSRF mismatch (stale tab, expired session): explains what
 // happened instead of a bare "Invalid CSRF token." line.
@@ -522,7 +535,34 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Public brand logo — served so Auth0 Universal Login can render the same
   // CostFlow mark the app header uses (one identity across product + sign-in).
   app.get('/brand/logo.svg', async (_request, reply) =>
-    reply.type('image/svg+xml').header('cache-control', 'public, max-age=86400').send(LOGO_SVG),
+    reply
+      .type('image/svg+xml')
+      .header('cache-control', 'public, max-age=86400')
+      .send(BRAND_LOGO_SVG),
+  );
+
+  // The official logo set: standalone icon (favicon/manifest/compact nav) and
+  // the full horizontal logo, one variant per theme (the wordmark is white on
+  // dark, ink on light; the icon itself is theme-neutral).
+  const brandPng: ReadonlyArray<readonly [string, Buffer]> = [
+    ['/brand/icon-192.png', ICON_192],
+    ['/brand/icon-512.png', ICON_512],
+    ['/brand/logo-dark.png', LOGO_DARK],
+    ['/brand/logo-light.png', LOGO_LIGHT],
+  ];
+  for (const [path, body] of brandPng) {
+    app.get(path, async (_request, reply) =>
+      reply.type('image/png').header('cache-control', 'public, max-age=86400').send(body),
+    );
+  }
+  app.get('/favicon.ico', async (_request, reply) =>
+    reply.type('image/x-icon').header('cache-control', 'public, max-age=86400').send(FAVICON_ICO),
+  );
+  app.get('/site.webmanifest', async (_request, reply) =>
+    reply
+      .type('application/manifest+json')
+      .header('cache-control', 'public, max-age=86400')
+      .send(WEB_MANIFEST),
   );
 
   // Social preview card (absolute HTTPS URL in og:image) + iOS icon. Served

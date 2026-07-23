@@ -38,6 +38,7 @@ export function securityHeaders(production: boolean): Record<string, string> {
       "form-action 'self'",
       "frame-ancestors 'none'",
       "img-src 'self' data:",
+      "manifest-src 'self'",
       "style-src 'self' 'unsafe-inline'",
       "script-src 'none'",
       "connect-src 'self'",

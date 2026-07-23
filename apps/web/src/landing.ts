@@ -1,5 +1,4 @@
-import { HEADER_MARK } from './brand';
-import { layout } from './html';
+import { BRAND_LOCKUP, layout } from './html';
 
 /**
  * Public, unauthenticated pages for the free beta (v1): the marketing landing,
@@ -46,7 +45,7 @@ const productMockup = `
     </div>
     <div class="lp-body">
       <aside class="lp-side">
-        <div class="lp-side-brand">${HEADER_MARK}<span>CostFlow</span></div>
+        <div class="lp-side-brand"><img src="/brand/icon-192.png" alt="" width="20" height="20"><span>CostFlow</span></div>
         <div class="lp-side-nav">
           <span>Home</span>
           <span class="on"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/></svg>Reports</span>
@@ -253,7 +252,7 @@ function landingJsonLd(): string {
         '@id': 'https://app.fbx1.com/#org',
         name: 'CostFlow',
         url: 'https://app.fbx1.com/',
-        logo: 'https://app.fbx1.com/brand/logo.svg',
+        logo: 'https://app.fbx1.com/brand/icon-512.png',
         description:
           'Business Friction Intelligence — price the cost of workflow friction from Jira or ClickUp.',
       },
@@ -306,7 +305,7 @@ const ctaBand = `
 const footer = `
 <footer class="lp-footer"><div class="container">
   <div class="lp-foot-top">
-    <span class="lp-foot-brand">${HEADER_MARK}<span>CostFlow</span></span>
+    <span class="lp-foot-brand">${BRAND_LOCKUP}</span>
     <nav class="lp-foot-links">
       <a href="/demo">Sample report</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a>
       <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>
@@ -374,7 +373,7 @@ const LANDING_STYLE = `
 .lp-body{display:flex;min-height:340px;background:#0c0d16;background-image:radial-gradient(60% 60% at 78% 0%,rgba(139,92,246,.10),transparent 60%)}
 .lp-side{width:200px;flex:none;padding:1.1rem 1rem;border-right:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:1.1rem}
 .lp-side-brand{display:flex;align-items:center;gap:.5rem;font-weight:660;color:#eef;font-size:.98rem}
-.lp-side-brand svg{width:20px;height:20px}
+.lp-side-brand img{width:20px;height:20px;display:block}
 .lp-side-nav{display:flex;flex-direction:column;gap:.15rem;margin-top:.2rem}
 .lp-side-nav span{display:flex;align-items:center;gap:.55rem;font-size:.86rem;color:#8589a0;padding:.42rem .6rem;border-radius:8px;font-weight:500}
 .lp-side-nav .on{color:#d6ccff;background:rgba(139,92,246,.16);font-weight:600}
@@ -496,8 +495,8 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:#4c43d6;filter:bright
 /* Footer */
 .lp-footer{border-top:1px solid var(--line);padding:2.6rem 0;background:var(--bg-2)}
 .lp-foot-top{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
-.lp-foot-brand{display:inline-flex;align-items:center;gap:.5rem;font-weight:660;color:var(--ink)}
-.lp-foot-brand svg{width:20px;height:20px}
+.lp-foot-brand{display:inline-flex;align-items:center}
+.lp-foot-brand img{display:block;height:26px;width:auto}
 .lp-foot-links{display:flex;gap:1.3rem;flex-wrap:wrap}
 .lp-foot-links a{color:var(--muted);font-size:.92rem}
 .lp-foot-links a:hover{color:var(--ink)}

@@ -70,10 +70,31 @@ describe('v1 public pages', () => {
     expect(String(res.headers['cache-control'])).toContain('max-age');
   });
 
-  it('shows the brand mark in the header on public and app pages', async () => {
+  it('shows the theme-aware brand lockup in the header on public and app pages', async () => {
     const t = makeApp();
     const landing = await t.app.inject({ method: 'GET', url: '/' });
-    expect(landing.body).toContain('viewBox="0 0 120 120"'); // header mark
+    // Full logo per color scheme, icon on compact viewports (official assets).
+    expect(landing.body).toContain('src="/brand/logo-light.png"');
+    expect(landing.body).toContain('srcset="/brand/logo-dark.png"');
+    expect(landing.body).toContain('srcset="/brand/icon-192.png"');
+  });
+
+  it('serves the favicon set, brand PNGs, and web manifest', async () => {
+    const t = makeApp();
+    for (const [url, type] of [
+      ['/favicon.ico', 'image/x-icon'],
+      ['/brand/icon-192.png', 'image/png'],
+      ['/brand/icon-512.png', 'image/png'],
+      ['/brand/logo-dark.png', 'image/png'],
+      ['/brand/logo-light.png', 'image/png'],
+      ['/site.webmanifest', 'application/manifest+json'],
+    ] as const) {
+      const res = await t.app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toContain(type);
+      expect(String(res.headers['cache-control'])).toContain('max-age');
+      expect(res.rawPayload.length).toBeGreaterThan(200); // real asset, not a stub
+    }
   });
 
   it('serves Terms and Privacy publicly (no session)', async () => {

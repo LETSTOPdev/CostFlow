@@ -1,6 +1,14 @@
 /** Server-rendered HTML shell + premium design system (doc 09 P4.1 — no SPA build). */
 
-import { HEADER_MARK } from './brand';
+/**
+ * Theme-aware brand lockup for headers/footers: the full horizontal CostFlow
+ * logo (icon + wordmark) with the wordmark variant matched to the color scheme
+ * — white wordmark on dark, ink wordmark on light. On narrow viewports the
+ * first `<source>` wins and compact navigation gets the standalone icon, which
+ * is theme-neutral (no white pixels), so it needs no scheme variants. Source
+ * order matters: the browser fetches exactly one of the three images.
+ */
+export const BRAND_LOCKUP = `<picture><source srcset="/brand/icon-192.png" media="(max-width: 560px)"><source srcset="/brand/logo-dark.png" media="(prefers-color-scheme: dark)"><img src="/brand/logo-light.png" alt="CostFlow"></picture>`;
 
 export function esc(value: string): string {
   // Defense in depth: a mistyped non-string (e.g. a Date leaking from the DB
@@ -90,8 +98,10 @@ main.bleed{display:block}
   -webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px);
   border-bottom:1px solid var(--line)}
 .site-header .container{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:66px}
-.brand{display:inline-flex;align-items:center;gap:.6rem;font-weight:680;font-size:1.08rem;color:var(--ink);letter-spacing:-.02em}
-.brand:hover{color:var(--ink)}
+.brand{display:inline-flex;align-items:center}
+.brand picture{display:block}
+.brand img{display:block;height:32px;width:auto}
+@media (max-width:560px){.brand img{height:28px}}
 .nav{display:flex;align-items:center;gap:1.35rem;font-size:.93rem;font-weight:500}
 .nav a{color:var(--muted)} .nav a:hover{color:var(--ink)}
 .nav a.btn{color:#fff}
@@ -407,8 +417,10 @@ export function layout(
 <meta name="color-scheme" content="light dark">
 <title>${esc(title)} — CostFlow</title>
 <meta name="description" content="See what workflow friction is costing your team. Connect Jira or ClickUp and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
+<link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="/brand/logo.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0b11">
 <meta property="og:site_name" content="CostFlow">
@@ -431,7 +443,7 @@ ${seoHead}
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-header"><div class="container">
-  <a class="brand" href="/">${HEADER_MARK}<span>CostFlow</span></a>
+  <a class="brand" href="/">${BRAND_LOCKUP}</a>
   <nav class="nav">${nav}</nav>
 </div></header>
 ${main}
@@ -530,7 +542,7 @@ export function demoAnalyzingPage(seed: number): string {
   body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);display:flex;align-items:center;justify-content:center;padding:1.5rem;-webkit-font-smoothing:antialiased}
   .box{width:100%;max-width:30rem;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:2.4rem 2.2rem;box-shadow:var(--sh)}
   .top{display:flex;align-items:center;gap:.7rem;margin-bottom:.4rem}
-  .top svg{width:26px;height:26px;display:block}
+  .top img{width:26px;height:26px;display:block}
   .top b{font-size:1.15rem;letter-spacing:-.02em}
   h1{font-size:1.15rem;letter-spacing:-.02em;margin:.6rem 0 .2rem}
   p{color:var(--muted);margin:0 0 1.3rem;font-size:.92rem}
@@ -550,7 +562,7 @@ export function demoAnalyzingPage(seed: number): string {
 </head>
 <body>
   <div class="box">
-    <div class="top"><svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="dg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs><rect width="120" height="120" rx="28" fill="url(#dg)"/><g fill="#fff"><rect x="30" y="34" width="60" height="11" rx="5.5"/><rect x="40" y="55" width="40" height="11" rx="5.5"/><rect x="50" y="76" width="20" height="11" rx="5.5"/></g><circle cx="60" cy="99" r="4.5" fill="#34e5b0"/></svg><b>CostFlow</b></div>
+    <div class="top"><img src="/brand/icon-192.png" alt="" width="26" height="26"><b>CostFlow</b></div>
     <h1>Analysing a live company…</h1>
     <p>Generating a realistic workspace and running the real CostFlow engine on it.</p>
     <div class="bar"><i></i></div>
