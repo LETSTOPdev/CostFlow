@@ -631,6 +631,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     if (!session) return;
     const workspace = await requireStep(session, reply, 'assumptions-set');
     if (!workspace) return;
+    const connector = connectorOf(workspace);
     const runs = await store.listRuns(session.tenantId);
     const jobs = await store.listJobsForWorkspace(session.tenantId, workspace.id);
     const failed = jobs.filter((j) => j.status === 'failed').slice(-3);
@@ -642,10 +643,10 @@ Sitemap: https://app.fbx1.com/sitemap.xml
            <div>
              <p class="eyebrow" style="margin-bottom:.5rem">Workspace</p>
              <h1 style="margin:0 0 .35rem">${esc(workspace.scopeName ?? 'Your workspace')} ${workspace.scopeId ? `<span class="note" style="font-weight:500;font-size:1rem">(${esc(workspace.scopeId)})</span>` : ''}</h1>
-             <p class="note" style="margin:0">${esc(connectorOf(workspace).describeConnection(workspace.connectionParams))} · credentials encrypted at rest</p>
+             <p class="note" style="margin:0">${esc(connector.describeConnection(workspace.connectionParams))} · credentials encrypted at rest</p>
            </div>
            <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run analysis</button>
-             <p class="note" style="margin:.6rem 0 0;max-width:16rem;text-align:right">Reads your board read-only and saves a point-in-time report. Safe to run any time — it never changes anything in Jira.</p>
+             <p class="note" style="margin:.6rem 0 0;max-width:16rem;text-align:right">Reads your board read-only and saves a point-in-time report. Safe to run any time — it never changes anything in ${esc(connector.descriptor.name)}.</p>
            </form>
          </div>
          ${
@@ -664,7 +665,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
              ? `<div class="empty">
                   <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg></span>
                   <h3>No reports yet</h3>
-                  <p>Run your first analysis to price this project's friction.</p>
+                  <p>Run your first analysis to price this ${esc(connector.descriptor.scopeNoun.singular)}'s friction.</p>
                   <form method="post" action="/runs" style="display:inline">${csrfField(session)}<button type="submit">Run your first analysis</button></form>
                 </div>`
              : `<ul class="rows">${runs.map((r) => runRow(r)).join('')}</ul>`

@@ -159,6 +159,55 @@ describe('INVARIANT: security posture (headers + CSRF)', () => {
   });
 });
 
+describe('INVARIANT: provider-aware copy (never name a platform the customer is not on)', () => {
+  // ADR-0005 made the app multi-platform; every workspace-scoped screen must
+  // draw platform vocabulary from the connector descriptor, never a literal.
+  // A ClickUp customer reading "never changes anything in Jira" stops
+  // trusting every other sentence — this guards the whole class.
+  const dashboardFor = async (
+    t: ReturnType<typeof makeApp>,
+    email: string,
+    provider: string,
+    connectionParams: Record<string, string>,
+  ): Promise<string> => {
+    const cookie = await signIn(t, email);
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const ws = await t.store.createWorkspace(tenantId, {
+      provider,
+      connectionParams,
+      tokenCiphertext: 'tok',
+    });
+    await t.store.updateWorkspace(tenantId, ws.id, {
+      scopeId: 'scope-1',
+      scopeName: 'Engineering',
+      onboarding: 'ready',
+    });
+    const res = await t.app.inject({ method: 'GET', url: '/dashboard', headers: { cookie } });
+    expect(res.statusCode).toBe(200);
+    // The <head> is site-wide metadata (og/meta description name every
+    // platform we support — correct there). The invariant governs what the
+    // customer READS, so assert on the body only.
+    const body = res.body.split('</head>')[1];
+    expect(body).toBeTruthy();
+    return body!;
+  };
+
+  it("a ClickUp workspace's dashboard names ClickUp and never Jira", async () => {
+    const body = await dashboardFor(makeApp(), 'cu-owner@x.example', 'clickup', {});
+    expect(body).toContain('ClickUp');
+    expect(body).not.toContain('Jira');
+  });
+
+  it("a Jira workspace's dashboard names Jira and never ClickUp", async () => {
+    const body = await dashboardFor(makeApp(), 'jira-owner@x.example', 'jira', {
+      site: 'https://acme.atlassian.net',
+      email: 'owner@acme.example',
+    });
+    expect(body).toContain('Jira');
+    expect(body).not.toContain('ClickUp');
+  });
+});
+
 describe('INVARIANT: canonical host (apex → app, no loop)', () => {
   it('redirects fbx1.com to app.fbx1.com but never loops on the canonical host', async () => {
     const t = makeApp();
