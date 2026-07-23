@@ -1,0 +1,437 @@
+{
+  "runId": "golden-demo-clickup",
+  "engineVersions": {
+    "analysis": "0.4.0",
+    "signals": {
+      "f2-aging": "1.0.0",
+      "f1-queue-wait": "1.0.0",
+      "f3-overdue": "1.0.0"
+    },
+    "contextSignals": {
+      "c6-wip-load": "1.0.0"
+    },
+    "costModels": {
+      "cm-aging-attention": "1.0.0",
+      "cm-overdue-attention": "1.0.0",
+      "cm-queue-wait-attention": "1.0.0"
+    }
+  },
+  "now": "2026-07-20T00:00:00Z",
+  "pricingPolicy": "report",
+  "batch": {
+    "id": "batch-golden-demo-clickup",
+    "provider": "clickup",
+    "mappingTemplateId": "clickup-legalops-space",
+    "mappingTemplateVersion": "1",
+    "importedAt": "2026-07-20T00:00:00Z",
+    "counts": {
+      "totalRows": 4,
+      "imported": 4,
+      "dropped": 0
+    },
+    "diagnostics": [
+      {
+        "row": 2,
+        "severity": "warning",
+        "message": "Task \"cu-2\" has 2 assignees — attributed to the deterministic primary (lowest user id); 1 not attributed."
+      }
+    ],
+    "capability": {
+      "hasEventHistory": false,
+      "hasDueDates": true,
+      "hasLastUpdated": true,
+      "hasActors": true
+    },
+    "pseudonymizationScope": "costflow-golden",
+    "items": [
+      {
+        "id": "cu-1",
+        "sourceId": "cu-1",
+        "title": "Renew MSA with vendor",
+        "stage": {
+          "name": "to do",
+          "kind": "queue"
+        },
+        "actor": {
+          "kind": "role",
+          "roleRef": "Legal"
+        },
+        "createdAt": "2026-06-20T00:00:00.000Z",
+        "dueAt": "2026-07-10T00:00:00.000Z",
+        "lastUpdatedAt": "2026-06-28T00:00:00.000Z"
+      },
+      {
+        "id": "cu-2",
+        "sourceId": "cu-2",
+        "title": "Quarterly access audit",
+        "stage": {
+          "name": "in progress",
+          "kind": "active"
+        },
+        "actor": {
+          "kind": "role",
+          "roleRef": "Legal"
+        },
+        "createdAt": "2026-05-15T00:00:00.000Z",
+        "dueAt": "2026-07-25T00:00:00.000Z",
+        "lastUpdatedAt": "2026-07-18T00:00:00.000Z"
+      },
+      {
+        "id": "cu-3",
+        "sourceId": "cu-3",
+        "title": "Archive stale intake forms",
+        "stage": {
+          "name": "to do",
+          "kind": "queue"
+        },
+        "actor": {
+          "kind": "missing"
+        },
+        "createdAt": "2026-05-01T00:00:00.000Z",
+        "dueAt": null,
+        "lastUpdatedAt": "2026-05-10T00:00:00.000Z"
+      },
+      {
+        "id": "cu-4",
+        "sourceId": "cu-4",
+        "title": "Publish new onboarding guide",
+        "stage": {
+          "name": "complete",
+          "kind": "done"
+        },
+        "actor": {
+          "kind": "unknown",
+          "pseudonym": "anon-19ca464d9bcc"
+        },
+        "createdAt": "2026-06-01T00:00:00.000Z",
+        "dueAt": "2026-06-25T00:00:00.000Z",
+        "lastUpdatedAt": "2026-07-01T00:00:00.000Z"
+      }
+    ],
+    "events": []
+  },
+  "assumptions": {
+    "id": "demo-clickup-assumptions",
+    "version": "1",
+    "currency": "USD",
+    "rates": [
+      {
+        "roleRef": "Legal",
+        "hourlyRate": "120",
+        "provenance": "customer-customized"
+      },
+      {
+        "roleRef": "Ops",
+        "hourlyRate": "90",
+        "provenance": "customer-customized"
+      }
+    ],
+    "defaultRate": {
+      "hourlyRate": "30",
+      "provenance": "customer-customized"
+    },
+    "parameters": {
+      "agingThresholdDays": {
+        "value": 14,
+        "provenance": "customer-customized"
+      },
+      "attentionHoursPerDay": {
+        "range": {
+          "low": "0.15",
+          "expected": "0.3",
+          "high": "0.6"
+        },
+        "provenance": "customer-customized"
+      },
+      "queueWaitAttentionHoursPerDay": {
+        "range": {
+          "low": "0.1",
+          "expected": "0.2",
+          "high": "0.4"
+        },
+        "provenance": "customer-customized"
+      },
+      "overdueAttentionHoursPerDay": {
+        "range": {
+          "low": "0.1",
+          "expected": "0.2",
+          "high": "0.4"
+        },
+        "provenance": "customer-accepted"
+      }
+    }
+  },
+  "detectors": [
+    {
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "signalName": "Aging / stagnation",
+      "status": "ran",
+      "instanceCount": 1
+    },
+    {
+      "signalId": "f1-queue-wait",
+      "signalVersion": "1.0.0",
+      "signalName": "Queue wait",
+      "status": "skipped",
+      "reason": "Requires hasEventHistory — not present in this import.",
+      "instanceCount": 0
+    },
+    {
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "signalName": "Overdue exposure",
+      "status": "ran",
+      "instanceCount": 1
+    }
+  ],
+  "frictions": [
+    {
+      "id": "f2-aging:to-do",
+      "signalId": "f2-aging",
+      "signalVersion": "1.0.0",
+      "frictionType": "aging",
+      "location": {
+        "stage": {
+          "name": "to do",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-beyond-threshold",
+        "value": 65
+      },
+      "evidence": [
+        {
+          "workItemId": "cu-3",
+          "title": "Archive stale intake forms",
+          "actor": {
+            "kind": "missing"
+          },
+          "lastUpdatedAt": "2026-05-10T00:00:00.000Z",
+          "agingDays": 71,
+          "excessDays": 57
+        },
+        {
+          "workItemId": "cu-1",
+          "title": "Renew MSA with vendor",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "lastUpdatedAt": "2026-06-28T00:00:00.000Z",
+          "agingDays": 22,
+          "excessDays": 8
+        }
+      ]
+    },
+    {
+      "id": "f3-overdue:to-do",
+      "signalId": "f3-overdue",
+      "signalVersion": "1.0.0",
+      "frictionType": "overdue",
+      "location": {
+        "stage": {
+          "name": "to do",
+          "kind": "queue"
+        }
+      },
+      "magnitude": {
+        "unit": "item-days-overdue",
+        "value": 10
+      },
+      "evidence": [
+        {
+          "workItemId": "cu-1",
+          "title": "Renew MSA with vendor",
+          "actor": {
+            "kind": "role",
+            "roleRef": "Legal"
+          },
+          "dueAt": "2026-07-10T00:00:00.000Z",
+          "overdueDays": 10,
+          "dueBeforeCreated": false,
+          "sharedDueDateCohortSize": 0
+        }
+      ]
+    }
+  ],
+  "pricing": [
+    {
+      "frictionInstanceId": "f2-aging:to-do",
+      "status": "priced",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0"
+    },
+    {
+      "frictionInstanceId": "f3-overdue:to-do",
+      "status": "priced",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0"
+    }
+  ],
+  "estimates": [
+    {
+      "frictionInstanceId": "f2-aging:to-do",
+      "costModelId": "cm-aging-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "400.5",
+        "expected": "801",
+        "high": "1602"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "C",
+        "reasons": [
+          "C: Default hourly rate applied to item(s) with no actor.",
+          "B: Durations inferred from snapshot dates, not event history."
+        ]
+      },
+      "assumptionSetId": "demo-clickup-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated attention cost of 2 item(s) aging beyond 14 days in stage \"to do\".",
+        "formula": "Σ over items: excessDays × attentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "aging-attention",
+            "workItemId": "cu-3",
+            "excessDays": 57,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "30",
+            "rateSource": "defaultRate:missing-actor",
+            "subtotal": {
+              "low": "256.5",
+              "expected": "513",
+              "high": "1026"
+            }
+          },
+          {
+            "kind": "aging-attention",
+            "workItemId": "cu-1",
+            "excessDays": 8,
+            "attentionHoursPerDay": {
+              "low": "0.15",
+              "expected": "0.3",
+              "high": "0.6"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "144",
+              "expected": "288",
+              "high": "576"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "defaultRate:missing-actor",
+            "value": "30 USD/h",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "parameters.agingThresholdDays",
+            "value": "14 days",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "parameters.attentionHoursPerDay",
+            "value": "0.15–0.6 h/day (expected 0.3)",
+            "provenance": "customer-customized"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "cu-3",
+            "cu-1"
+          ]
+        }
+      }
+    },
+    {
+      "frictionInstanceId": "f3-overdue:to-do",
+      "costModelId": "cm-overdue-attention",
+      "costModelVersion": "1.0.0",
+      "cost": {
+        "low": "120",
+        "expected": "240",
+        "high": "480"
+      },
+      "currency": "USD",
+      "confidence": {
+        "tier": "A",
+        "reasons": []
+      },
+      "assumptionSetId": "demo-clickup-assumptions",
+      "assumptionSetVersion": "1",
+      "trace": {
+        "claim": "Estimated chasing cost of 1 item(s) past their own due dates in stage \"to do\".",
+        "formula": "Σ over items: overdueDays × overdueAttentionHoursPerDay × hourlyRate(role); low/high follow the attention-hours range",
+        "terms": [
+          {
+            "kind": "overdue-attention",
+            "workItemId": "cu-1",
+            "overdueDays": 10,
+            "dueAt": "2026-07-10T00:00:00.000Z",
+            "attentionHoursPerDay": {
+              "low": "0.1",
+              "expected": "0.2",
+              "high": "0.4"
+            },
+            "hourlyRate": "120",
+            "rateSource": "rates.Legal",
+            "subtotal": {
+              "low": "120",
+              "expected": "240",
+              "high": "480"
+            }
+          }
+        ],
+        "assumptionsUsed": [
+          {
+            "ref": "parameters.overdueAttentionHoursPerDay",
+            "value": "0.1–0.4 h/day (expected 0.2)",
+            "provenance": "customer-accepted"
+          },
+          {
+            "ref": "rates.Legal",
+            "value": "120 USD/h",
+            "provenance": "customer-customized"
+          }
+        ],
+        "inputs": {
+          "workItemIds": [
+            "cu-1"
+          ]
+        }
+      }
+    }
+  ],
+  "context": [
+    {
+      "signalId": "c6-wip-load",
+      "signalVersion": "1.0.0",
+      "signalName": "Work-in-flight load",
+      "statement": "2 of 3 in-flight items (67%) sit in queue- or review-kind stages; the largest single pool is stage \"to do\" (2 items).",
+      "facts": {
+        "inFlight": 3,
+        "queueKind": 2,
+        "reviewKind": 0,
+        "activeKind": 1,
+        "blockedKind": 0,
+        "waitingSharePercent": 67
+      }
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "tasks": [
+    {
+      "id": "cu-3",
+      "custom_id": null,
+      "name": "Archive stale intake forms",
+      "status": { "status": "to do", "color": "#d3d3d3", "type": "open", "orderindex": 0 },
+      "orderindex": "1.00000000000000000000",
+      "date_created": "1777593600000",
+      "date_updated": "1778371200000",
+      "date_closed": null,
+      "creator": { "id": 102, "username": "Dan Ops", "email": "dan@example.test" },
+      "assignees": [],
+      "checklists": [],
+      "tags": [],
+      "parent": null,
+      "priority": null,
+      "due_date": null,
+      "start_date": null,
+      "time_estimate": null,
+      "custom_fields": [],
+      "list": { "id": "902", "name": "Backlog" },
+      "folder": { "id": null, "name": "hidden" },
+      "space": { "id": "90120" },
+      "url": "https://app.clickup.com/t/cu-3"
+    },
+    {
+      "id": "cu-4",
+      "custom_id": null,
+      "name": "Publish new onboarding guide",
+      "status": { "status": "complete", "color": "#6bc950", "type": "closed", "orderindex": 3 },
+      "orderindex": "2.00000000000000000000",
+      "date_created": "1780272000000",
+      "date_updated": "1782864000000",
+      "date_closed": "1782864000000",
+      "creator": { "id": 300, "username": "Rina Writer", "email": "rina@example.test" },
+      "assignees": [{ "id": 300, "username": "Rina Writer", "email": "rina@example.test" }],
+      "checklists": [],
+      "tags": [],
+      "parent": null,
+      "priority": { "id": "3", "priority": "normal", "color": "#6fddff" },
+      "due_date": "1782345600000",
+      "start_date": null,
+      "time_estimate": null,
+      "custom_fields": [],
+      "list": { "id": "902", "name": "Backlog" },
+      "folder": { "id": null, "name": "hidden" },
+      "space": { "id": "90120" },
+      "url": "https://app.clickup.com/t/cu-4"
+    }
+  ],
+  "last_page": true
+}

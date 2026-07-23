@@ -120,7 +120,9 @@ export function transformClickUp(input: ClickUpTransformInput): ImportBatch {
   ): IsoDateString | null => {
     if (value === null || value === undefined || value === '') return null;
     const ms = typeof value === 'number' ? value : /^\d+$/.test(value) ? Number(value) : Number.NaN;
-    if (!Number.isFinite(ms)) {
+    // Beyond ±8.64e15 ms, Date.toISOString throws (Invalid Date) — a corrupt
+    // raw value must degrade to a diagnostic, never crash the transform.
+    if (!Number.isFinite(ms) || Math.abs(ms) > 8.64e15) {
       diagnostics.push({
         row: taskRow,
         severity: 'warning',

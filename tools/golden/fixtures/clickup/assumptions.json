@@ -1,0 +1,51 @@
+{
+  "id": "demo-clickup-assumptions",
+  "version": "1",
+  "currency": "USD",
+  "rates": [
+    {
+      "roleRef": "Legal",
+      "hourlyRate": "120",
+      "provenance": "customer-customized"
+    },
+    {
+      "roleRef": "Ops",
+      "hourlyRate": "90",
+      "provenance": "customer-customized"
+    }
+  ],
+  "defaultRate": {
+    "hourlyRate": "30",
+    "provenance": "customer-customized"
+  },
+  "parameters": {
+    "agingThresholdDays": {
+      "value": 14,
+      "provenance": "customer-customized"
+    },
+    "attentionHoursPerDay": {
+      "range": {
+        "low": "0.15",
+        "expected": "0.3",
+        "high": "0.6"
+      },
+      "provenance": "customer-customized"
+    },
+    "queueWaitAttentionHoursPerDay": {
+      "range": {
+        "low": "0.1",
+        "expected": "0.2",
+        "high": "0.4"
+      },
+      "provenance": "customer-customized"
+    },
+    "overdueAttentionHoursPerDay": {
+      "range": {
+        "low": "0.1",
+        "expected": "0.2",
+        "high": "0.4"
+      },
+      "provenance": "customer-accepted"
+    }
+  }
+}

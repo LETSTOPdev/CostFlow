@@ -1,0 +1,14 @@
+{
+  "id": "clickup-legalops-space",
+  "version": "1",
+  "statusMap": {
+    "to do": "queue",
+    "in progress": "active",
+    "review": "review",
+    "complete": "done"
+  },
+  "actorRoleMap": {
+    "Noa Legal": "Legal",
+    "Dan Ops": "Ops"
+  }
+}

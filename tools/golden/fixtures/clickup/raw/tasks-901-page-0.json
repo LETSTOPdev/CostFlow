@@ -1,0 +1,58 @@
+{
+  "tasks": [
+    {
+      "id": "cu-1",
+      "custom_id": null,
+      "name": "Renew MSA with vendor",
+      "status": { "status": "to do", "color": "#d3d3d3", "type": "open", "orderindex": 0 },
+      "orderindex": "1.00000000000000000000",
+      "date_created": "1781913600000",
+      "date_updated": "1782604800000",
+      "date_closed": null,
+      "creator": { "id": 101, "username": "Noa Legal", "email": "noa@example.test" },
+      "assignees": [{ "id": 101, "username": "Noa Legal", "email": "noa@example.test" }],
+      "checklists": [],
+      "tags": [],
+      "parent": null,
+      "priority": { "id": "2", "priority": "high", "color": "#ffcc00" },
+      "due_date": "1783641600000",
+      "start_date": null,
+      "time_estimate": 14400000,
+      "custom_fields": [
+        { "id": "cf-1", "name": "Contract value", "type": "currency", "value": "80000" }
+      ],
+      "list": { "id": "901", "name": "Sprint" },
+      "folder": { "id": "457", "name": "Legal Ops" },
+      "space": { "id": "90120" },
+      "url": "https://app.clickup.com/t/cu-1"
+    },
+    {
+      "id": "cu-2",
+      "custom_id": null,
+      "name": "Quarterly access audit",
+      "status": { "status": "in progress", "color": "#4194f6", "type": "custom", "orderindex": 1 },
+      "orderindex": "2.00000000000000000000",
+      "date_created": "1778803200000",
+      "date_updated": "1784332800000",
+      "date_closed": null,
+      "creator": { "id": 102, "username": "Dan Ops", "email": "dan@example.test" },
+      "assignees": [
+        { "id": 102, "username": "Dan Ops", "email": "dan@example.test" },
+        { "id": 101, "username": "Noa Legal", "email": "noa@example.test" }
+      ],
+      "checklists": [],
+      "tags": ["security"],
+      "parent": null,
+      "priority": { "id": "1", "priority": "urgent", "color": "#f50000" },
+      "due_date": "1784937600000",
+      "start_date": "1778803200000",
+      "time_estimate": 28800000,
+      "custom_fields": [],
+      "list": { "id": "901", "name": "Sprint" },
+      "folder": { "id": "457", "name": "Legal Ops" },
+      "space": { "id": "90120" },
+      "url": "https://app.clickup.com/t/cu-2"
+    }
+  ],
+  "last_page": true
+}

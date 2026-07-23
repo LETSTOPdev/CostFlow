@@ -216,6 +216,29 @@ mapping schema, web connector with 429-aware fetch (ClickUp rate limit:
 100 req/min — bounded retry honoring `Retry-After`), golden `demo-clickup`
 with a hand-computed expected table, and stress tests.
 
+### The demo-clickup golden — hand-computed BEFORE generation (project law)
+
+Fixture: 2 lists (901 Sprint, 902 Backlog), 4 tasks, `--now 2026-07-20T00:00:00Z`,
+demo-jira's assumption set (Legal 120, Ops 90, default 30, aging ≥14d,
+attention 0.15/0.3/0.6, overdue attention 0.1/0.2/0.4 customer-accepted).
+CU-1 "to do" Legal, updated Jun 28, due Jul 10 · CU-2 "in progress"
+2 assignees (primary = lowest id → Legal), fresh · CU-3 "to do" no assignee,
+updated May 10 · CU-4 "complete" unmapped assignee, due Jun 25 (terminal).
+
+- Counts: 4/4/0. Events 0; capability event-history **no**. Due-date
+  coverage 2 of 3 in-flight. One CU3 diagnostic (CU-2). Queue-wait **skipped**.
+- **Aging, stage "to do"**: CU-1 → 22 untouched − 14 = 8 d; CU-3 → 71 − 14 =
+  57 d; magnitude **65 item-days-beyond-threshold**. Cost: CU-1 8×{0.15,0.3,0.6}×120
+  = 144/288/576; CU-3 57×{…}×30 = 256.5/513/1026. Stage total
+  **400.5 / 801 / 1602** → displayed 400 – 1,602 (expected ~801). Tier **C**
+  (default rate on the actor-less CU-3, min-composition).
+- **Overdue, stage "to do"**: CU-1 only (CU-4 terminal) → **10
+  item-days-overdue**; 10×{0.1,0.2,0.4}×120 = **120/240/480**, tier **A**
+  (customer-owned due date + accepted attention; no clustering, no
+  due-before-created).
+- Rank: aging 801 → #1, overdue 240 → #2. Context: 3 in-flight, 2 (67%) in
+  queue/review, largest pool "to do" (2 items).
+
 ---
 
 ## 6. How to add the next connector (the permanent recipe)

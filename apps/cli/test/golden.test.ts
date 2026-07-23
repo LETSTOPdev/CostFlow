@@ -4,13 +4,20 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { importCsv, transformAsana, transformJira, transformMonday } from '@costflow/ingestion';
+import {
+  importCsv,
+  transformAsana,
+  transformClickUp,
+  transformJira,
+  transformMonday,
+} from '@costflow/ingestion';
 import { runAnalysis } from '@costflow/analysis';
 import { buildReportModel, renderMarkdown } from '@costflow/reporting';
 import { buildPseudonymizationContext } from '../src/pseudonym';
 import {
   assumptionSetSchema,
   asanaMappingSchema,
+  clickupMappingSchema,
   jiraMappingSchema,
   mappingTemplateSchema,
   mondayMappingSchema,
@@ -365,6 +372,68 @@ describe('golden dataset: demo-asana (P2: the SPI promise test, second half)', (
     );
     expect(model.unpriced).toHaveLength(0);
     expect(model.run.batch.provider).toBe('asana');
+  });
+});
+
+describe('golden dataset: demo-clickup (doc 18: the first registry-era connector)', () => {
+  function clickupGoldenRun() {
+    const dir = join(FIXTURES, 'clickup');
+    return runAnalysis({
+      runId: 'golden-demo-clickup',
+      now: NOW,
+      batch: transformClickUp({
+        batchId: 'batch-golden-demo-clickup',
+        taskPagesByList: {
+          '901': [readFileSync(join(dir, 'raw', 'tasks-901-page-0.json'), 'utf8')],
+          '902': [readFileSync(join(dir, 'raw', 'tasks-902-page-0.json'), 'utf8')],
+        },
+        mapping: clickupMappingSchema.parse(
+          JSON.parse(readFileSync(join(dir, 'mapping.json'), 'utf8')),
+        ),
+        importedAt: NOW,
+        pseudonymization: pseudonymization(),
+      }),
+      assumptions: assumptionSetSchema.parse(
+        JSON.parse(readFileSync(join(dir, 'assumptions.json'), 'utf8')),
+      ),
+    });
+  }
+
+  it('reproduces the frozen artifacts byte-exactly and deterministically', () => {
+    const artifact = JSON.stringify(clickupGoldenRun(), null, 2) + '\n';
+    expect(artifact).toBe(readFileSync(join(EXPECTED, 'demo-clickup', 'run.json'), 'utf8'));
+    const report = renderMarkdown(buildReportModel(clickupGoldenRun()));
+    expect(report).toBe(readFileSync(join(EXPECTED, 'demo-clickup', 'report.md'), 'utf8'));
+    expect(JSON.stringify(clickupGoldenRun())).toBe(JSON.stringify(clickupGoldenRun()));
+  });
+
+  it('matches the doc 18 hand-computed table (CU1/CU3/CU4/CU7 on real-shape data)', () => {
+    const model = buildReportModel(clickupGoldenRun());
+    expect(
+      model.ranked.map((r) => [
+        r.instance.frictionType,
+        r.instance.location.stage.name,
+        r.estimate.cost.expected,
+        r.estimate.confidence.tier,
+      ]),
+    ).toEqual([
+      ['aging', 'to do', '801', 'C'],
+      ['overdue', 'to do', '240', 'A'],
+    ]);
+    // CU4: no events, structurally — queue-wait skips VISIBLY, never invents.
+    expect(model.run.batch.events).toHaveLength(0);
+    const queueWait = model.run.detectors.find((d) => d.signalId === 'f1-queue-wait');
+    expect(queueWait?.status).toBe('skipped');
+    // CU3: the multi-assignee task priced to its deterministic primary
+    // (lowest user id → the mapped Legal role), diagnosed not silent.
+    expect(model.run.batch.diagnostics.map((d) => d.message).join(' ')).toContain(
+      '2 assignees — attributed to the deterministic primary',
+    );
+    // CU7: the completed task is terminal — its overdue due date never prices.
+    const overdue = model.ranked[1];
+    expect(overdue?.instance.evidence.map((e) => e.workItemId)).toEqual(['cu-1']);
+    expect(model.unpriced).toHaveLength(0);
+    expect(model.run.batch.provider).toBe('clickup');
   });
 });
 
