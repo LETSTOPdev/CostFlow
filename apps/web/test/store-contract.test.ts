@@ -26,8 +26,7 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const b = (await store.createTenantWithUser('b@y.example', 'sb')).tenant;
       const workspace = await store.createWorkspace(a.id, {
         provider: 'jira',
-        site: 'https://a.example',
-        email: 'a@y.example',
+        connection: { site: 'https://a.example', email: 'a@y.example' },
         tokenCiphertext: 'tok',
       });
       expect(await store.getWorkspace(b.id, workspace.id)).toBeNull();
@@ -57,19 +56,18 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const { tenant } = await store.createTenantWithUser('c@y.example', 's');
       const workspace = await store.createWorkspace(tenant.id, {
         provider: 'jira',
-        site: 'https://c.example',
-        email: 'c@y.example',
+        connection: { site: 'https://c.example', email: 'c@y.example' },
         tokenCiphertext: 'tok',
       });
       const updated = await store.updateWorkspace(tenant.id, workspace.id, {
-        projectKey: 'OPS',
-        projectName: 'Operations',
+        scopeKey: 'OPS',
+        scopeName: 'Operations',
         observedStatuses: ['A', 'B'],
         statusMap: { A: 'queue', B: 'done' },
         onboarding: 'statuses-mapped',
       });
       expect(updated).toMatchObject({
-        projectKey: 'OPS',
+        scopeKey: 'OPS',
         observedStatuses: ['A', 'B'],
         statusMap: { A: 'queue', B: 'done' },
         onboarding: 'statuses-mapped',
@@ -81,8 +79,7 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const { tenant } = await store.createTenantWithUser('d@y.example', 's');
       const workspace = await store.createWorkspace(tenant.id, {
         provider: 'jira',
-        site: 'https://d.example',
-        email: 'd@y.example',
+        connection: { site: 'https://d.example', email: 'd@y.example' },
         tokenCiphertext: 'tok',
       });
       const running = await store.createJob(tenant.id, workspace.id);
@@ -103,8 +100,7 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const { tenant } = await store.createTenantWithUser('e@y.example', 's');
       const workspace = await store.createWorkspace(tenant.id, {
         provider: 'jira',
-        site: 'https://e.example',
-        email: 'e@y.example',
+        connection: { site: 'https://e.example', email: 'e@y.example' },
         tokenCiphertext: 'tok',
       });
       await store.createRun({
@@ -131,8 +127,7 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const { tenant } = await store.createTenantWithUser(email, 's');
       const workspace = await store.createWorkspace(tenant.id, {
         provider: 'jira',
-        site: `https://${runId}.example`,
-        email,
+        connection: { site: `https://${runId}.example`, email },
         tokenCiphertext: 'tok',
       });
       const job = await store.createJob(tenant.id, workspace.id);
@@ -180,14 +175,12 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const { tenant } = await store.createTenantWithUser('multi@y.example', 's');
       const keep = await store.createWorkspace(tenant.id, {
         provider: 'jira',
-        site: 'https://keep.example',
-        email: 'multi@y.example',
+        connection: { site: 'https://keep.example', email: 'multi@y.example' },
         tokenCiphertext: 'tok',
       });
       const drop = await store.createWorkspace(tenant.id, {
         provider: 'jira',
-        site: 'https://drop.example',
-        email: 'multi@y.example',
+        connection: { site: 'https://drop.example', email: 'multi@y.example' },
         tokenCiphertext: 'tok',
       });
       await store.deleteWorkspace(tenant.id, drop.id);
@@ -248,8 +241,7 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const { tenant } = await store.createTenantWithUser('owner@org.example', 's');
       const workspace = await store.createWorkspace(tenant.id, {
         provider: 'jira',
-        site: 'https://o.example',
-        email: 'owner@org.example',
+        connection: { site: 'https://o.example', email: 'owner@org.example' },
         tokenCiphertext: 'tok',
       });
       const member = await store.createUserInTenant(tenant.id, 'member@org.example', 'member');
@@ -303,8 +295,7 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const { tenant, user } = await store.createTenantWithUser('del2@org.example', 's');
       const workspace = await store.createWorkspace(tenant.id, {
         provider: 'jira',
-        site: 'https://d2.example',
-        email: 'del2@org.example',
+        connection: { site: 'https://d2.example', email: 'del2@org.example' },
         tokenCiphertext: 'tok',
       });
       const member = await store.createUserInTenant(tenant.id, 'm2@org.example', 'member');
@@ -334,8 +325,7 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const one = (await store.createTenantWithUser('f1@z.example', 's')).tenant;
       const ws1 = await store.createWorkspace(one.id, {
         provider: 'jira',
-        site: 'https://f1.example',
-        email: 'f1@z.example',
+        connection: { site: 'https://f1.example', email: 'f1@z.example' },
         tokenCiphertext: 'tok',
       });
       await store.createRun({
@@ -352,8 +342,7 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       const two = (await store.createTenantWithUser('f2@z.example', 's')).tenant;
       await store.createWorkspace(two.id, {
         provider: 'jira',
-        site: 'https://f2.example',
-        email: 'f2@z.example',
+        connection: { site: 'https://f2.example', email: 'f2@z.example' },
         tokenCiphertext: 'tok',
       });
       // Org 3: signs up only.

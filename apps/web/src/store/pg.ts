@@ -306,15 +306,24 @@ export class PgStore implements Store {
   }
 
   private workspaceFromRow(row: Record<string, unknown>): WorkspaceRecord {
+    // D-21 backfill: rows created before connection_json existed are Jira rows
+    // whose display fields live in the legacy site/email columns.
+    const site = (row['site'] as string | null) ?? null;
+    const email = (row['email'] as string | null) ?? null;
+    const connection =
+      (row['connection_json'] as Record<string, string> | null) ??
+      ({
+        ...(site !== null && site !== '' ? { site } : {}),
+        ...(email !== null && email !== '' ? { email } : {}),
+      } as Record<string, string>);
     return {
       id: row['id'] as string,
       tenantId: row['tenant_id'] as string,
-      provider: row['provider'] as 'jira',
-      site: row['site'] as string,
-      email: row['email'] as string,
+      provider: row['provider'] as string,
+      connection,
       tokenCiphertext: row['token_ciphertext'] as string,
-      projectKey: (row['project_key'] as string | null) ?? null,
-      projectName: (row['project_name'] as string | null) ?? null,
+      scopeKey: (row['project_key'] as string | null) ?? null,
+      scopeName: (row['project_name'] as string | null) ?? null,
       observedStatuses: (row['observed_statuses'] as string[] | null) ?? [],
       observedActors: (row['observed_actors'] as string[] | null) ?? [],
       statusMap: (row['status_map'] as WorkspaceRecord['statusMap']) ?? null,
@@ -327,14 +336,25 @@ export class PgStore implements Store {
 
   async createWorkspace(
     tenantId: string,
-    data: Pick<WorkspaceRecord, 'provider' | 'site' | 'email' | 'tokenCiphertext'>,
+    data: Pick<WorkspaceRecord, 'provider' | 'connection' | 'tokenCiphertext'>,
   ): Promise<WorkspaceRecord> {
     const id = newId();
     const createdAt = this.now();
+    // site/email are mirrored from the connection when present (rollback
+    // safety for jira rows, doc 18 D-21); token-only providers store null.
     await this.pool.query(
-      `insert into workspaces (id, tenant_id, provider, site, email, token_ciphertext, created_at)
-       values ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, tenantId, data.provider, data.site, data.email, data.tokenCiphertext, createdAt],
+      `insert into workspaces (id, tenant_id, provider, connection_json, site, email, token_ciphertext, created_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        id,
+        tenantId,
+        data.provider,
+        JSON.stringify(data.connection),
+        data.connection['site'] ?? null,
+        data.connection['email'] ?? null,
+        data.tokenCiphertext,
+        createdAt,
+      ],
     );
     return (await this.getWorkspace(tenantId, id)) as WorkspaceRecord;
   }
@@ -362,8 +382,14 @@ export class PgStore implements Store {
     patch: WorkspacePatch,
   ): Promise<WorkspaceRecord | null> {
     const columns: Record<string, unknown> = {};
-    if (patch.projectKey !== undefined) columns['project_key'] = patch.projectKey;
-    if (patch.projectName !== undefined) columns['project_name'] = patch.projectName;
+    if (patch.provider !== undefined) columns['provider'] = patch.provider;
+    if (patch.connection !== undefined) {
+      columns['connection_json'] = JSON.stringify(patch.connection);
+      columns['site'] = patch.connection['site'] ?? null;
+      columns['email'] = patch.connection['email'] ?? null;
+    }
+    if (patch.scopeKey !== undefined) columns['project_key'] = patch.scopeKey;
+    if (patch.scopeName !== undefined) columns['project_name'] = patch.scopeName;
     if (patch.observedStatuses !== undefined)
       columns['observed_statuses'] = JSON.stringify(patch.observedStatuses);
     if (patch.observedActors !== undefined)

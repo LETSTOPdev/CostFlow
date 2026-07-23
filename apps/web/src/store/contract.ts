@@ -73,12 +73,18 @@ export function onboardingRank(state: OnboardingState): number {
 export interface WorkspaceRecord {
   readonly id: string;
   readonly tenantId: string;
-  readonly provider: 'jira';
-  readonly site: string;
-  readonly email: string;
+  /** Connector id from the web registry ('jira', 'clickup', …) — doc 18 §4. */
+  readonly provider: string;
+  /**
+   * Connector-authored NON-secret connection fields (Jira: {site, email};
+   * ClickUp: {}). The one secret credential lives ONLY in tokenCiphertext
+   * (AES-256-GCM). Doc 18 D-21.
+   */
+  readonly connection: Readonly<Record<string, string>>;
   readonly tokenCiphertext: string;
-  readonly projectKey: string | null;
-  readonly projectName: string | null;
+  /** Selected import scope (Jira: project key; ClickUp: Space id). */
+  readonly scopeKey: string | null;
+  readonly scopeName: string | null;
   readonly observedStatuses: readonly string[];
   readonly observedActors: readonly string[];
   readonly statusMap: Readonly<Record<string, StageKind>> | null;
@@ -91,8 +97,10 @@ export interface WorkspaceRecord {
 export type WorkspacePatch = Partial<
   Pick<
     WorkspaceRecord,
-    | 'projectKey'
-    | 'projectName'
+    | 'provider'
+    | 'connection'
+    | 'scopeKey'
+    | 'scopeName'
     | 'observedStatuses'
     | 'observedActors'
     | 'statusMap'
@@ -195,7 +203,7 @@ export interface Store {
 
   createWorkspace(
     tenantId: string,
-    data: Pick<WorkspaceRecord, 'provider' | 'site' | 'email' | 'tokenCiphertext'>,
+    data: Pick<WorkspaceRecord, 'provider' | 'connection' | 'tokenCiphertext'>,
   ): Promise<WorkspaceRecord>;
   getWorkspace(tenantId: string, workspaceId: string): Promise<WorkspaceRecord | null>;
   listWorkspaces(tenantId: string): Promise<WorkspaceRecord[]>;

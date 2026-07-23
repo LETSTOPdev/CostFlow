@@ -5,7 +5,7 @@ import { loadConfig } from '../src/config';
 import { securityHeaders } from '../src/security';
 import { MemoryStore } from '../src/store/memory';
 import {
-  StubJiraGateway,
+  StubJiraConnector,
   SESSION_KEY,
   CREDENTIAL_KEY,
   TOKEN,
@@ -52,7 +52,7 @@ describe('health + readiness probes (doc 09 P4.2 §4)', () => {
     const events: TelemetryEvent[] = [];
     const app = buildServer({
       store: brokenStore,
-      gateway: new StubJiraGateway(),
+      connectors: { jira: new StubJiraConnector() },
       auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
       telemetry: (e) => events.push(e),
     });
@@ -93,14 +93,14 @@ describe('sanitized operational logging (doc 09 P4.2 §5)', () => {
     const t = makeApp({ logSink: (line) => lines.push(line) });
     const cookie = await signIn(t, 'log@b.example');
     // POST a body carrying the secret token; the log line must not echo it.
-    await post(t, cookie, '/connect', {
+    await post(t, cookie, '/connect/jira', {
       site: 'https://log.atlassian.net',
       email: 'log@b.example',
       token: TOKEN,
     });
-    const connectLog = lines.find((l) => l['path'] === '/connect');
+    const connectLog = lines.find((l) => l['path'] === '/connect/jira');
     expect(connectLog).toBeDefined();
-    expect(connectLog).toMatchObject({ msg: 'request', method: 'POST', path: '/connect' });
+    expect(connectLog).toMatchObject({ msg: 'request', method: 'POST', path: '/connect/jira' });
     expect(typeof connectLog!['durationMs']).toBe('number');
     const serialized = JSON.stringify(lines);
     expect(serialized).not.toContain(TOKEN);

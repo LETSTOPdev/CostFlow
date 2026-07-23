@@ -1,6 +1,6 @@
 import { loadConfig } from './config';
 import { buildServer } from './server';
-import { HttpJiraGateway } from './jira-gateway';
+import { buildConnectors } from './connectors';
 import { MemoryStore } from './store/memory';
 import { PgStore } from './store/pg';
 import { fileTelemetrySink } from './telemetry-web';
@@ -32,7 +32,7 @@ async function main(): Promise<void> {
 
   const app = buildServer({
     store,
-    gateway: new HttpJiraGateway(),
+    connectors: buildConnectors(),
     auth: config.auth,
     telemetry: fileTelemetrySink(),
     production: config.production,

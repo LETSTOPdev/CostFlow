@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { GatewayError } from '../src/jira-gateway';
+import { GatewayError } from '../src/connectors';
 import { nextProvenance } from '../src/assumptions';
 import { TOKEN, get, makeApp, post, signIn, type TestApp } from './helpers';
 
 async function onboardToReady(t: TestApp, email: string): Promise<string> {
   const cookie = await signIn(t, email);
-  await post(t, cookie, '/connect', {
+  await post(t, cookie, '/connect/jira', {
     site: 'https://acme.atlassian.net',
     email,
     token: TOKEN,

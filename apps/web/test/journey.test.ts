@@ -19,7 +19,7 @@ async function completeJourneyToAssumptions(t: TestApp, cookie: string): Promise
 
   // 2. connect a Jira workspace (validated against the gateway)
   record(
-    await post(t, cookie, '/connect', {
+    await post(t, cookie, '/connect/jira', {
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: TOKEN,
@@ -164,7 +164,7 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
   it('report-mode provenance gate reaches the web: vendor-suggested assumptions leave frictions unpriced', async () => {
     const t = makeApp();
     const cookie = await signIn(t, 'careless@acme.example');
-    await post(t, cookie, '/connect', {
+    await post(t, cookie, '/connect/jira', {
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: TOKEN,
@@ -202,7 +202,7 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
   it('"Accept all suggested values" (v1) reaches a priced report in one click', async () => {
     const t = makeApp();
     const cookie = await signIn(t, 'fast@acme.example');
-    await post(t, cookie, '/connect', {
+    await post(t, cookie, '/connect/jira', {
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: TOKEN,

@@ -96,8 +96,7 @@ describe('P4.4 invitations & membership', () => {
     const ownerCookie = await signIn(t, 'owner4@acme.example');
     const workspace = await t.store.createWorkspace(ownerTenant, {
       provider: 'jira',
-      site: 'https://w.example',
-      email: 'owner4@acme.example',
+      connection: { site: 'https://w.example', email: 'owner4@acme.example' },
       tokenCiphertext: 'tok',
     });
     await t.store.createRun({

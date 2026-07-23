@@ -15,7 +15,7 @@ function csrfFromHtml(html: string): string {
 
 async function connectOnly(t: TestApp, email: string): Promise<string> {
   const cookie = await signIn(t, email);
-  await post(t, cookie, '/connect', {
+  await post(t, cookie, '/connect/jira', {
     site: 'https://acme.atlassian.net',
     email,
     token: TOKEN,
@@ -27,7 +27,7 @@ describe('authenticated sign-out control (doc 09 P4.2 Gate 2 fix)', () => {
   it('is present in the shared header on the connect and runs pages (and onboarding steps)', async () => {
     const t = makeApp();
     const cookie = await connectOnly(t, 'nav@acme.example');
-    for (const url of ['/connect', '/runs', '/scope']) {
+    for (const url of ['/connect/jira', '/runs', '/scope']) {
       const page = await get(t, cookie, url);
       expect(page.statusCode, url).toBe(200);
       // Correct form method + action (a real submittable POST control).
@@ -88,7 +88,7 @@ describe('authenticated sign-out control (doc 09 P4.2 Gate 2 fix)', () => {
     const cookie = await connectOnly(t, 'flow@acme.example');
 
     // Use the EXACT token the UI rendered — proves the real control works.
-    const connectPage = await get(t, cookie, '/connect');
+    const connectPage = await get(t, cookie, '/connect/jira');
     const token = csrfFromHtml(connectPage.body);
 
     const logout = await t.app.inject({
@@ -146,7 +146,7 @@ describe('authenticated sign-out control (doc 09 P4.2 Gate 2 fix)', () => {
     });
     expect(forged.statusCode).toBe(403);
     // The session still works after the rejected forgery.
-    const still = await get(t, cookie, '/connect');
+    const still = await get(t, cookie, '/connect/jira');
     expect(still.statusCode).toBe(200);
   });
 });

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CREDENTIAL_KEY,
   SESSION_KEY,
-  StubJiraGateway,
+  StubJiraConnector,
   cookieOf,
   get,
   makeApp,
@@ -110,8 +110,7 @@ describe('v1 activation-funnel analytics', () => {
     const a = (await store.createTenantWithUser('a@f.example', 's')).tenant;
     const wsA = await store.createWorkspace(a.id, {
       provider: 'jira',
-      site: 'https://a.example',
-      email: 'a@f.example',
+      connection: { site: 'https://a.example', email: 'a@f.example' },
       tokenCiphertext: 'tok',
     });
     await store.createRun({
@@ -128,8 +127,7 @@ describe('v1 activation-funnel analytics', () => {
     const b = (await store.createTenantWithUser('b@f.example', 's')).tenant;
     await store.createWorkspace(b.id, {
       provider: 'jira',
-      site: 'https://b.example',
-      email: 'b@f.example',
+      connection: { site: 'https://b.example', email: 'b@f.example' },
       tokenCiphertext: 'tok',
     });
     // Org C: signs up only.
@@ -149,7 +147,7 @@ describe('v1 founder admin page', () => {
     const store = new MemoryStore();
     const app = buildServer({
       store,
-      gateway: new StubJiraGateway(),
+      connectors: { jira: new StubJiraConnector() },
       auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
       telemetry: () => undefined,
       adminEmails,

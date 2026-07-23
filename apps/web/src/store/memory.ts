@@ -203,17 +203,16 @@ export class MemoryStore implements Store {
 
   async createWorkspace(
     tenantId: string,
-    data: Pick<WorkspaceRecord, 'provider' | 'site' | 'email' | 'tokenCiphertext'>,
+    data: Pick<WorkspaceRecord, 'provider' | 'connection' | 'tokenCiphertext'>,
   ): Promise<WorkspaceRecord> {
     const workspace: WorkspaceRecord = {
       id: newId(),
       tenantId,
       provider: data.provider,
-      site: data.site,
-      email: data.email,
+      connection: data.connection,
       tokenCiphertext: data.tokenCiphertext,
-      projectKey: null,
-      projectName: null,
+      scopeKey: null,
+      scopeName: null,
       observedStatuses: [],
       observedActors: [],
       statusMap: null,

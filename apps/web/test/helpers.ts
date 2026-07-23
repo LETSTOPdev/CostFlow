@@ -4,7 +4,13 @@ import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import type { TelemetryEvent } from '@costflow/telemetry';
 import { buildServer, type ServerDeps } from '../src/server';
-import { GatewayError, type JiraConnection, type JiraGateway } from '../src/jira-gateway';
+import {
+  GatewayError,
+  jiraConnector,
+  type Connection,
+  type ScopeRef,
+  type WebConnector,
+} from '../src/connectors';
 import { MemoryStore } from '../src/store/memory';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
@@ -18,28 +24,47 @@ export const JIRA_FIXTURE_PAGE = readFileSync(
   'utf8',
 );
 
-/** Fixture-backed stub gateway (doc 09 P4.1 plan §8): golden Jira raw pages. */
-export class StubJiraGateway implements JiraGateway {
+/**
+ * Fixture-backed stub connector (doc 09 P4.1 plan §8, doc 18 §4.1): the REAL
+ * jira connector's pure surface (credential parsing, counting, observation,
+ * transform) with only the two HTTP halves stubbed to golden raw pages — so
+ * a passing web suite still exercises the real edge logic.
+ */
+export class StubJiraConnector implements WebConnector {
+  private real = jiraConnector();
   failListWith: GatewayError | null = null;
   failFetchWith: GatewayError | null = null;
-  lastConnection: JiraConnection | null = null;
+  lastConnection: Connection | null = null;
   lastFetchProjectKey: string | null = null;
-  projects: { key: string; name: string }[] = [
+  projects: ScopeRef[] = [
     { key: 'OPS', name: 'Operations' },
     { key: 'MKT', name: 'Marketing Website' },
   ];
 
-  async listProjects(connection: JiraConnection) {
+  descriptor = this.real.descriptor;
+  scopeNoun = this.real.scopeNoun;
+  pickerHint = this.real.pickerHint;
+  credentialFields = this.real.credentialFields;
+  connectionHelpHtml = this.real.connectionHelpHtml;
+  parseCredentials: WebConnector['parseCredentials'] = (body) => this.real.parseCredentials(body);
+  connectionFrom: WebConnector['connectionFrom'] = (workspace, secret) =>
+    this.real.connectionFrom(workspace, secret);
+  summaryText: WebConnector['summaryText'] = (workspace) => this.real.summaryText(workspace);
+  countItems: WebConnector['countItems'] = (payload) => this.real.countItems(payload);
+  observe: WebConnector['observe'] = (payload) => this.real.observe(payload);
+  transform: WebConnector['transform'] = (payload, args) => this.real.transform(payload, args);
+
+  async listScopes(connection: Connection): Promise<ScopeRef[]> {
     this.lastConnection = connection;
     if (this.failListWith) throw this.failListWith;
     return this.projects;
   }
 
-  async fetchAll(connection: JiraConnection, projectKey: string) {
+  async fetchAll(connection: Connection, scopeKey: string) {
     this.lastConnection = connection;
-    this.lastFetchProjectKey = projectKey;
+    this.lastFetchProjectKey = scopeKey;
     if (this.failFetchWith) throw this.failFetchWith;
-    if (projectKey !== 'OPS') throw new GatewayError('fetch-error', 'search', 'Unknown project.');
+    if (scopeKey !== 'OPS') throw new GatewayError('fetch-error', 'search', 'Unknown project.');
     return { searchPages: [JIRA_FIXTURE_PAGE], supplementaryChangelogs: {} };
   }
 }
@@ -47,19 +72,19 @@ export class StubJiraGateway implements JiraGateway {
 export interface TestApp {
   app: FastifyInstance;
   store: MemoryStore;
-  gateway: StubJiraGateway;
+  gateway: StubJiraConnector;
   events: TelemetryEvent[];
   logs: Record<string, unknown>[];
 }
 
 export function makeApp(overrides: Partial<ServerDeps> = {}): TestApp {
   const store = new MemoryStore();
-  const gateway = new StubJiraGateway();
+  const gateway = new StubJiraConnector();
   const events: TelemetryEvent[] = [];
   const logs: Record<string, unknown>[] = [];
   const app = buildServer({
     store,
-    gateway,
+    connectors: { jira: gateway },
     auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
     telemetry: (event) => events.push(event),
     logSink: (line) => logs.push(line),

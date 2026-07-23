@@ -48,6 +48,15 @@ create table if not exists workspaces (
   created_at timestamptz not null
 );
 create index if not exists workspaces_tenant on workspaces (tenant_id);
+-- Doc 18 D-21 (multi-platform connectors): connections are provider-neutral.
+-- `connection_json` holds the connector's NON-secret display fields (Jira:
+-- {site, email}; ClickUp: {}); the secret stays in token_ciphertext. The
+-- legacy site/email columns lose NOT NULL (token-only providers have neither)
+-- but stay MIRRORED for jira rows so a rollback build still reads them; rows
+-- created before this migration are backfilled at read time from site/email.
+alter table workspaces alter column site drop not null;
+alter table workspaces alter column email drop not null;
+alter table workspaces add column if not exists connection_json jsonb;
 
 create table if not exists jobs (
   id uuid primary key,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GatewayError } from '../src/jira-gateway';
+import { GatewayError } from '../src/connectors';
 import { TOKEN, get, makeApp, post, signIn, type TestApp } from './helpers';
 
 /**
@@ -11,7 +11,7 @@ import { TOKEN, get, makeApp, post, signIn, type TestApp } from './helpers';
 
 async function reachScope(t: TestApp, email: string): Promise<string> {
   const cookie = await signIn(t, email);
-  await post(t, cookie, '/connect', {
+  await post(t, cookie, '/connect/jira', {
     site: 'https://acme.atlassian.net',
     email,
     token: TOKEN,
@@ -30,7 +30,7 @@ describe('project import (POST /scope)', () => {
 
     const tenantId = (await t.store.findUserByEmail('ok@acme.example'))!.tenantId;
     const workspace = (await t.store.listWorkspaces(tenantId))[0]!;
-    expect(workspace.projectKey).toBe('OPS');
+    expect(workspace.scopeKey).toBe('OPS');
     expect(workspace.onboarding).toBe('scope-selected');
     expect(workspace.observedStatuses.length).toBeGreaterThan(0); // parsed from the import
   });
@@ -73,7 +73,7 @@ describe('project import (POST /scope)', () => {
     expect(res.body).not.toContain(TOKEN);
 
     // A sanitized diagnostic log line was emitted — class/stage/status only.
-    const diag = t.logs.find((l) => l['msg'] === 'jira-import-failed');
+    const diag = t.logs.find((l) => l['msg'] === 'connector-import-failed');
     expect(diag).toMatchObject({ errorClass: 'fetch-error', stage: 'search', status: 410 });
     const serialized = JSON.stringify(t.logs);
     expect(serialized).not.toContain(TOKEN);
@@ -95,7 +95,7 @@ describe('project import (POST /scope)', () => {
     const res = await post(t, cookie, '/scope', { project: '0' });
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('auth-error');
-    expect(t.logs.find((l) => l['msg'] === 'jira-import-failed')).toMatchObject({
+    expect(t.logs.find((l) => l['msg'] === 'connector-import-failed')).toMatchObject({
       errorClass: 'auth-error',
       stage: 'search',
     });

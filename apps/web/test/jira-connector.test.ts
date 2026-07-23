@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { GatewayError, HttpJiraGateway, type JiraConnection } from '../src/jira-gateway';
+import { GatewayError, jiraConnector, type Connection } from '../src/connectors';
 
 /**
- * HttpJiraGateway against a mocked Jira (P4.2 defect 2). Proves the import
- * targets the CURRENT /rest/api/3/search/jql endpoint (the legacy
- * /rest/api/3/search was removed on Jira Cloud — the root cause), paginates
- * by cursor, and maps failures to sanitized {errorClass, stage, status}.
+ * The Jira web connector against a mocked Jira (P4.2 defect 2, connector SPI
+ * since doc 18). Proves the import targets the CURRENT /rest/api/3/search/jql
+ * endpoint (the legacy /rest/api/3/search was removed on Jira Cloud — the
+ * root cause), paginates by cursor, and maps failures to sanitized
+ * {errorClass, stage, status}.
  */
 
-const CONNECTION: JiraConnection = {
-  site: 'https://acme.atlassian.net',
-  email: 'me@acme.example',
-  token: 'super-secret-jira-token',
+const CONNECTION: Connection = {
+  display: { site: 'https://acme.atlassian.net', email: 'me@acme.example' },
+  secret: 'super-secret-jira-token',
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -31,7 +31,7 @@ function recordingFetch(handler: (url: string) => Response): {
   return { fetch: fetchFn, urls };
 }
 
-describe('HttpJiraGateway (mocked Jira)', () => {
+describe('jira connector (mocked Jira)', () => {
   it('imports a real project via the current /search/jql endpoint, by cursor', async () => {
     const { fetch, urls } = recordingFetch((url) => {
       if (url.includes('/rest/api/3/project/search')) {
@@ -65,12 +65,12 @@ describe('HttpJiraGateway (mocked Jira)', () => {
       }
       throw new Error(`unexpected url ${url}`);
     });
-    const gateway = new HttpJiraGateway(fetch);
+    const connector = jiraConnector(fetch);
 
-    const projects = await gateway.listProjects(CONNECTION);
-    expect(projects).toEqual([{ key: 'KAN', name: 'CostFlow Test' }]);
+    const scopes = await connector.listScopes(CONNECTION);
+    expect(scopes).toEqual([{ key: 'KAN', name: 'CostFlow Test' }]);
 
-    const result = await gateway.fetchAll(CONNECTION, 'KAN');
+    const result = (await connector.fetchAll(CONNECTION, 'KAN')) as { searchPages: string[] };
     expect(result.searchPages).toHaveLength(2); // followed the cursor
     // The legacy endpoint is never used.
     expect(urls.some((u) => u.includes('/rest/api/3/search/jql'))).toBe(true);
@@ -84,8 +84,8 @@ describe('HttpJiraGateway (mocked Jira)', () => {
         ? jsonResponse({}, 401)
         : jsonResponse({ values: [], isLast: true }),
     );
-    const gateway = new HttpJiraGateway(fetch);
-    await expect(gateway.fetchAll(CONNECTION, 'KAN')).rejects.toMatchObject({
+    const connector = jiraConnector(fetch);
+    await expect(connector.fetchAll(CONNECTION, 'KAN')).rejects.toMatchObject({
       errorClass: 'auth-error',
       stage: 'search',
       status: 401,
@@ -98,9 +98,9 @@ describe('HttpJiraGateway (mocked Jira)', () => {
         ? jsonResponse({ errorMessages: ['gone'] }, 410)
         : jsonResponse({}),
     );
-    const gateway = new HttpJiraGateway(fetch);
+    const connector = jiraConnector(fetch);
     try {
-      await gateway.fetchAll(CONNECTION, 'KAN');
+      await connector.fetchAll(CONNECTION, 'KAN');
       throw new Error('should have thrown');
     } catch (error) {
       expect(error).toBeInstanceOf(GatewayError);
@@ -116,8 +116,8 @@ describe('HttpJiraGateway (mocked Jira)', () => {
     const fetchFn = (async () => {
       throw new Error('ECONNREFUSED 1.2.3.4:443');
     }) as typeof globalThis.fetch;
-    const gateway = new HttpJiraGateway(fetchFn);
-    await expect(gateway.fetchAll(CONNECTION, 'KAN')).rejects.toMatchObject({
+    const connector = jiraConnector(fetchFn);
+    await expect(connector.fetchAll(CONNECTION, 'KAN')).rejects.toMatchObject({
       errorClass: 'fetch-error',
       stage: 'search',
     });
@@ -127,14 +127,14 @@ describe('HttpJiraGateway (mocked Jira)', () => {
     const { fetch } = recordingFetch((url) =>
       url.includes('/search/jql') ? jsonResponse({}, 500) : jsonResponse({}),
     );
-    const gateway = new HttpJiraGateway(fetch);
+    const connector = jiraConnector(fetch);
     try {
-      await gateway.fetchAll(CONNECTION, 'KAN');
+      await connector.fetchAll(CONNECTION, 'KAN');
     } catch (error) {
       const e = error as GatewayError;
       const serialized = `${e.message} ${JSON.stringify({ errorClass: e.errorClass, stage: e.stage, status: e.status })}`;
-      expect(serialized).not.toContain(CONNECTION.token);
-      expect(serialized).not.toContain(CONNECTION.email);
+      expect(serialized).not.toContain(CONNECTION.secret);
+      expect(serialized).not.toContain('me@acme.example');
       expect(serialized).not.toContain('atlassian.net');
     }
   });

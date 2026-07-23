@@ -45,8 +45,7 @@ describe('FR-17 attribution guard at the reporting layer (route, fail-closed)', 
   ): Promise<void> {
     const workspace = await t.store.createWorkspace(tenantId, {
       provider: 'jira',
-      site: 'https://x.example',
-      email: 'x@x.example',
+      connection: { site: 'https://x.example', email: 'x@x.example' },
       tokenCiphertext: 'tok',
     });
     await t.store.updateWorkspace(tenantId, workspace.id, { observedActors });

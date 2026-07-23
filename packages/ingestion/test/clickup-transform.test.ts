@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PseudonymizationContext } from '@costflow/domain';
-import {
-  countClickUpTasks,
-  observeClickUpTaskPages,
-  transformClickUp,
-} from '@costflow/ingestion';
+import { countClickUpTasks, observeClickUpTaskPages, transformClickUp } from '@costflow/ingestion';
 import type { ClickUpMapping } from '@costflow/ingestion';
 import { describeProviderConformance } from './spi-conformance';
 

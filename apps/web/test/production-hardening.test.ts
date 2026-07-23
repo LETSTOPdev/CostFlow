@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GatewayError } from '../src/jira-gateway';
+import { GatewayError } from '../src/connectors';
 import { redactPath } from '../src/security';
 import { buildServer } from '../src/server';
 import { MemoryStore } from '../src/store/memory';
@@ -7,7 +7,7 @@ import type { RunRecord } from '../src/store/contract';
 import {
   CREDENTIAL_KEY,
   SESSION_KEY,
-  StubJiraGateway,
+  StubJiraConnector,
   cookieOf,
   get,
   makeApp,
@@ -59,7 +59,7 @@ describe('global error boundary', () => {
     const logs: Record<string, unknown>[] = [];
     const app = buildServer({
       store: new ThrowingRunsStore(),
-      gateway: new StubJiraGateway(),
+      connectors: { jira: new StubJiraConnector() },
       auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
       telemetry: () => undefined,
       logSink: (line) => logs.push(line),
@@ -131,7 +131,7 @@ describe('graceful gateway failure on /scope', () => {
   it('a project-list failure during import returns a 400 import error, not a 500', async () => {
     const t = makeApp();
     const cookie = await signIn(t, 'owner@scope.example');
-    await post(t, cookie, '/connect', {
+    await post(t, cookie, '/connect/jira', {
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: 'secret-jira-token-abc123',
@@ -147,7 +147,7 @@ describe('graceful gateway failure on /scope', () => {
   it('refuses a project above the issue ceiling before the memory-heavy analysis', async () => {
     // A single unbounded analysis holds ~1GB heap at 100k issues; on a shared
     // process that OOMs every tenant. The guard converts it into a clear 400.
-    class HugeGateway extends StubJiraGateway {
+    class HugeGateway extends StubJiraConnector {
       override async fetchAll() {
         // Jira's first page carries the authoritative `total`.
         return {
@@ -160,7 +160,7 @@ describe('graceful gateway failure on /scope', () => {
     const gateway = new HugeGateway();
     const app = buildServer({
       store,
-      gateway,
+      connectors: { jira: gateway },
       auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
       telemetry: () => {},
       jobNowFn: () => '2026-07-20T00:00:00Z',
@@ -169,7 +169,7 @@ describe('graceful gateway failure on /scope', () => {
     });
     const t = { app, store, gateway, events: [], logs: [] };
     const cookie = await signIn(t, 'huge@scope.example');
-    await post(t, cookie, '/connect', {
+    await post(t, cookie, '/connect/jira', {
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: 'secret-jira-token-abc123',

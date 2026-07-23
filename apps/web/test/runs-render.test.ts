@@ -47,8 +47,7 @@ describe('GET /runs renders even when a Date leaks from the store (defect 2 repr
     const tenantId = (await store.findUserByEmail('date@acme.example'))!.tenantId;
     const ws = await store.createWorkspace(tenantId, {
       provider: 'jira',
-      site: 'https://acme.atlassian.net',
-      email: 'date@acme.example',
+      connection: { site: 'https://acme.atlassian.net', email: 'date@acme.example' },
       tokenCiphertext: 'ct',
     });
     await store.createRun({
