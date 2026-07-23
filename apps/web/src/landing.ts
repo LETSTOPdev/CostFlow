@@ -95,7 +95,7 @@ const hero = `
 <section class="lp-hero">
   <div class="lp-aurora" aria-hidden="true"></div>
   <div class="container lp-hero-inner">
-    <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Try the live demo free during beta. No signup required. →</a>
+    <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Try the live demo for free during beta. No signup required. →</a>
     <h1 class="lp-h1">See what delays in Jira or ClickUp<br><span class="lp-grad">are costing you in dollars.</span></h1>
     <p class="lp-sub">Connect Jira or ClickUp and get a ranked cost report in about a minute.
       Every figure traces back to its formula.</p>
@@ -159,8 +159,8 @@ const traceable = `
     <div class="lp-split-copy">
       <p class="lp-kicker">Defensible by design</p>
       <h2 class="lp-h2">Every number opens up<br>into <span class="lp-grad">exactly how it was computed.</span></h2>
-      <p class="lp-lead">No black box. Every figure expands into its formula, inputs, and assumptions.
-        Unconfirmed assumptions stay <em>unpriced</em>. Nothing is invented.</p>
+      <p class="lp-lead">Every figure expands into its formula, inputs, and assumptions.
+        Anything unconfirmed stays <em>unpriced</em>. We never guess.</p>
     </div>
     <div class="lp-split-viz">
       <div class="lp-trace-card">
@@ -224,7 +224,7 @@ const FAQ_ITEMS: readonly [string, string][] = [
   ],
   [
     'What about privacy and my data?',
-    `Credentials are encrypted; individuals are pseudonymized before analysis; you can export or permanently delete everything anytime. See <a href="/privacy">Privacy</a>, or email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.`,
+    `Credentials are encrypted and individuals are pseudonymized before analysis. You can export or permanently delete everything at any time. See <a href="/privacy">Privacy</a> or email <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.`,
   ],
   [
     'Which tools do you support?',

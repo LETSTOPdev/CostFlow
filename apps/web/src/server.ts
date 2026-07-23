@@ -116,8 +116,8 @@ const BRAND_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192
 // happened instead of a bare "Invalid CSRF token." line.
 const csrfErrorBody = `<div class="empty" style="max-width:34rem;margin:2.5rem auto">
   <h3>That form has expired</h3>
-  <p>Invalid CSRF token. This usually means the page was open for a while or your session changed.
-  Nothing was saved. Go back, refresh, and try again.</p>
+  <p>The page was open for a while or your session changed, so the form couldn't be submitted
+  safely. Nothing was saved. Go back, refresh, and try again.</p>
   <a class="btn" href="/">Back to CostFlow</a>
 </div>`;
 
@@ -208,9 +208,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         layout(
           'Signed out',
           '<div class="panel" style="max-width:32rem;margin:2rem auto;text-align:center">' +
-            "<h1>You've been signed out</h1>" +
-            '<p class="lead">Your CostFlow session has ended.</p>' +
-            '<div class="hero-actions" style="margin-top:1.5rem"><a class="btn btn-lg" href="/login">Sign in again</a></div>' +
+            "<h1>You're signed out</h1>" +
+            '<p class="lead">Sign back in to pick up where you left off.</p>' +
+            '<div class="hero-actions" style="margin-top:1.5rem"><a class="btn btn-lg" href="/login">Sign in</a></div>' +
             '</div>',
         ),
       );
@@ -455,8 +455,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Public pages (no session): sample report, Terms, Privacy.
   app.get('/demo', async (_request, reply) => {
     const banner =
-      '<div class="info">This is a <strong>sample report</strong> from demo data. ' +
-      '<a href="/login">Sign in</a> to run one on your own Jira or ClickUp. It\'s free.</div>';
+      '<div class="info">This is a <strong>sample report</strong> built from demo data. ' +
+      '<a href="/login">Sign in</a> to run one on your own Jira or ClickUp.</div>';
     let body: string;
     try {
       body = renderReportBody(parseRun(DEMO_RUN_JSON), { runId: 'demo' });
@@ -466,7 +466,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const cta =
       '<div class="cta-band" style="margin-top:2.5rem">' +
       '<h2>Ready to see your own?</h2>' +
-      '<p class="lead">Connect Jira or ClickUp in about a minute and get a report like this for your team. It\'s free.</p>' +
+      '<p class="lead">Connect Jira or ClickUp and get a report like this for your own team in about a minute. Free while in beta.</p>' +
       '<div class="hero-actions"><a class="btn btn-lg" href="/login">Get started free</a></div>' +
       '</div>';
     return reply
@@ -510,7 +510,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
           ),
         );
     }
-    const banner = `<div class="info">You just analyzed <strong>${esc(demo.companyName)}</strong>, a simulated ${esc(demo.industry)} with ${demo.issueCount} issues and a ${demo.teamSize}-person team. It was generated for this demo and run through the real CostFlow engine. <a href="/try">Generate a different company →</a></div>`;
+    const banner = `<div class="info">You just analyzed <strong>${esc(demo.companyName)}</strong>, a simulated ${esc(demo.industry)} with ${demo.issueCount} issues and a ${demo.teamSize}-person team, generated fresh for this demo and run through the real CostFlow engine. <a href="/try">Generate a different company →</a></div>`;
     const cta =
       '<div class="cta-band" style="margin-top:2.5rem">' +
       '<h2>Now do it for your own team.</h2>' +
@@ -1138,8 +1138,8 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         `${stepsNav('roles')}
          <p class="eyebrow">Step 4: Roles</p>
          <h1 style="margin-top:.6rem">Map people to roles</h1>
-         <p class="lead">Role names (e.g. "Legal", "Ops") price work by rate card. Anyone left blank is
-         pseudonymized, never stored by name, and priced at the default rate with reduced confidence.</p>
+         <p class="lead">Roles like "Legal" or "Ops" decide which hourly rate prices the work. Anyone left
+         blank is pseudonymized and priced at the default rate with reduced confidence.</p>
          <form method="post" action="/mapping/actors" class="panel" style="margin-top:1.5rem">${csrfField(session)}
            <div class="info">This step is optional. Leaving everything blank is fine and is the fastest path to your first report. You can refine roles later.</div>
            <div class="table-wrap"><table><tr><th>Person (from ${esc(connectorOf(workspace).descriptor.name)})</th><th>Role (blank = pseudonymize)</th></tr>
@@ -1245,8 +1245,8 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         `${stepsNav('assumptions')}
          <p class="eyebrow">Step 5: Assumptions</p>
          <h1 style="margin-top:.6rem">Confirm your assumptions</h1>
-         <p class="lead">Nothing is priced on a vendor suggestion: accept a value as yours, or change
-         it. Unconfirmed assumptions leave their frictions unpriced in reports. Currency: ${esc(current.currency)}.</p>
+         <p class="lead">Nothing is priced on a vendor suggestion. Accept each value or set your own.
+         Anything left unconfirmed stays unpriced in your reports. Currency: ${esc(current.currency)}.</p>
          <form method="post" action="/assumptions" class="panel" style="margin-top:1.5rem">${csrfField(session)}
            <div class="info"><label style="margin:0"><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong>, the fastest path to a fully priced report. You can change any value now or refine later.</label></div>
            <div class="table-wrap"><table><tr><th>Assumption</th><th>Value</th><th>Status</th></tr>
@@ -1554,7 +1554,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
                <div class="empty">
                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg></span>
                  <h3>No reports yet</h3>
-                 <p>Run your first analysis to see what workflow friction is costing your team. Every figure traces back to its formula.</p>
+                 <p>Run your first analysis to see what friction is costing your team.</p>
                  <a class="btn" href="/">Start an analysis</a>
                </div>`
           : `<h1>Reports</h1>

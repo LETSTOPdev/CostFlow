@@ -351,7 +351,7 @@ export function renderReportBody(
   const agingDays = run.assumptions.parameters.agingThresholdDays.value;
   const ranked =
     model.ranked.length === 0
-      ? `<div class="info">No priced friction crossed your thresholds in this import. That is a genuinely healthy sign for the work analyzed. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`
+      ? `<div class="info">No priced friction crossed your thresholds in this import. That's a genuinely healthy sign for the work analyzed. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`
       : model.ranked
           .map((rf) =>
             renderRankedFriction(

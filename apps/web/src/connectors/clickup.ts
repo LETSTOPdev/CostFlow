@@ -228,7 +228,7 @@ const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
   scopeNoun: { singular: 'List', plural: 'Lists' },
   itemNoun: 'tasks',
   connectLead:
-    'CostFlow reads your ClickUp with a personal API token. Access is read-only, the token is encrypted at rest and never shown again, and setup takes about a minute.',
+    "CostFlow reads your ClickUp with a personal API token. It's read-only, encrypted at rest, and never displayed after you save it. Setup takes about a minute.",
   fields: [
     {
       name: 'token',
