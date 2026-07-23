@@ -127,7 +127,9 @@ function parseJson(text: string, label: string): unknown {
 function epochMsToIso(value: StringOrNumber | null | undefined): IsoDateString | null {
   if (value === null || value === undefined || value === '') return null;
   const ms = typeof value === 'number' ? value : /^-?\d+$/.test(value) ? Number(value) : NaN;
-  if (!Number.isSafeInteger(ms)) return null;
+  // Beyond ±8.64e15 ms, Date.toISOString throws (RangeError) — a corrupt
+  // raw value must degrade to a diagnostic, never crash the transform.
+  if (!Number.isSafeInteger(ms) || Math.abs(ms) > 8.64e15) return null;
   return new Date(ms).toISOString();
 }
 

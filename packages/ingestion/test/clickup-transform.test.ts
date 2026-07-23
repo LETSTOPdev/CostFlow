@@ -214,6 +214,39 @@ describe('clickup transform (ADR-0005: CU1–CU5)', () => {
     expect(batch.diagnostics.map((d) => d.message).join(' ')).toContain('due_date');
   });
 
+  it('an epoch beyond the Date range degrades to a diagnostic, never a crash', () => {
+    // Values in (8.64e15, 2^53] pass Number.isSafeInteger but make
+    // Date.toISOString throw — every raw field must degrade, not crash.
+    const batch = run(
+      [
+        {
+          id: 'evil',
+          status: 'backlog',
+          created: '8640000000000001', // one ms past the Date range
+          updated: '-8640000000000001',
+          due: String(Number.MAX_SAFE_INTEGER),
+        },
+        { id: 'ok', status: 'in progress', created: day(0) },
+      ],
+      {
+        // The corrupt residency instant is skipped; the valid entry survives.
+        ok: [
+          { status: 'backlog', since: day(0), orderindex: 0 },
+          { status: 'in progress', since: '9007199254740991', orderindex: 1 },
+        ],
+      },
+    );
+    expect(batch.items).toHaveLength(2);
+    expect(batch.items[0]).toMatchObject({ createdAt: null, dueAt: null, lastUpdatedAt: null });
+    expect(batch.diagnostics.filter((d) => d.severity === 'warning')).toHaveLength(3);
+    const messages = batch.diagnostics.map((d) => d.message).join(' ');
+    expect(messages).toContain('date_created');
+    expect(messages).toContain('date_updated');
+    expect(messages).toContain('due_date');
+    // 'evil' has no anchor instant, so only 'ok' derives its arrival event.
+    expect(batch.events.map((e) => [e.from?.name ?? null, e.to.name])).toEqual([[null, 'backlog']]);
+  });
+
   it('single-task residency documents (externally keyed) join the chain like bulk pages', () => {
     const single = JSON.stringify({
       current_status: {
