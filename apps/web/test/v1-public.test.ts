@@ -36,11 +36,11 @@ describe('v1 public pages', () => {
     expect(res.body).toContain('property="og:url" content="https://app.fbx1.com/"');
     expect(res.body).toContain('property="og:title"');
     expect(res.body).toContain('property="og:description"');
-    expect(res.body).toContain('property="og:image" content="https://app.fbx1.com/og.jpg"');
+    expect(res.body).toContain('property="og:image" content="https://app.fbx1.com/og.jpg?v=2"');
     expect(res.body).toContain('property="og:image:width" content="1200"');
     expect(res.body).toContain('property="og:image:height" content="630"');
     expect(res.body).toContain('name="twitter:card" content="summary_large_image"');
-    expect(res.body).toContain('name="twitter:image" content="https://app.fbx1.com/og.jpg"');
+    expect(res.body).toContain('name="twitter:image" content="https://app.fbx1.com/og.jpg?v=2"');
     expect(res.body).toContain('rel="icon"');
     expect(res.body).toContain('rel="apple-touch-icon"');
     expect(res.body).toContain('name="theme-color"');
