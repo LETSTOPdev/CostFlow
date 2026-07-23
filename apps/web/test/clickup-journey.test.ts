@@ -112,7 +112,9 @@ describe('ClickUp end-to-end web journey (provider-blind routes)', () => {
     // Observed vocabulary came from the raw task pages (all statuses + ALL
     // assignee usernames, including the multi-assignee task's second person).
     const workspace = (
-      await t.store.listWorkspaces((await t.store.findUserByEmail('owner@clickup.example'))!.tenantId)
+      await t.store.listWorkspaces(
+        (await t.store.findUserByEmail('owner@clickup.example'))!.tenantId,
+      )
     )[0]!;
     expect(workspace.provider).toBe('clickup');
     expect(workspace.scopeKey).toBe('90120');
@@ -121,26 +123,26 @@ describe('ClickUp end-to-end web journey (provider-blind routes)', () => {
 
     await completeMappingSteps(t, cookie);
     // Customize rates to the demo-clickup card (roles sorted: Legal, Ops),
-  // accept the rest — mirrors the journey.test.ts assumption step.
-  await post(t, cookie, '/assumptions', {
-    rate0: '120',
-    rate1: '90',
-    defaultRate: '30',
-    agingThresholdDays: '14',
-    accept_agingThresholdDays: 'on',
-    attention_low: '0.15',
-    attention_expected: '0.3',
-    attention_high: '0.6',
-    accept_attention: 'on',
-    queueWait_low: '0.1',
-    queueWait_expected: '0.2',
-    queueWait_high: '0.4',
-    accept_queueWait: 'on',
-    overdue_low: '0.1',
-    overdue_expected: '0.2',
-    overdue_high: '0.4',
-    accept_overdue: 'on',
-  });
+    // accept the rest — mirrors the journey.test.ts assumption step.
+    await post(t, cookie, '/assumptions', {
+      rate0: '120',
+      rate1: '90',
+      defaultRate: '30',
+      agingThresholdDays: '14',
+      accept_agingThresholdDays: 'on',
+      attention_low: '0.15',
+      attention_expected: '0.3',
+      attention_high: '0.6',
+      accept_attention: 'on',
+      queueWait_low: '0.1',
+      queueWait_expected: '0.2',
+      queueWait_high: '0.4',
+      accept_queueWait: 'on',
+      overdue_low: '0.1',
+      overdue_expected: '0.2',
+      overdue_high: '0.4',
+      accept_overdue: 'on',
+    });
 
     // Run the analysis through the real engine.
     const run = await post(t, cookie, '/runs', {});
@@ -167,26 +169,26 @@ describe('ClickUp end-to-end web journey (provider-blind routes)', () => {
     await post(t, cookie, '/scope', { project: '0' });
     await completeMappingSteps(t, cookie);
     // Customize rates to the demo-clickup card (roles sorted: Legal, Ops),
-  // accept the rest — mirrors the journey.test.ts assumption step.
-  await post(t, cookie, '/assumptions', {
-    rate0: '120',
-    rate1: '90',
-    defaultRate: '30',
-    agingThresholdDays: '14',
-    accept_agingThresholdDays: 'on',
-    attention_low: '0.15',
-    attention_expected: '0.3',
-    attention_high: '0.6',
-    accept_attention: 'on',
-    queueWait_low: '0.1',
-    queueWait_expected: '0.2',
-    queueWait_high: '0.4',
-    accept_queueWait: 'on',
-    overdue_low: '0.1',
-    overdue_expected: '0.2',
-    overdue_high: '0.4',
-    accept_overdue: 'on',
-  });
+    // accept the rest — mirrors the journey.test.ts assumption step.
+    await post(t, cookie, '/assumptions', {
+      rate0: '120',
+      rate1: '90',
+      defaultRate: '30',
+      agingThresholdDays: '14',
+      accept_agingThresholdDays: 'on',
+      attention_low: '0.15',
+      attention_expected: '0.3',
+      attention_high: '0.6',
+      accept_attention: 'on',
+      queueWait_low: '0.1',
+      queueWait_expected: '0.2',
+      queueWait_high: '0.4',
+      accept_queueWait: 'on',
+      overdue_low: '0.1',
+      overdue_expected: '0.2',
+      overdue_high: '0.4',
+      accept_overdue: 'on',
+    });
 
     const dashboard = await get(t, cookie, '/dashboard');
     expect(dashboard.statusCode).toBe(200);

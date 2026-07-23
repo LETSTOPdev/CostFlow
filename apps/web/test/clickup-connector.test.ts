@@ -10,7 +10,7 @@ import { clickupConnector, type ClickUpFetchPayload, type Connection } from '../
 const CONNECTION: Connection = { display: {}, secret: 'pk_secret_clickup_token' };
 
 function jsonResponse(body: unknown, status = 200, headers?: Record<string, string>): Response {
-  return new Response(JSON.stringify(body), { status, headers });
+  return new Response(JSON.stringify(body), { status, ...(headers ? { headers } : {}) });
 }
 
 function recordingFetch(handler: (url: string, call: number) => Response): {
@@ -117,9 +117,7 @@ describe('clickup connector (mocked ClickUp)', () => {
     const connector = clickupConnector(fetch, async (ms) => {
       sleeps.push(ms);
     });
-    expect(await connector.listScopes(CONNECTION)).toEqual([
-      { key: '10', name: 'Engineering' },
-    ]);
+    expect(await connector.listScopes(CONNECTION)).toEqual([{ key: '10', name: 'Engineering' }]);
     expect(sleeps).toEqual([2000, 2000]); // two waits, Retry-After honored
   });
 
