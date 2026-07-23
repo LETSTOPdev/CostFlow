@@ -62,6 +62,42 @@ function titleMap(run: AnalysisRun): Map<string, string> {
 const confidenceBadge = (tier: string): string =>
   `<span class="tier tier-${esc(tier)}" title="Confidence tier ${esc(tier)}">Confidence ${esc(tier)}</span>`;
 
+// Plain-language equivalents of the engine's magnitude units (buyers do not
+// speak "item-hours-waiting"). Purely a label — the number is unchanged and
+// still traces to the drill-down.
+const humanizeMagnitude = (value: number | string, unit: string): string => {
+  const v = typeof value === 'number' ? value.toLocaleString('en-US') : esc(String(value));
+  switch (unit) {
+    case 'item-hours-waiting':
+      return `${v} item-hours spent waiting in this queue`;
+    case 'item-days-overdue':
+      return `${v} item-days past their due date`;
+    case 'item-days-beyond-threshold':
+    case 'item-days-aging':
+      return `${v} item-days sitting beyond the aging threshold`;
+    default:
+      return `${v} ${esc(unit)}`;
+  }
+};
+
+// A deterministic, DATA-DERIVED interpretation of each friction — what it is in
+// business terms and where the leverage is. Derived only from the friction type
+// and the stage name (never a fabricated number, never AI-written per-report):
+// this is the "so what do I do?" a buyer looks for, kept honest.
+const frictionInsight = (type: string, stage: string, agingDays: number): string => {
+  const s = `“${esc(stage)}”`;
+  switch (type) {
+    case 'queue-wait':
+      return `Work is <strong>sitting in the ${s} queue</strong> before anyone acts on it. This cost is pure wait, not effort — cutting time-in-queue here (WIP limits, faster pickup, or removing the hand-off) is usually the fastest win.`;
+    case 'aging':
+      return `Items in ${s} have gone <strong>untouched past your ${agingDays}-day mark</strong>, quietly accruing carrying cost. Clearing or closing the oldest items first recovers the most.`;
+    case 'overdue':
+      return `Commitments in ${s} are <strong>past their due date and still open</strong>. The cost is the chasing, re-planning, and stakeholder churn they create — re-scoping or renegotiating these dates stops the bleed.`;
+    default:
+      return `Friction concentrated in ${s}. Open the breakdown to see the contributing work items.`;
+  }
+};
+
 function renderTerms(
   estimate: CostEstimate,
   titleOf: Map<string, string>,
@@ -119,6 +155,7 @@ function renderRankedFriction(
   currency: string,
   open: boolean,
   barPct: number,
+  agingDays: number,
 ): string {
   const { instance, estimate } = rf;
   const trace = estimate.trace;
@@ -138,7 +175,8 @@ function renderRankedFriction(
     <h3>#${rf.rank} · ${esc(frictionLabel(instance.frictionType))} — stage “${esc(instance.location.stage.name)}”</h3>
     <p class="figure">${money(estimate.cost.expected, currency)} <span class="range-sub">· ${money(estimate.cost.low, currency)} – ${money(estimate.cost.high, currency)}</span> ${confidenceBadge(estimate.confidence.tier)}</p>
     <div class="fbar" aria-hidden="true"><i style="width:${barPct}%"></i></div>
-    <p class="note">${instance.magnitude.value} ${esc(instance.magnitude.unit)}</p>
+    <p class="note">${humanizeMagnitude(instance.magnitude.value, instance.magnitude.unit)}</p>
+    <p>${frictionInsight(instance.frictionType, instance.location.stage.name, agingDays)}</p>
     <details${open ? ' open' : ''}>
       <summary>How this number was computed</summary>
       <p><strong>What is this?</strong> ${esc(trace.claim)}</p>
@@ -298,24 +336,39 @@ export function renderReportBody(
           2,
           Math.min(100, Math.round((Number(rf.estimate.cost.expected) / maxExpected) * 100)),
         );
+  const agingDays = run.assumptions.parameters.agingThresholdDays.value;
   const ranked =
     model.ranked.length === 0
-      ? '<p class="note">No priced frictions detected above thresholds in this import.</p>'
+      ? `<div class="info">No priced friction crossed your thresholds in this import — a genuinely healthy sign for the work analysed. If you expected findings, your aging/queue thresholds may be set conservatively; lower them and re-run to surface smaller effects.</div>`
       : model.ranked
           .map((rf) =>
-            renderRankedFriction(rf, titleOf, currency, options.open === true, pctOf(rf)),
+            renderRankedFriction(
+              rf,
+              titleOf,
+              currency,
+              options.open === true,
+              pctOf(rf),
+              agingDays,
+            ),
           )
           .join('');
   const links = options.printLinks
     ? `<p class="note"><a href="/reports/${esc(options.runId)}/print">Printable / export version</a> · <a href="/reports/${esc(options.runId)}/raw">Raw markdown</a></p>`
     : '';
+  const readingNote =
+    model.ranked.length === 0
+      ? ''
+      : `<p class="lead" style="margin-top:.6rem">This is the ongoing cost of workflow friction your team is currently carrying — time lost to waiting, chasing, and stalled work. It's <strong>recoverable</strong>: the ranked items below are where fixing the process would pay back the most.</p>
+         <p class="note">Every figure is an <strong>estimate shown as a range</strong>, computed from your own work items and the rates you confirmed, and traceable to its formula (open “How this number was computed”). <strong>Confidence A/B/C</strong> reflects how much we observed versus inferred. Where a required input isn't confirmed, we leave the item <strong>unpriced</strong> rather than guess. <span title="Reference for support">Ref <code>${esc(run.runId)}</code></span></p>`;
   return `<p class="eyebrow">Friction report</p>
     <h1 style="margin-top:.6rem">What friction is costing this team</h1>
-    <p class="note">Every figure is an estimate with stated assumptions and a traceable formula. <span title="Reference for support">Ref <code>${esc(run.runId)}</code></span></p>
+    ${readingNote}
     ${banner}
     ${summary}
     ${links}
-    <section><h2>Ranked frictions</h2>${ranked}</section>
+    <section><h2>Ranked frictions</h2>
+    ${model.ranked.length === 0 ? '' : '<p class="note" style="margin-top:-.3rem">Ranked by expected cost — highest-leverage first.</p>'}
+    ${ranked}</section>
     ${renderTrend(run, options.previous ?? null)}
     ${renderUnpriced(model.unpriced)}
     ${renderContext(run)}
