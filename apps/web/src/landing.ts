@@ -171,8 +171,8 @@ const traceable = `
         </div>
         <div class="lp-tc-detail">
           <div class="lp-tc-line"><span>Formula</span><code>wait_days × rate × attention/day</code></div>
-          <div class="lp-tc-line"><span>Items</span><b>18 work items · 1,536 item-hours waiting</b></div>
-          <div class="lp-tc-line"><span>Rate</span><b>$95/h · default (customer-accepted)</b></div>
+          <div class="lp-tc-line"><span>Items</span><b>18 work items, 1,536 item-hours waiting</b></div>
+          <div class="lp-tc-line"><span>Rate</span><b>$95/h default (customer-accepted)</b></div>
         </div>
       </div>
     </div>
@@ -416,7 +416,7 @@ const LANDING_STYLE = `
 .lp-h2{font-size:clamp(1.7rem,1.2rem+2vw,2.7rem);line-height:1.1;letter-spacing:-.03em;font-weight:660;margin:0}
 .lp-lead{font-size:clamp(1.02rem,1rem+.4vw,1.2rem);color:var(--muted);margin:.8rem auto 0;line-height:1.55}
 
-/* How-it-works steps — fixed 3 columns so the third never orphans */
+/* How-it-works steps: fixed 3 columns so the third never orphans */
 .lp-steps{display:grid;gap:1.4rem;grid-template-columns:repeat(3,minmax(0,1fr))}
 .lp-step{position:relative;padding:1.5rem;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--sh-1);
   transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease)}
@@ -459,7 +459,7 @@ const LANDING_STYLE = `
 .lp-tc-line b{color:var(--ink);font-weight:560}
 .lp-tc-line code{font-family:var(--mono);font-size:.78rem;background:var(--grad-soft);color:var(--primary);border:1px solid color-mix(in srgb,var(--primary) 18%,transparent);padding:.14rem .4rem;border-radius:6px}
 
-/* Feature grid — two cards, centered (2 / 1) */
+/* Feature grid: two cards, centered (2 / 1) */
 .lp-feat-grid{display:grid;gap:1.3rem;grid-template-columns:repeat(2,minmax(0,1fr));max-width:46rem;margin-inline:auto}
 .lp-feat{padding:1.6rem;border-radius:18px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--sh-1);
   transition:transform .2s var(--ease),box-shadow .2s var(--ease),border-color .2s var(--ease)}
