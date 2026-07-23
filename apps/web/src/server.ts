@@ -32,6 +32,7 @@ import {
 import { randomDemoSeed, renderDemoCompany } from './demo-live';
 import { LOGO_SVG } from './brand';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
+import { renderDashboard } from './dashboard-view';
 import { parseRun, renderReportBody, runSummary } from './report-view';
 import { executeJob } from './jobs';
 import { GatewayError, type ConnectFieldSpec, type Connector } from './connectors/types';
@@ -639,46 +640,16 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       page(
         session,
         'Dashboard',
-        `<div class="panel" style="display:flex;flex-wrap:wrap;gap:1.25rem;align-items:center;justify-content:space-between">
-           <div>
-             <p class="eyebrow" style="margin-bottom:.5rem">Workspace</p>
-             <h1 style="margin:0 0 .35rem">${esc(workspace.scopeName ?? 'Your workspace')} ${workspace.scopeId ? `<span class="note" style="font-weight:500;font-size:1rem">(${esc(workspace.scopeId)})</span>` : ''}</h1>
-             <p class="note" style="margin:0">${esc(connector.describeConnection(workspace.connectionParams))} · credentials encrypted at rest</p>
-           </div>
-           <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run analysis</button>
-             <p class="note" style="margin:.6rem 0 0;max-width:16rem;text-align:right">Reads your board read-only and saves a point-in-time report. Safe to run any time — it never changes anything in ${esc(connector.descriptor.name)}.</p>
-           </form>
-         </div>
-         ${
-           failed.length > 0
-             ? `<div class="danger"><h3>Recent failures</h3><ul style="margin:0">${failed
-                 .map(
-                   (j) =>
-                     `<li><span class="note">${fmtWhen(j.createdAt)}</span> — <strong>${esc(j.errorClass ?? 'unexpected')}</strong>${j.errorMessage ? `: ${esc(j.errorMessage)}` : ''}</li>`,
-                 )
-                 .join('')}</ul></div>`
-             : ''
-         }
-         <h2 style="margin-top:2rem">Reports</h2>
-         ${
-           runs.length === 0
-             ? `<div class="empty">
-                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg></span>
-                  <h3>No reports yet</h3>
-                  <p>Run your first analysis to price this ${esc(connector.descriptor.scopeNoun.singular)}'s friction.</p>
-                  <form method="post" action="/runs" style="display:inline">${csrfField(session)}<button type="submit">Run your first analysis</button></form>
-                </div>`
-             : `<ul class="rows">${runs.map((r) => runRow(r)).join('')}</ul>`
-         }
-         <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:2rem">
-           <a class="chip" href="/connect">Connection</a>
-           <a class="chip" href="/scope">Scope</a>
-           <a class="chip" href="/mapping/statuses">Statuses</a>
-           <a class="chip" href="/mapping/actors">Roles</a>
-           <a class="chip" href="/assumptions">Assumptions</a>
-           <a class="chip" href="/org">Organization &amp; members</a>
-           <a class="chip" href="/settings">Settings</a>
-         </div>`,
+        renderDashboard({
+          scopeName: workspace.scopeName,
+          scopeId: workspace.scopeId,
+          connectionText: connector.describeConnection(workspace.connectionParams),
+          providerName: connector.descriptor.name,
+          scopeNounSingular: connector.descriptor.scopeNoun.singular,
+          csrfField: csrfField(session),
+          runs,
+          failures: failed,
+        }),
       ),
     );
   });
@@ -1700,12 +1671,31 @@ Sitemap: https://app.fbx1.com/sitemap.xml
            </div>`,
       )
       .join('');
+    // Configuration hub: every workspace-setup surface lives here (not on the
+    // executive dashboard). Summaries are provider-correct via the descriptor.
+    const cfg = workspaces[0] ?? null;
+    const cfgConnector = cfg ? connectors.get(cfg.provider) : undefined;
+    const configCard = (title: string, summary: string, href: string, cta: string): string =>
+      `<div class="card"><h3 style="margin-bottom:.3rem">${title}</h3><p class="note" style="margin:0 0 .7rem">${summary}</p><a href="${href}">${cta} →</a></div>`;
+    const configCards = cfg
+      ? `<h2 style="margin-top:.4rem">Workspace configuration</h2>
+         <div class="grid grid-3" style="margin:0 0 2.2rem">
+           ${configCard('Connection', esc(cfgConnector?.describeConnection(cfg.connectionParams) ?? cfg.provider), '/connect', 'Manage')}
+           ${configCard('Scope', cfg.scopeName ? `${esc(cfg.scopeName)}${cfg.scopeId ? ` (${esc(cfg.scopeId)})` : ''}` : 'Not selected yet', '/scope', 'Change')}
+           ${configCard('Statuses', cfg.statusMap ? `${Object.keys(cfg.statusMap).length} statuses mapped to stages` : 'Not mapped yet', '/mapping/statuses', 'Review')}
+           ${configCard('Roles', cfg.actorRoleMap ? `${Object.keys(cfg.actorRoleMap).length} people mapped to roles` : 'Not mapped yet', '/mapping/actors', 'Review')}
+           ${configCard('Assumptions', cfg.assumptions ? `Currency ${esc(cfg.assumptions.currency)} · v${esc(cfg.assumptions.version)}` : 'Not set yet', '/assumptions', 'Review')}
+           ${configCard('Organization &amp; members', 'Invitations, roles, and access', '/org', 'Manage')}
+         </div>`
+      : '';
     return reply.type('text/html').send(
       page(
         session,
         'Settings',
         `<p class="eyebrow">Settings</p>
-         <h1 style="margin-top:.6rem">Data &amp; privacy</h1>
+         <h1 style="margin-top:.6rem">Settings</h1>
+         ${configCards}
+         <h2>Data &amp; privacy</h2>
          <p class="lead">You control your data. Deleting is permanent and cascades to every
          derived analysis (GDPR erasure). CostFlow keeps no copy.</p>
          ${

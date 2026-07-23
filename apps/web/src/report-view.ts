@@ -49,7 +49,7 @@ const rangeText = (spec: RangeSpec, currency: string): string =>
   `${money(spec.low, currency)} – ${money(spec.high, currency)} (expected ~${money(spec.expected, currency)})`;
 
 /** Sum priced estimate ranges via the engine's range algebra (never floats). */
-function totalRange(ranked: readonly RankedFriction[]): RangeSpec {
+export function totalRange(ranked: readonly RankedFriction[]): RangeSpec {
   let acc = ZERO_RANGE;
   for (const r of ranked) acc = addRanges(acc, rangeFromSpec(r.estimate.cost));
   return rangeToSpec(acc);
@@ -59,13 +59,13 @@ function titleMap(run: AnalysisRun): Map<string, string> {
   return new Map(run.batch.items.map((i) => [i.id, i.title]));
 }
 
-const confidenceBadge = (tier: string): string =>
+export const confidenceBadge = (tier: string): string =>
   `<span class="tier tier-${esc(tier)}" title="Confidence tier ${esc(tier)}">Confidence ${esc(tier)}</span>`;
 
 // Plain-language equivalents of the engine's magnitude units (buyers do not
 // speak "item-hours-waiting"). Purely a label — the number is unchanged and
 // still traces to the drill-down.
-const humanizeMagnitude = (value: number | string, unit: string): string => {
+export const humanizeMagnitude = (value: number | string, unit: string): string => {
   const v = typeof value === 'number' ? value.toLocaleString('en-US') : esc(String(value));
   switch (unit) {
     case 'item-hours-waiting':
@@ -84,7 +84,7 @@ const humanizeMagnitude = (value: number | string, unit: string): string => {
 // business terms and where the leverage is. Derived only from the friction type
 // and the stage name (never a fabricated number, never AI-written per-report):
 // this is the "so what do I do?" a buyer looks for, kept honest.
-const frictionInsight = (type: string, stage: string, agingDays: number): string => {
+export const frictionInsight = (type: string, stage: string, agingDays: number): string => {
   const s = `“${esc(stage)}”`;
   switch (type) {
     case 'queue-wait':
