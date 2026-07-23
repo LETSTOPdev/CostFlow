@@ -409,14 +409,17 @@ export function layout(
   const main = opts.bleed
     ? `<main id="main" class="bleed">${body}</main>`
     : `<main id="main" class="page"><div class="container">${body}</div></main>`;
+  // Brand suffix only when the page title doesn't already carry it (the landing
+  // and legal pages previously rendered "… — CostFlow — CostFlow").
+  const fullTitle = title.includes('CostFlow') ? title : `${title} | CostFlow`;
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
-<title>${esc(title)} — CostFlow</title>
-<meta name="description" content="See what workflow friction is costing your team. Connect Jira or ClickUp and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
+<title>${esc(fullTitle)}</title>
+<meta name="description" content="See what workflow friction is costing your team. Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.">
 <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="/brand/logo.svg?v=2">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
@@ -426,16 +429,16 @@ export function layout(
 <meta property="og:site_name" content="CostFlow">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://app.fbx1.com/">
-<meta property="og:title" content="CostFlow — see what workflow friction is costing your team">
-<meta property="og:description" content="Connect Jira or ClickUp and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
+<meta property="og:title" content="CostFlow: see what workflow friction costs your team">
+<meta property="og:description" content="Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.">
 <meta property="og:image" content="https://app.fbx1.com/og.jpg?v=2">
 <meta property="og:image:secure_url" content="https://app.fbx1.com/og.jpg?v=2">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="CostFlow — see what workflow friction is costing your team">
-<meta name="twitter:description" content="Connect Jira or ClickUp and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
+<meta name="twitter:title" content="CostFlow: see what workflow friction costs your team">
+<meta name="twitter:description" content="Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.">
 <meta name="twitter:image" content="https://app.fbx1.com/og.jpg?v=2">
 ${seoHead}
 <style>${STYLES}</style>
@@ -464,7 +467,7 @@ export function loadingPage(): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="2">
 <meta name="color-scheme" content="light dark">
-<title>Analysing… — CostFlow</title>
+<title>Analyzing your workflow | CostFlow</title>
 <style>
   :root{--ink:#0d0e14;--muted:#5c5f6e;--line:#e9e9f0;--bg:#ffffff;--surface:#ffffff;--primary:#5b54e6;
     --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);
@@ -490,8 +493,8 @@ export function loadingPage(): string {
 <body>
   <div class="box">
     <div class="sp"></div>
-    <h1>Analysing your workflow…</h1>
-    <p>Importing work items and pricing friction. This usually takes a few seconds — the page refreshes on its own.</p>
+    <h1>Analyzing your workflow</h1>
+    <p>Importing work items and pricing friction. This usually takes a few seconds. The page refreshes on its own.</p>
     <div class="bar"></div>
   </div>
 </body>
@@ -532,7 +535,7 @@ export function demoAnalyzingPage(seed: number): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta http-equiv="refresh" content="${wait}; url=/try/report?seed=${seed}">
-<title>Analysing a live company… — CostFlow</title>
+<title>Analyzing a live company | CostFlow</title>
 <style>
   :root{--ink:#0d0e14;--muted:#5c5f6e;--faint:#8a8d9b;--line:#e9e9f0;--bg:#ffffff;--surface:#ffffff;--primary:#5b54e6;--pos:#0ea371;
     --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);--sh:0 24px 50px -14px rgba(30,24,74,.22);
@@ -563,7 +566,7 @@ export function demoAnalyzingPage(seed: number): string {
 <body>
   <div class="box">
     <div class="top"><img src="/brand/icon-192.png" alt="" width="26" height="26"><b>CostFlow</b></div>
-    <h1>Analysing a live company…</h1>
+    <h1>Analyzing a live company</h1>
     <p>Generating a realistic workspace and running the real CostFlow engine on it.</p>
     <div class="bar"><i></i></div>
     <ul>${rows}</ul>
@@ -603,7 +606,7 @@ export function printLayout(title: string, body: string): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${esc(title)} — CostFlow</title>
+<title>${esc(title)} | CostFlow</title>
 <style>
   :root{--ink:#0d0e14;--ink-2:#33353f;--muted:#5c5f6e;--line:#e4e4ea;--line-2:#f0f0f4;
     --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);
@@ -661,13 +664,13 @@ ${body}
 /** Fixed methodology appendix for the executive export (P5). */
 export const METHODOLOGY_APPENDIX = `<section class="appendix">
   <h2>Methodology</h2>
-  <p>Every figure is an estimate expressed as a range: <em>low – high (expected)</em>. Frictions are
-  ranked by expected cost, computed deterministically from the imported work items and your stated
-  assumptions — the same numbers are reproducible from the run's saved inputs.</p>
+  <p>Every figure is an estimate expressed as a range: <em>low to high, with an expected value</em>.
+  Frictions are ranked by expected cost, computed deterministically from the imported work items and
+  your stated assumptions. The same numbers are reproducible from the run's saved inputs.</p>
   <p><strong>Confidence tiers:</strong> A (fully observed data and customer-confirmed assumptions),
-  B and C (progressively more inference or missing inputs — each drill-down states why).</p>
-  <p><strong>Assumption provenance:</strong> vendor-suggested (unconfirmed — never priced in report
+  B and C (progressively more inference or missing inputs; each drill-down states why).</p>
+  <p><strong>Assumption provenance:</strong> vendor-suggested (unconfirmed and never priced in report
   mode), accepted by customer, customized by customer, or measured by customer.</p>
-  <p><strong>Attribution:</strong> cost is attributed to processes, stages, and roles — never to
+  <p><strong>Attribution:</strong> cost is attributed to processes, stages, and roles, never to
   named individuals. Individual identities are pseudonymized before analysis.</p>
 </section>`;

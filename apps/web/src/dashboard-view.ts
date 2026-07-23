@@ -73,7 +73,7 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 const fmtWhen = (iso: string): string => {
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
   if (!m) return esc(iso);
-  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]} · ${m[4]}:${m[5]} UTC`;
+  return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}, ${m[4]}:${m[5]} UTC`;
 };
 
 /** Summarize a stored artifact; null when the blob cannot be read (mirrors runSummary). */
@@ -154,7 +154,7 @@ const runForm = (csrfField: string, label: string, note: string): string =>
    <p class="hero-note">${note}</p>`;
 
 const safetyNote = (providerName: string): string =>
-  `Read-only · never changes anything in ${esc(providerName)}`;
+  `Read-only. Never changes anything in ${esc(providerName)}.`;
 
 // ---------- hero ----------
 
@@ -164,18 +164,15 @@ const heroWithFindings = (
   previous: RunDigest | null,
 ): string => {
   const { total, currency, ranked, unpricedCount } = latest;
-  const scope = input.scopeName ? ` · “${esc(input.scopeName)}”` : '';
-  const sub = [
-    `${money(total.low, currency)} – ${money(total.high, currency)} range`,
-    `${ranked.length} priced finding${ranked.length === 1 ? '' : 's'}${unpricedCount > 0 ? ` · ${unpricedCount} unpriced` : ''}`,
-  ].join(' · ');
+  const scope = input.scopeName ? ` for “${esc(input.scopeName)}”` : '';
+  const sub = `Range ${money(total.low, currency)} to ${money(total.high, currency)}. ${ranked.length} priced finding${ranked.length === 1 ? '' : 's'}${unpricedCount > 0 ? `, ${unpricedCount} unpriced` : ''}.`;
   return `<section class="dash-hero">
     <p class="hero-eyebrow">Potential recoverable cost</p>
     <p class="figure-hero">${heroMoney(total.expected, currency)}</p>
     <p class="hero-sub">${sub}</p>
     <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}${scope}</p>
     ${trendLine(latest, previous)}
-    ${runForm(input.csrfField, 'Analyze Again', safetyNote(input.providerName))}
+    ${runForm(input.csrfField, 'Analyze again', safetyNote(input.providerName))}
   </section>`;
 };
 
@@ -183,8 +180,8 @@ const heroNothingPriced = (input: DashboardInput, latest: RunDigest): string =>
   `<section class="dash-hero">
     <p class="hero-eyebrow">Potential recoverable cost</p>
     <p class="figure-hero quiet">No priced friction above your thresholds</p>
-    <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}${latest.unpricedCount > 0 ? ` · ${latest.unpricedCount} unpriced finding${latest.unpricedCount === 1 ? '' : 's'} awaiting a confirmed assumption` : ''}</p>
-    ${runForm(input.csrfField, 'Analyze Again', safetyNote(input.providerName))}
+    <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}${latest.unpricedCount > 0 ? `. ${latest.unpricedCount} unpriced finding${latest.unpricedCount === 1 ? '' : 's'} awaiting a confirmed assumption` : ''}</p>
+    ${runForm(input.csrfField, 'Analyze again', safetyNote(input.providerName))}
   </section>`;
 
 const heroUnreadable = (input: DashboardInput): string =>
@@ -192,14 +189,14 @@ const heroUnreadable = (input: DashboardInput): string =>
     <p class="hero-eyebrow">Latest analysis</p>
     <p class="figure-hero quiet">Your report is ready</p>
     <p class="hero-sub"><a href="/reports/${esc(input.runs[0]?.id ?? '')}">Open the full report →</a></p>
-    ${runForm(input.csrfField, 'Analyze Again', safetyNote(input.providerName))}
+    ${runForm(input.csrfField, 'Analyze again', safetyNote(input.providerName))}
   </section>`;
 
 const heroFirstRun = (input: DashboardInput): string =>
   `<section class="dash-hero">
     <p class="hero-eyebrow">CostFlow is ready</p>
     <h1 class="hero-title">Your ${esc(input.providerName)} ${esc(input.scopeNounSingular)} is connected.<br>See what its friction costs.</h1>
-    ${runForm(input.csrfField, 'Run First Analysis', `Read-only · about a minute · never changes anything in ${esc(input.providerName)}`)}
+    ${runForm(input.csrfField, 'Run first analysis', `Read-only, takes about a minute, and never changes anything in ${esc(input.providerName)}.`)}
   </section>
   <div class="dash-cards">
     <div class="insight"><p class="k">You'll see</p><p class="lede">One recoverable-cost total for the whole ${esc(input.scopeNounSingular)}.</p></div>
@@ -234,7 +231,7 @@ const insightCards = (latest: RunDigest, latestRunId: string): string => {
   const strongestCard = strongest
     ? `<div class="insight">
         <p class="k">How solid is this</p>
-        <p class="lede">Strongest evidence: ${lowerFirst(frictionSubject(strongest.instance.frictionType, strongest.instance.location.stage.name).subject)} — about <strong>${money(strongest.estimate.cost.expected, currency)}</strong>, grade&nbsp;${esc(strongest.estimate.confidence.tier)}.</p>
+        <p class="lede">Strongest evidence: ${lowerFirst(frictionSubject(strongest.instance.frictionType, strongest.instance.location.stage.name).subject)} at about <strong>${money(strongest.estimate.cost.expected, currency)}</strong>, grade&nbsp;${esc(strongest.estimate.confidence.tier)}.</p>
         <p class="note">${tierPills(ranked)}</p>
       </div>`
     : '';
@@ -279,7 +276,7 @@ const reportCard = (run: DashboardRun): string => {
   return `<a class="report-card" href="/reports/${esc(run.id)}">
     ${amt}
     ${topLine}
-    <span class="sub">${ranked.length} priced · ${when}</span>
+    <span class="sub">${ranked.length} priced, ${when}</span>
     <span class="go">View report →</span>
   </a>`;
 };
@@ -290,14 +287,14 @@ const failureBanner = (failures: readonly DashboardFailure[]): string =>
     : `<div class="danger"><h3>Recent failures</h3><ul style="margin:0">${failures
         .map(
           (j) =>
-            `<li><span class="note">${fmtWhen(j.createdAt)}</span> — <strong>${esc(j.errorClass ?? 'unexpected')}</strong>${j.errorMessage ? `: ${esc(j.errorMessage)}` : ''}</li>`,
+            `<li><span class="note">${fmtWhen(j.createdAt)}</span> <strong>${esc(j.errorClass ?? 'unexpected')}</strong>${j.errorMessage ? `: ${esc(j.errorMessage)}` : ''}</li>`,
         )
         .join('')}</ul></div>`;
 
 // ---------- page ----------
 
 export function renderDashboard(input: DashboardInput): string {
-  const foot = `<p class="dash-foot">${esc(input.scopeName ?? 'Your workspace')}${input.scopeId ? ` (${esc(input.scopeId)})` : ''} · ${esc(input.connectionText)} · credentials encrypted at rest · <a href="/settings">Settings</a></p>`;
+  const foot = `<p class="dash-foot">${esc(input.scopeName ?? 'Your workspace')}${input.scopeId ? ` (${esc(input.scopeId)})` : ''}. ${esc(input.connectionText)}. Credentials encrypted at rest. <a href="/settings">Settings</a></p>`;
 
   if (input.runs.length === 0) {
     return heroFirstRun(input) + failureBanner(input.failures) + foot;

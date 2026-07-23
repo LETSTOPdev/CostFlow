@@ -57,7 +57,7 @@ describe('executive dashboard', () => {
 
     const res = await get(t, cookie, '/dashboard');
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Run First Analysis');
+    expect(res.body).toContain('Run first analysis');
     // Provider vocabulary from the descriptor, on the first screen.
     expect(res.body.split('</head>')[1]).toContain('Jira');
     // What-you-get preview instead of an empty report list.
@@ -78,8 +78,8 @@ describe('executive dashboard', () => {
     const summary = runSummary(RUN_JSON)!;
     expect(summary.priced).toBeGreaterThan(0);
     expect(res.body).toContain(summary.expectedText);
-    expect(res.body).toContain('Analyze Again');
-    expect(res.body).not.toContain('Run First Analysis');
+    expect(res.body).toContain('Analyze again');
+    expect(res.body).not.toContain('Run first analysis');
   });
 
   it('insight cards read as executive sentences, not categories', async () => {
@@ -132,7 +132,7 @@ describe('executive dashboard', () => {
     }
     expect(dash.body).toContain('href="/settings"');
     // The trust line survives (provider-correct connection description).
-    expect(dash.body).toContain('credentials encrypted at rest');
+    expect(dash.body).toContain('Credentials encrypted at rest');
 
     const settings = await get(t, cookie, '/settings');
     expect(settings.statusCode).toBe(200);

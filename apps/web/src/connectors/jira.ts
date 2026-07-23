@@ -167,7 +167,7 @@ const JIRA_DESCRIPTOR: ConnectorDescriptor = {
   scopeNoun: { singular: 'project', plural: 'projects' },
   itemNoun: 'issues',
   connectLead:
-    'CostFlow reads your Jira with a personal API token — read-only, encrypted at rest, and never shown again. It takes about a minute.',
+    'CostFlow reads your Jira with a personal API token. Access is read-only, the token is encrypted at rest and never shown again, and setup takes about a minute.',
   fields: [
     {
       name: 'site',
@@ -196,7 +196,7 @@ const JIRA_DESCRIPTOR: ConnectorDescriptor = {
              <li>Click <strong>Create API token</strong>, name it "CostFlow", and copy it.</li>
              <li>Paste it above along with your Jira site URL and the email for that Atlassian account.</li>
            </ol>`,
-  pickerBlurb: 'Jira Cloud projects — issues, statuses, assignees, and full workflow history.',
+  pickerBlurb: 'Jira Cloud projects: issues, statuses, assignees, and full workflow history.',
 };
 
 /**
@@ -219,14 +219,14 @@ export function buildJiraConnector(gateway: ConnectorGateway): Connector {
         return {
           ok: false,
           error:
-            'All three fields are required, and the site must be an https:// URL — for example <code>https://your-org.atlassian.net</code>.',
+            'All three fields are required, and the site must be an https:// URL, for example <code>https://your-org.atlassian.net</code>.',
         };
       }
       return { ok: true, params: { site, email }, secret: token };
     },
 
     describeConnection(params: ConnectionParams): string {
-      return `Jira site ${params['site'] ?? ''} · connected as ${params['email'] ?? ''}`;
+      return `Jira site ${params['site'] ?? ''}, connected as ${params['email'] ?? ''}`;
     },
 
     observe(raw: RawFetch): ObservedWorkspace {

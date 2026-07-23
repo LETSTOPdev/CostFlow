@@ -228,13 +228,13 @@ const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
   scopeNoun: { singular: 'List', plural: 'Lists' },
   itemNoun: 'tasks',
   connectLead:
-    'CostFlow reads your ClickUp with a personal API token — read-only, encrypted at rest, and never shown again. It takes about a minute.',
+    'CostFlow reads your ClickUp with a personal API token. Access is read-only, the token is encrypted at rest and never shown again, and setup takes about a minute.',
   fields: [
     {
       name: 'token',
       label: 'Personal API token',
       kind: 'secret',
-      placeholder: 'pk_… — paste your ClickUp personal token',
+      placeholder: 'pk_1234567890',
     },
   ],
   helpHtml: `<summary>How to get your ClickUp API token (~60 seconds)</summary>
@@ -243,7 +243,7 @@ const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
              <li>Under <strong>API Token</strong>, click <strong>Generate</strong> (or copy the existing token starting with <code>pk_</code>).</li>
              <li>Paste it above. For status-history analysis, ask a Workspace admin to enable the <strong>Total Time in Status</strong> ClickApp.</li>
            </ol>`,
-  pickerBlurb: 'ClickUp Lists — tasks, statuses, assignees, due dates, and time-in-status history.',
+  pickerBlurb: 'ClickUp Lists: tasks, statuses, assignees, due dates, and time-in-status history.',
 };
 
 /**
@@ -262,14 +262,14 @@ export function buildClickUpConnector(gateway: ConnectorGateway): Connector {
         return {
           ok: false,
           error:
-            'A ClickUp personal API token is required — it starts with <code>pk_</code> and is generated under Settings → Apps.',
+            'A ClickUp personal API token is required. It starts with <code>pk_</code> and is generated under Settings → Apps.',
         };
       }
       return { ok: true, params: {}, secret: token };
     },
 
     describeConnection(): string {
-      return 'ClickUp workspace · personal API token';
+      return 'ClickUp workspace (personal API token)';
     },
 
     observe(raw: RawFetch): ObservedWorkspace {

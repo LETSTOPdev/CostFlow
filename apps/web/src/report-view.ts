@@ -45,8 +45,20 @@ const frictionLabel = (t: string): string => FRICTION_LABELS[t] ?? t;
 
 const money = (value: string, currency: string): string => esc(formatWholeMoney(value, currency));
 
+/**
+ * Display-layer punctuation normalizer for engine-authored artifact strings
+ * (assumption values, confidence reasons, unpriced reasons). The engine is
+ * frozen under golden byte-identity, so its artifacts keep their original
+ * punctuation; the web view renders numeric en-dash ranges as "a to b" and
+ * em-dash clauses as separate sentences. Never applied to money strings.
+ */
+const displayText = (s: string): string =>
+  s
+    .replace(/(\d)\s?–\s?(\d)/g, '$1 to $2')
+    .replace(/\s+—\s+(\p{L})/gu, (_, c: string) => `. ${c.toUpperCase()}`);
+
 const rangeText = (spec: RangeSpec, currency: string): string =>
-  `${money(spec.low, currency)} – ${money(spec.high, currency)} (expected ~${money(spec.expected, currency)})`;
+  `${money(spec.low, currency)} to ${money(spec.high, currency)} (expected ~${money(spec.expected, currency)})`;
 
 /** Sum priced estimate ranges via the engine's range algebra (never floats). */
 export function totalRange(ranked: readonly RankedFriction[]): RangeSpec {
@@ -88,11 +100,11 @@ export const frictionInsight = (type: string, stage: string, agingDays: number):
   const s = `“${esc(stage)}”`;
   switch (type) {
     case 'queue-wait':
-      return `Work is <strong>sitting in the ${s} queue</strong> before anyone acts on it. This cost is pure wait, not effort — cutting time-in-queue here (WIP limits, faster pickup, or removing the hand-off) is usually the fastest win.`;
+      return `Work is <strong>sitting in the ${s} queue</strong> before anyone acts on it. This cost is pure wait, not effort. Cutting time in queue here, with WIP limits, faster pickup, or removing the hand-off, is usually the fastest win.`;
     case 'aging':
       return `Items in ${s} have gone <strong>untouched past your ${agingDays}-day mark</strong>, quietly accruing carrying cost. Clearing or closing the oldest items first recovers the most.`;
     case 'overdue':
-      return `Commitments in ${s} are <strong>past their due date and still open</strong>. The cost is the chasing, re-planning, and stakeholder churn they create — re-scoping or renegotiating these dates stops the bleed.`;
+      return `Commitments in ${s} are <strong>past their due date and still open</strong>. The cost is the chasing, re-planning, and stakeholder churn they create. Re-scoping or renegotiating these dates stops the bleed.`;
     default:
       return `Friction concentrated in ${s}. Open the breakdown to see the contributing work items.`;
   }
@@ -105,7 +117,7 @@ function renderTerms(
 ): string {
   const rate = (t: Extract<TraceTerm, { hourlyRate: string }>): string =>
     `${esc(t.hourlyRate)}/h <span class="note">(${esc(t.rateSource)})</span>`;
-  const attn = (r: RangeSpec): string => `${esc(r.low)}–${esc(r.high)}`;
+  const attn = (r: RangeSpec): string => `${esc(r.low)} to ${esc(r.high)}`;
   const item = (id: string): string =>
     `${esc(titleOf.get(id) ?? id)} <span class="note">${esc(id)}</span>`;
 
@@ -144,7 +156,7 @@ function renderTerms(
   const cols = kind === 'aging-attention' ? 5 : kind === 'overdue-attention' ? 6 : 7;
   const more =
     hidden > 0
-      ? `<tr><td colspan="${cols}" class="note">+ ${hidden.toLocaleString('en-US')} more item${hidden === 1 ? '' : 's'} contributing to this figure — the full itemized breakdown is in the <em>Raw markdown</em> export.</td></tr>`
+      ? `<tr><td colspan="${cols}" class="note">+ ${hidden.toLocaleString('en-US')} more item${hidden === 1 ? '' : 's'} contributing to this figure. The full itemized breakdown is in the <em>Raw markdown</em> export.</td></tr>`
       : '';
   return `<div class="table-wrap"><table>${head}${rows}${more}</table></div>`;
 }
@@ -162,18 +174,18 @@ function renderRankedFriction(
   const assumptions = trace.assumptionsUsed
     .map(
       (a) =>
-        `<li><code>${esc(a.ref)}</code> = ${esc(a.value)} — ${esc(provLabel(a.provenance))}</li>`,
+        `<li><code>${esc(a.ref)}</code> = ${esc(displayText(a.value))} (${esc(provLabel(a.provenance))})</li>`,
     )
     .join('');
   const confidence =
     estimate.confidence.reasons.length === 0
-      ? `<p>${confidenceBadge(estimate.confidence.tier)} — no binding constraints: fully observed data and customer-confirmed assumptions.</p>`
+      ? `<p>${confidenceBadge(estimate.confidence.tier)} No binding constraints: fully observed data and customer-confirmed assumptions.</p>`
       : `<p>${confidenceBadge(estimate.confidence.tier)}, limited by:</p><ul>${estimate.confidence.reasons
-          .map((r) => `<li>${esc(r)}</li>`)
+          .map((r) => `<li>${esc(displayText(r))}</li>`)
           .join('')}</ul>`;
   return `<div class="friction">
-    <h3>#${rf.rank} · ${esc(frictionLabel(instance.frictionType))} — stage “${esc(instance.location.stage.name)}”</h3>
-    <p class="figure">${money(estimate.cost.expected, currency)} <span class="range-sub">· ${money(estimate.cost.low, currency)} – ${money(estimate.cost.high, currency)}</span> ${confidenceBadge(estimate.confidence.tier)}</p>
+    <h3>#${rf.rank} ${esc(frictionLabel(instance.frictionType))} in stage “${esc(instance.location.stage.name)}”</h3>
+    <p class="figure">${money(estimate.cost.expected, currency)} <span class="range-sub">${money(estimate.cost.low, currency)} to ${money(estimate.cost.high, currency)}</span> ${confidenceBadge(estimate.confidence.tier)}</p>
     <div class="fbar" aria-hidden="true"><i style="width:${barPct}%"></i></div>
     <p class="note">${humanizeMagnitude(instance.magnitude.value, instance.magnitude.unit)}</p>
     <p>${frictionInsight(instance.frictionType, instance.location.stage.name, agingDays)}</p>
@@ -196,15 +208,15 @@ function renderCoverage(run: AnalysisRun): string {
   const capChips = [
     `<span class="chip">${c.imported} of ${c.totalRows} rows imported</span>`,
     c.dropped > 0 ? `<span class="chip">${c.dropped} dropped</span>` : '',
-    `<span class="chip">event history ${cap.hasEventHistory ? '✓' : '—'}</span>`,
-    `<span class="chip">due dates ${cap.hasDueDates ? '✓' : '—'}</span>`,
-    `<span class="chip">last-updated ${cap.hasLastUpdated ? '✓' : '—'}</span>`,
-    `<span class="chip">actors ${cap.hasActors ? '✓' : '—'}</span>`,
+    `<span class="chip">event history ${cap.hasEventHistory ? '✓' : '✕'}</span>`,
+    `<span class="chip">due dates ${cap.hasDueDates ? '✓' : '✕'}</span>`,
+    `<span class="chip">last-updated ${cap.hasLastUpdated ? '✓' : '✕'}</span>`,
+    `<span class="chip">actors ${cap.hasActors ? '✓' : '✕'}</span>`,
   ].join('');
   const detectors = run.detectors
     .map(
       (d) =>
-        `<li>${esc(d.signalName)} — ${
+        `<li>${esc(d.signalName)}: ${
           d.status === 'ran'
             ? `ran, ${d.instanceCount} finding(s)`
             : `<strong>skipped</strong>${d.reason ? `: ${esc(d.reason)}` : ''}`
@@ -215,7 +227,7 @@ function renderCoverage(run: AnalysisRun): string {
     run.batch.diagnostics.length === 0
       ? ''
       : `<p class="note">Import diagnostics:</p><ul>${run.batch.diagnostics
-          .map((d) => `<li>row ${d.row} — ${esc(d.severity)}: ${esc(d.message)}</li>`)
+          .map((d) => `<li>row ${d.row}, ${esc(d.severity)}: ${esc(d.message)}</li>`)
           .join('')}</ul>`;
   return `<section>
     <h2>Coverage &amp; confidence</h2>
@@ -231,7 +243,7 @@ function renderContext(run: AnalysisRun): string {
     .map((o) => {
       const facts = Object.entries(o.facts)
         .map(([k, v]) => `${esc(k)}: ${v}`)
-        .join(' · ');
+        .join(', ');
       return `<li>${esc(o.statement)}<br><span class="note">${facts}</span></li>`;
     })
     .join('');
@@ -247,11 +259,11 @@ function renderUnpriced(
   const rows = unpriced
     .map(
       (u) =>
-        `<li><strong>${esc(frictionLabel(u.instance.frictionType))}</strong> — stage “${esc(u.instance.location.stage.name)}” (${u.instance.magnitude.value} ${esc(u.instance.magnitude.unit)})<br><span class="note">${esc(u.reason)}</span></li>`,
+        `<li><strong>${esc(frictionLabel(u.instance.frictionType))}</strong> in stage “${esc(u.instance.location.stage.name)}” (${u.instance.magnitude.value} ${esc(u.instance.magnitude.unit)})<br><span class="note">${esc(displayText(u.reason))}</span></li>`,
     )
     .join('');
   return `<section><h2>Unpriced frictions</h2>
-    <p class="note">Detected but not priced — the magnitude is real; the missing input is named. Confirm the assumption to price it.</p>
+    <p class="note">Detected but not priced. The magnitude is real and the missing input is named. Confirm the assumption to price it.</p>
     <ul>${rows}</ul></section>`;
 }
 
@@ -284,7 +296,7 @@ export function renderTrend(current: AnalysisRun, previous: AnalysisRun | null):
               : dir < 0
                 ? '<span class="down">▼ decreased</span>'
                 : 'unchanged';
-      return `<tr><td>${esc(id)}</td><td>${p ? money(p.expected, currency) : '—'}</td><td>${c ? money(c.expected, currency) : '—'}</td><td>${money(deltaExpected, currency)}</td><td>${label}</td></tr>`;
+      return `<tr><td>${esc(id)}</td><td>${p ? money(p.expected, currency) : 'n/a'}</td><td>${c ? money(c.expected, currency) : 'n/a'}</td><td>${money(deltaExpected, currency)}</td><td>${label}</td></tr>`;
     })
     .join('');
   return `<section><h2>Change since previous run</h2>
@@ -307,14 +319,14 @@ export function renderReportBody(
   const total = totalRange(model.ranked);
   const banner =
     run.pricingPolicy === 'simulation'
-      ? `<p class="error"><strong>Simulation mode</strong> — this run prices vendor-suggested (unconfirmed) assumptions. Figures are conditional and not suitable for executive reporting.</p>`
+      ? `<p class="error"><strong>Simulation mode.</strong> This run prices vendor-suggested, unconfirmed assumptions. Figures are conditional and not suitable for executive reporting.</p>`
       : '';
   // A business reader wants a readable date, not a raw ISO timestamp.
   const analysisDate = /^\d{4}-\d{2}-\d{2}/.test(run.now) ? run.now.slice(0, 10) : run.now;
   const summary = `<section class="report-hero">
-    <p class="note" style="margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Total priced friction · expected</p>
+    <p class="note" style="margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Total priced friction (expected)</p>
     <p class="figure big" style="margin:0">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : money(total.expected, currency)}</p>
-    ${model.ranked.length === 0 ? '' : `<p class="note" style="margin:.3rem 0 0">Range ${money(total.low, currency)} – ${money(total.high, currency)}</p>`}
+    ${model.ranked.length === 0 ? '' : `<p class="note" style="margin:.3rem 0 0">Range ${money(total.low, currency)} to ${money(total.high, currency)}</p>`}
     <div class="meta">
       <span class="chip">${model.ranked.length} priced</span>
       <span class="chip">${model.unpriced.length} unpriced</span>
@@ -339,7 +351,7 @@ export function renderReportBody(
   const agingDays = run.assumptions.parameters.agingThresholdDays.value;
   const ranked =
     model.ranked.length === 0
-      ? `<div class="info">No priced friction crossed your thresholds in this import — a genuinely healthy sign for the work analysed. If you expected findings, your aging/queue thresholds may be set conservatively; lower them and re-run to surface smaller effects.</div>`
+      ? `<div class="info">No priced friction crossed your thresholds in this import. That is a genuinely healthy sign for the work analyzed. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`
       : model.ranked
           .map((rf) =>
             renderRankedFriction(
@@ -353,12 +365,12 @@ export function renderReportBody(
           )
           .join('');
   const links = options.printLinks
-    ? `<p class="note"><a href="/reports/${esc(options.runId)}/print">Printable / export version</a> · <a href="/reports/${esc(options.runId)}/raw">Raw markdown</a></p>`
+    ? `<p class="note"><a href="/reports/${esc(options.runId)}/print">Printable / export version</a> &nbsp; <a href="/reports/${esc(options.runId)}/raw">Raw markdown</a></p>`
     : '';
   const readingNote =
     model.ranked.length === 0
       ? ''
-      : `<p class="lead" style="margin-top:.6rem">This is the ongoing cost of workflow friction your team is currently carrying — time lost to waiting, chasing, and stalled work. It's <strong>recoverable</strong>: the ranked items below are where fixing the process would pay back the most.</p>
+      : `<p class="lead" style="margin-top:.6rem">This is the ongoing cost of workflow friction your team is currently carrying: time lost to waiting, chasing, and stalled work. It's <strong>recoverable</strong>: the ranked items below are where fixing the process would pay back the most.</p>
          <p class="note">Every figure is an <strong>estimate shown as a range</strong>, computed from your own work items and the rates you confirmed, and traceable to its formula (open “How this number was computed”). <strong>Confidence A/B/C</strong> reflects how much we observed versus inferred. Where a required input isn't confirmed, we leave the item <strong>unpriced</strong> rather than guess. <span title="Reference for support">Ref <code>${esc(run.runId)}</code></span></p>`;
   return `<p class="eyebrow">Friction report</p>
     <h1 style="margin-top:.6rem">What friction is costing this team</h1>
@@ -367,7 +379,7 @@ export function renderReportBody(
     ${summary}
     ${links}
     <section><h2>Ranked frictions</h2>
-    ${model.ranked.length === 0 ? '' : '<p class="note" style="margin-top:-.3rem">Ranked by expected cost — highest-leverage first.</p>'}
+    ${model.ranked.length === 0 ? '' : '<p class="note" style="margin-top:-.3rem">Ranked by expected cost, biggest first.</p>'}
     ${ranked}</section>
     ${renderTrend(run, options.previous ?? null)}
     ${renderUnpriced(model.unpriced)}

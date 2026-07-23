@@ -116,13 +116,13 @@ const BRAND_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192
 // happened instead of a bare "Invalid CSRF token." line.
 const csrfErrorBody = `<div class="empty" style="max-width:34rem;margin:2.5rem auto">
   <h3>That form has expired</h3>
-  <p>Invalid CSRF token. This usually means the page was open for a while or your session changed —
-  nothing was saved. Go back, refresh, and try again.</p>
+  <p>Invalid CSRF token. This usually means the page was open for a while or your session changed.
+  Nothing was saved. Go back, refresh, and try again.</p>
   <a class="btn" href="/">Back to CostFlow</a>
 </div>`;
 
 const PROVENANCE_LABEL: Record<Provenance, string> = {
-  'vendor-suggested': 'vendor suggested — not used in pricing until you accept or customize it',
+  'vendor-suggested': 'vendor suggested, not used in pricing until you accept or customize it',
   'customer-accepted': 'accepted by you',
   'customer-customized': 'customized by you',
   'customer-measured': 'measured',
@@ -260,7 +260,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const fmtWhen = (iso: string): string => {
     const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso);
     if (!m) return esc(iso);
-    return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]} · ${m[4]}:${m[5]} UTC`;
+    return `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}, ${m[4]}:${m[5]} UTC`;
   };
 
   // Executive list row for a stored run: the headline is the expected total —
@@ -274,7 +274,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         : s.priced === 0
           ? 'No priced frictions'
           : `${esc(s.expectedText)} expected`;
-    const sub = `${fmtWhen(r.createdAt)}${s !== null && s.priced > 0 ? ` · ${s.priced} priced` : ''} · Ref ${esc(r.id)}`;
+    const sub = `${fmtWhen(r.createdAt)}${s !== null && s.priced > 0 ? `, ${s.priced} priced` : ''}. Ref ${esc(r.id)}`;
     return `<li class="row"><a class="row-main" href="/reports/${esc(r.id)}"><span>${title}</span><span class="row-sub">${sub}</span></a><span class="row-go">View report →</span></li>`;
   };
 
@@ -456,7 +456,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/demo', async (_request, reply) => {
     const banner =
       '<div class="info">This is a <strong>sample report</strong> from demo data. ' +
-      '<a href="/login">Sign in</a> to run one on your own Jira or ClickUp — free.</div>';
+      '<a href="/login">Sign in</a> to run one on your own Jira or ClickUp. It\'s free.</div>';
     let body: string;
     try {
       body = renderReportBody(parseRun(DEMO_RUN_JSON), { runId: 'demo' });
@@ -466,14 +466,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const cta =
       '<div class="cta-band" style="margin-top:2.5rem">' +
       '<h2>Ready to see your own?</h2>' +
-      '<p class="lead">Connect Jira or ClickUp in about a minute and get a report like this for your team — free.</p>' +
+      '<p class="lead">Connect Jira or ClickUp in about a minute and get a report like this for your team. It\'s free.</p>' +
       '<div class="hero-actions"><a class="btn btn-lg" href="/login">Get started free</a></div>' +
       '</div>';
     return reply
       .type('text/html')
       .send(
         layout(
-          'Sample report — CostFlow',
+          'Sample report',
           `${banner}${body}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
         ),
       );
@@ -505,16 +505,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         .type('text/html')
         .send(
           layout(
-            'Demo — CostFlow',
+            'Demo',
             '<div class="empty" style="max-width:34rem;margin:2.5rem auto"><h3>The demo hiccuped</h3><p>Please <a href="/try">try another company</a>.</p></div>',
           ),
         );
     }
-    const banner = `<div class="info">You just analysed <strong>${esc(demo.companyName)}</strong> — a simulated ${esc(demo.industry)} (${demo.issueCount} issues, ${demo.teamSize}-person team) generated for this demo and run through the real CostFlow engine. <a href="/try">Generate a different company →</a></div>`;
+    const banner = `<div class="info">You just analyzed <strong>${esc(demo.companyName)}</strong>, a simulated ${esc(demo.industry)} with ${demo.issueCount} issues and a ${demo.teamSize}-person team. It was generated for this demo and run through the real CostFlow engine. <a href="/try">Generate a different company →</a></div>`;
     const cta =
       '<div class="cta-band" style="margin-top:2.5rem">' +
       '<h2>Now do it for your own team.</h2>' +
-      '<p class="lead">Connect Jira or ClickUp in about a minute and get this report on your real board — free, read-only.</p>' +
+      '<p class="lead">Connect Jira or ClickUp in about a minute and get this report on your real board. Free and read-only.</p>' +
       '<div class="hero-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>' +
       '<a class="lp-cta-link" href="/try">or try another company →</a></div>' +
       '</div>';
@@ -523,7 +523,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       .header('cache-control', 'public, max-age=1800')
       .send(
         layout(
-          `Demo — ${demo.companyName}`,
+          `Demo: ${demo.companyName}`,
           `${banner}${demo.reportBody}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
           undefined,
           // Infinite seed space — canonicalise crawlers to /try, don't index each.
@@ -647,13 +647,14 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       return notFound(reply);
     }
     const stats = await store.funnelStats();
-    const pct = (n: number, d: number): string => (d === 0 ? '—' : `${Math.round((n / d) * 100)}%`);
+    const pct = (n: number, d: number): string =>
+      d === 0 ? 'n/a' : `${Math.round((n / d) * 100)}%`;
     const row = (label: string, n: number): string =>
       `<tr><td>${label}</td><td>${n}</td><td>${pct(n, stats.organizations)}</td></tr>`;
     return reply.type('text/html').send(
       page(
         session,
-        'Admin — activation funnel',
+        'Admin: activation funnel',
         `<p class="eyebrow">Admin</p>
          <h1 style="margin-top:.6rem">Activation funnel</h1>
          <div class="table-wrap" style="max-width:34rem"><table><tr><th>Stage</th><th>Organizations</th><th>of signups</th></tr>
@@ -722,9 +723,9 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       session,
       'Connect a tracker',
       `${stepsNav('connect')}
-       <p class="eyebrow">Step 1 · Connect</p>
+       <p class="eyebrow">Step 1: Connect</p>
        <h1 style="margin-top:.6rem">Where does your team track work?</h1>
-       <p class="lead">CostFlow connects read-only, analyses your workflow history, and prices the
+       <p class="lead">CostFlow connects read-only, analyzes your workflow history, and prices the
        friction. Credentials are encrypted at rest and never shown again.</p>
        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1rem;max-width:44rem;margin-top:1.5rem">
          ${connectors
@@ -763,7 +764,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       session,
       `Connect ${d.name}`,
       `${stepsNav('connect')}
-       <p class="eyebrow">Step 1 · Connect</p>
+       <p class="eyebrow">Step 1: Connect</p>
        <h1 style="margin-top:.6rem">Connect your ${esc(d.connectionNoun)}</h1>
        <p class="lead">${esc(d.connectLead)}</p>
        <div class="panel" style="max-width:38rem;margin-top:1.5rem">
@@ -806,7 +807,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       connectPage(session, connector, {
         values: sameProvider ? workspace.connectionParams : {},
         connectedNote: sameProvider
-          ? `<div class="info">Connected — ${esc(connector.describeConnection(workspace.connectionParams))}. Submitting replaces the stored credentials.</div>`
+          ? `<div class="info">Connected: ${esc(connector.describeConnection(workspace.connectionParams))}. Submitting replaces the stored credentials.</div>`
           : workspace
             ? `<div class="info">This workspace is currently connected to ${esc(connectorOf(workspace).descriptor.name)}. Connecting ${esc(connector.descriptor.name)} replaces that connection and restarts setup from scope selection; existing reports are kept.</div>`
             : '',
@@ -925,9 +926,9 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         session,
         'Choose scope',
         `${stepsNav('scope')}
-         <p class="eyebrow">Step 2 · Scope</p>
+         <p class="eyebrow">Step 2: Scope</p>
          <h1 style="margin-top:.6rem">Choose the ${esc(d.scopeNoun.singular)} to import</h1>
-         <p class="lead">Pick the ${esc(d.name)} ${esc(d.scopeNoun.singular)} you want CostFlow to analyse. You can reconnect and switch it later.</p>
+         <p class="lead">Pick the ${esc(d.name)} ${esc(d.scopeNoun.singular)} you want CostFlow to analyze. You can reconnect and switch it later.</p>
          ${
            scopes.length === 0
              ? `<div class="empty" style="max-width:38rem">
@@ -986,7 +987,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           page(
             session,
             'Choose scope',
-            `<div class="error" role="alert">That selection is no longer valid — the ${esc(d.scopeNoun.singular)} list may have changed.</div>
+            `<div class="error" role="alert">That selection is no longer valid. The ${esc(d.scopeNoun.singular)} list may have changed.</div>
              <p><a class="btn btn-ghost" href="/scope">Back to selection</a></p>`,
           ),
         );
@@ -1053,11 +1054,11 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         session,
         'Map statuses',
         `${stepsNav('statuses')}
-         <p class="eyebrow">Step 3 · Statuses</p>
+         <p class="eyebrow">Step 3: Statuses</p>
          <h1 style="margin-top:.6rem">Map every status to a stage kind</h1>
-         <p class="lead">All ${workspace.observedStatuses.length} statuses observed (current and historical) must be mapped — history through an unmapped status would make the analysis refuse.</p>
+         <p class="lead">All ${workspace.observedStatuses.length} observed statuses, current and historical, must be mapped. The analysis refuses to run if history passes through an unmapped status.</p>
          <form method="post" action="/mapping/statuses" class="panel" style="margin-top:1.5rem">${csrfField(session)}
-           <div class="info">We've pre-selected suggestions from the ${esc(providerName)} workflow — review each one, adjust anything that's off, and save.</div>
+           <div class="info">We've pre-selected suggestions from the ${esc(providerName)} workflow. Review each one, adjust anything that's off, and save.</div>
            <div class="table-wrap"><table><tr><th>Status in ${esc(providerName)}</th><th>Stage kind</th></tr>
            ${workspace.observedStatuses
              .map((status, index) => {
@@ -1067,7 +1068,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
                const chosen =
                  workspace.statusMap?.[status] ?? workspace.statusHints?.[status] ?? null;
                return `<tr><td>${esc(status)}</td><td><select name="s${index}" required>
-                    <option value="" ${chosen === null ? 'selected' : ''} disabled>choose…</option>
+                    <option value="" ${chosen === null ? 'selected' : ''} disabled>Choose</option>
                     ${STAGE_KINDS.map(
                       (k) => `<option value="${k}" ${chosen === k ? 'selected' : ''}>${k}</option>`,
                     ).join('')}
@@ -1100,7 +1101,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
             page(
               session,
               'Map statuses',
-              `<div class="error" role="alert">Every status needs a stage kind — one selection is missing.</div>
+              `<div class="error" role="alert">Every status needs a stage kind. One selection is missing.</div>
                <p><a class="btn btn-ghost" href="/mapping/statuses">Back to status mapping</a></p>`,
             ),
           );
@@ -1135,12 +1136,12 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         session,
         'Map people to roles',
         `${stepsNav('roles')}
-         <p class="eyebrow">Step 4 · Roles</p>
+         <p class="eyebrow">Step 4: Roles</p>
          <h1 style="margin-top:.6rem">Map people to roles</h1>
          <p class="lead">Role names (e.g. "Legal", "Ops") price work by rate card. Anyone left blank is
-         pseudonymized — never stored by name — and priced at the default rate with reduced confidence.</p>
+         pseudonymized, never stored by name, and priced at the default rate with reduced confidence.</p>
          <form method="post" action="/mapping/actors" class="panel" style="margin-top:1.5rem">${csrfField(session)}
-           <div class="info">This step is optional — leaving everything blank is fine and is the fastest path to your first report. You can refine roles later.</div>
+           <div class="info">This step is optional. Leaving everything blank is fine and is the fastest path to your first report. You can refine roles later.</div>
            <div class="table-wrap"><table><tr><th>Person (from ${esc(connectorOf(workspace).descriptor.name)})</th><th>Role (blank = pseudonymize)</th></tr>
            ${workspace.observedActors
              .map(
@@ -1214,8 +1215,8 @@ Sitemap: https://app.fbx1.com/sitemap.xml
   const decimalAttrs =
     'inputmode="decimal" pattern="\\d+(\\.\\d+)?" title="Non-negative decimal, e.g. 0.5"';
   const rangeInputs = (name: string, range: RangeSpec): string =>
-    `<input name="${name}_low" size="6" ${decimalAttrs} value="${esc(range.low)}"> –
-     <input name="${name}_expected" size="6" ${decimalAttrs} value="${esc(range.expected)}"> –
+    `<input name="${name}_low" size="6" ${decimalAttrs} value="${esc(range.low)}"> /
+     <input name="${name}_expected" size="6" ${decimalAttrs} value="${esc(range.expected)}"> /
      <input name="${name}_high" size="6" ${decimalAttrs} value="${esc(range.high)}"> h/day`;
 
   const acceptBox = (name: string, provenance: Provenance): string =>
@@ -1242,17 +1243,17 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         session,
         'Assumptions',
         `${stepsNav('assumptions')}
-         <p class="eyebrow">Step 5 · Assumptions</p>
+         <p class="eyebrow">Step 5: Assumptions</p>
          <h1 style="margin-top:.6rem">Confirm your assumptions</h1>
          <p class="lead">Nothing is priced on a vendor suggestion: accept a value as yours, or change
          it. Unconfirmed assumptions leave their frictions unpriced in reports. Currency: ${esc(current.currency)}.</p>
          <form method="post" action="/assumptions" class="panel" style="margin-top:1.5rem">${csrfField(session)}
-           <div class="info"><label style="margin:0"><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong> — the fastest path to a fully priced report. You can change any value now or refine later.</label></div>
+           <div class="info"><label style="margin:0"><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong>, the fastest path to a fully priced report. You can change any value now or refine later.</label></div>
            <div class="table-wrap"><table><tr><th>Assumption</th><th>Value</th><th>Status</th></tr>
            ${current.rates
              .map((rate, index) =>
                row(
-                 `Hourly rate — ${rate.roleRef}`,
+                 `Hourly rate for ${rate.roleRef}`,
                  rate.provenance,
                  `<input name="rate${index}" size="8" ${decimalAttrs} value="${esc(rate.hourlyRate)}"> ${esc(current.currency)}/h`,
                  `rate${index}`,
@@ -1272,7 +1273,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
              'agingThresholdDays',
            )}
            ${row(
-             'Attention on aging items (hours/day, low–expected–high)',
+             'Attention on aging items (hours per day: low, expected, high)',
              current.parameters.attentionHoursPerDay.provenance,
              rangeInputs('attention', current.parameters.attentionHoursPerDay.range),
              'attention',
@@ -1396,7 +1397,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           page(
             session,
             'Assumptions',
-            `<p class="error">Invalid value(s) for: ${esc(invalid.join(', '))} — non-negative decimals only.</p>
+            `<p class="error">Invalid value(s) for: ${esc(invalid.join(', '))}. Use non-negative decimals only.</p>
              <p><a href="/assumptions">Back</a></p>`,
           ),
         );
@@ -1524,8 +1525,8 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           'Run failed',
           `<div class="panel" style="max-width:38rem">
              <h1>The analysis didn't finish</h1>
-             <p class="lead">We hit a problem while importing or analysing your project. Nothing was saved from this run.</p>
-             <div class="error"><strong>${esc(job.errorClass ?? 'unexpected')}</strong>${job.errorMessage ? ` — ${esc(job.errorMessage)}` : ''}</div>
+             <p class="lead">We hit a problem while importing or analyzing your project. Nothing was saved from this run.</p>
+             <div class="error"><strong>${esc(job.errorClass ?? 'unexpected')}</strong>${job.errorMessage ? `: ${esc(job.errorMessage)}` : ''}</div>
              <div class="hero-actions" style="justify-content:flex-start;margin-top:1.25rem">
                <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run again</button></form>
                <a class="btn btn-ghost" href="/connect">Check connection</a>
@@ -1553,7 +1554,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
                <div class="empty">
                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg></span>
                  <h3>No reports yet</h3>
-                 <p>Run your first analysis to see what workflow friction is costing your team — every figure traceable to its formula.</p>
+                 <p>Run your first analysis to see what workflow friction is costing your team. Every figure traces back to its formula.</p>
                  <a class="btn" href="/">Start an analysis</a>
                </div>`
           : `<h1>Reports</h1>
@@ -1703,7 +1704,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         (w) =>
           `<div class="danger">
              <h3>${esc(w.scopeName ?? 'Unconfigured workspace')} (${esc(w.scopeId ?? w.provider)})</h3>
-             <p class="note">${esc(connectors.get(w.provider)?.describeConnection(w.connectionParams) ?? w.provider)} · deletes this workspace and every run and job derived from it. This cannot be undone.</p>
+             <p class="note">${esc(connectors.get(w.provider)?.describeConnection(w.connectionParams) ?? w.provider)}. Deleting removes this workspace and every run and job derived from it. This cannot be undone.</p>
              <form method="post" action="/workspaces/${esc(w.id)}/delete">${csrfField(session)}
                <label>Type <strong>${DELETE_WORKSPACE_PHRASE}</strong> to confirm <input name="confirm" autocomplete="off" required></label>
                <button type="submit">Delete this workspace's data</button>
@@ -1724,7 +1725,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
            ${configCard('Scope', cfg.scopeName ? `${esc(cfg.scopeName)}${cfg.scopeId ? ` (${esc(cfg.scopeId)})` : ''}` : 'Not selected yet', '/scope', 'Change')}
            ${configCard('Statuses', cfg.statusMap ? `${Object.keys(cfg.statusMap).length} statuses mapped to stages` : 'Not mapped yet', '/mapping/statuses', 'Review')}
            ${configCard('Roles', cfg.actorRoleMap ? `${Object.keys(cfg.actorRoleMap).length} people mapped to roles` : 'Not mapped yet', '/mapping/actors', 'Review')}
-           ${configCard('Assumptions', cfg.assumptions ? `Currency ${esc(cfg.assumptions.currency)} · v${esc(cfg.assumptions.version)}` : 'Not set yet', '/assumptions', 'Review')}
+           ${configCard('Assumptions', cfg.assumptions ? `Currency ${esc(cfg.assumptions.currency)}, version ${esc(cfg.assumptions.version)}` : 'Not set yet', '/assumptions', 'Review')}
            ${configCard('Organization &amp; members', 'Invitations, roles, and access', '/org', 'Manage')}
          </div>`
       : '';
@@ -1776,7 +1777,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           page(
             session,
             'Settings',
-            `<p class="error">Deletion not confirmed — nothing was deleted. Type ${DELETE_WORKSPACE_PHRASE} exactly. <a href="/settings">Back</a></p>`,
+            `<p class="error">Deletion not confirmed, so nothing was deleted. Type ${DELETE_WORKSPACE_PHRASE} exactly. <a href="/settings">Back</a></p>`,
           ),
         );
     }
@@ -1813,7 +1814,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           page(
             session,
             'Settings',
-            `<p class="error">Deletion not confirmed — nothing was deleted. Type ${esc(DELETE_ACCOUNT_PHRASE)} exactly. <a href="/settings">Back</a></p>`,
+            `<p class="error">Deletion not confirmed, so nothing was deleted. Type ${esc(DELETE_ACCOUNT_PHRASE)} exactly. <a href="/settings">Back</a></p>`,
           ),
         );
     }
@@ -1899,7 +1900,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
   // with ?done=<key>; only keys from this fixed map ever render.
   const ORG_DONE: Record<string, string> = {
     renamed: 'Organization name saved.',
-    invited: 'Invitation created — share the invite link from the table below.',
+    invited: 'Invitation created. Share the invite link from the table below.',
     revoked: 'Invitation revoked.',
     role: 'Member role updated.',
     removed: 'Member removed from the organization.',
@@ -1960,7 +1961,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         const memberIds = memberIdsByWs.get(w.id) ?? [];
         const memberList =
           memberIds.length === 0
-            ? '<p class="note" style="margin:.4rem 0 .8rem">No explicit members — owners and admins always have access.</p>'
+            ? '<p class="note" style="margin:.4rem 0 .8rem">No explicit members. Owners and admins always have access.</p>'
             : memberIds
                 .map((uid) => {
                   const mu = userById.get(uid);
@@ -1987,7 +1988,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         'Organization',
         `<p class="eyebrow">Organization</p>
          <h1 style="margin-top:.6rem">Organization &amp; members</h1>
-         <p class="lead">Signed in as <strong>${esc(actor?.email ?? '')}</strong> · ${esc(actor?.role ?? '')}.</p>
+         <p class="lead">Signed in as <strong>${esc(actor?.email ?? '')}</strong> (${esc(actor?.role ?? '')}).</p>
          ${doneBanner}
 
          <div class="panel">
@@ -2014,7 +2015,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
              <label>Invite email <input name="email" type="email" required autocomplete="off"></label>
              <label>Role <select name="role"><option value="member">member</option><option value="admin">admin</option></select></label>
              <button type="submit">Create invitation</button>
-             <p class="note" style="margin-top:.75rem">Share the generated link with the invitee — they join this organization when they sign in with that email.</p>
+             <p class="note" style="margin-top:.75rem">Share the generated link with the invitee. They join this organization when they sign in with that email.</p>
            </form>
          </div>
 
@@ -2035,7 +2036,11 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     if (!checkCsrf(request, session, reply)) return;
     const name = ((request.body as { name?: string }).name ?? '').trim();
     if (name === '' || name.length > 100) {
-      return orgBadRequest(session, reply, 'Organization name must be 1–100 characters.');
+      return orgBadRequest(
+        session,
+        reply,
+        'Organization name must be between 1 and 100 characters.',
+      );
     }
     await store.updateTenantName(session.tenantId, name);
     telemetry(webEvent('tm-web-org-renamed', {}));

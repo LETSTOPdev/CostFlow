@@ -201,7 +201,7 @@ export function registerAuthRoutes(
   if (config.mode === 'dev') {
     app.get('/login', async (_request, reply) => {
       return reply.type('text/html').send(
-        `<!doctype html><title>CostFlow — sign in</title>
+        `<!doctype html><title>Sign in | CostFlow</title>
          <h1>Sign in (development mode)</h1>
          <form method="post" action="/login">
            <label>Email <input name="email" type="email" required></label>

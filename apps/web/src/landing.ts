@@ -55,7 +55,7 @@ const productMockup = `
         </div>
         <div class="lp-side-foot">
           <span class="lp-avatar">O</span>
-          <span>Operations · OPS</span>
+          <span>Operations (OPS)</span>
         </div>
       </aside>
       <div class="lp-main">
@@ -63,7 +63,7 @@ const productMockup = `
         <div class="lp-report-hero">
           <div class="lp-rh-label">Total priced friction</div>
           <div class="lp-rh-big">$2,229</div>
-          <div class="lp-rh-range">1,114 – 4,458 expected range</div>
+          <div class="lp-rh-range">1,114 to 4,458 expected range</div>
           <div class="lp-chips">
             <span>5 priced</span><span>0 unpriced</span><span>USD</span><span>Jul 20</span>
           </div>
@@ -78,9 +78,9 @@ const productMockup = `
         </div>
         <div class="lp-fr-label">Ranked frictions</div>
         <div class="lp-fr-list">
-          ${frictionRow(1, 'Queue wait · To Do', '$1,062', 'C', 100)}
-          ${frictionRow(2, 'Overdue exposure · To Do', '$342', 'A', 42)}
-          ${frictionRow(3, 'Aging · In Review', '$297', 'B', 34)}
+          ${frictionRow(1, 'Queue wait in To Do', '$1,062', 'C', 100)}
+          ${frictionRow(2, 'Overdue exposure in To Do', '$342', 'A', 42)}
+          ${frictionRow(3, 'Aging in In Review', '$297', 'B', 34)}
         </div>
       </div>
     </div>
@@ -95,10 +95,10 @@ const hero = `
 <section class="lp-hero">
   <div class="lp-aurora" aria-hidden="true"></div>
   <div class="container lp-hero-inner">
-    <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Free during beta · try a live demo — no signup →</a>
-    <h1 class="lp-h1">See what delays in Jira or ClickUp<br><span class="lp-grad">are costing you — in dollars.</span></h1>
-    <p class="lp-sub">Connect Jira or ClickUp. Get an itemized, ranked cost report in about a minute —
-      every figure traceable to its formula.</p>
+    <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Try the live demo free during beta. No signup required. →</a>
+    <h1 class="lp-h1">See what delays in Jira or ClickUp<br><span class="lp-grad">are costing you in dollars.</span></h1>
+    <p class="lp-sub">Connect Jira or ClickUp and get a ranked cost report in about a minute.
+      Every figure traces back to its formula.</p>
     <div class="lp-cta">
       <a class="btn btn-lg" href="/signup">Get started free</a>
       <a class="btn btn-ghost btn-lg" href="/try">Try a live demo</a>
@@ -120,7 +120,7 @@ const how = `
     <div class="lp-steps">
       <div class="lp-step">
         <div class="lp-step-viz lp-viz-connect">
-          <div class="lp-mini-field"><span>Workspace</span><i>Jira · ClickUp</i></div>
+          <div class="lp-mini-field"><span>Workspace</span><i>Jira or ClickUp</i></div>
           <div class="lp-mini-field"><span>API token</span><i>••••••••••••</i></div>
           <div class="lp-mini-btn">Validate &amp; connect</div>
         </div>
@@ -159,13 +159,13 @@ const traceable = `
     <div class="lp-split-copy">
       <p class="lp-kicker">Defensible by design</p>
       <h2 class="lp-h2">Every number opens up<br>into <span class="lp-grad">exactly how it was computed.</span></h2>
-      <p class="lp-lead">No black box. Every figure expands into its formula, inputs, and assumptions —
-        and unconfirmed assumptions stay <em>unpriced</em>, never invented.</p>
+      <p class="lp-lead">No black box. Every figure expands into its formula, inputs, and assumptions.
+        Unconfirmed assumptions stay <em>unpriced</em>. Nothing is invented.</p>
     </div>
     <div class="lp-split-viz">
       <div class="lp-trace-card">
-        <div class="lp-tc-head"><span class="lp-fr-rank">#1</span> Queue wait · To Do <span class="lp-pill lp-pill-C" style="margin-left:auto">● C</span></div>
-        <div class="lp-tc-amt">$531 – $2,124 <span>expected ~$1,062</span></div>
+        <div class="lp-tc-head"><span class="lp-fr-rank">#1</span> Queue wait in To Do <span class="lp-pill lp-pill-C" style="margin-left:auto">● C</span></div>
+        <div class="lp-tc-amt">$531 to $2,124 <span>expected ~$1,062</span></div>
         <div class="lp-tc-open">How this number was computed
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </div>
@@ -181,8 +181,8 @@ const traceable = `
 
 const midCta = `
 <section class="lp-midcta"><div class="container">
-  <a class="btn btn-lg" href="/signup">See what it's costing my team — free</a>
-  <p class="lp-midcta-fine">Your own report in about a minute · no credit card · read-only</p>
+  <a class="btn btn-lg" href="/signup">See what it's costing my team</a>
+  <p class="lp-midcta-fine">Your first report takes about a minute. No credit card. Read-only access.</p>
 </div></section>`;
 
 const ICONS = {
@@ -200,7 +200,7 @@ const trust = `
     <div class="lp-feat-grid">
       <div class="lp-feat"><span class="lp-feat-ic">${ICONS.people}</span>
         <h3>People are never scored</h3>
-        <p>Cost is attributed to processes and stages — never to named individuals.</p></div>
+        <p>Costs are attributed to processes and stages, never to named individuals.</p></div>
       <div class="lp-feat"><span class="lp-feat-ic">${ICONS.lock}</span>
         <h3>Your data, your control</h3>
         <p>Credentials encrypted at rest. Delete everything, anytime.</p></div>
@@ -212,15 +212,15 @@ const trust = `
 const FAQ_ITEMS: readonly [string, string][] = [
   [
     'Is it really free? What is the catch?',
-    'No catch. CostFlow is a free public beta — no credit card, no trial clock. Paid plans come later; nothing you do now will cost you.',
+    'No catch. CostFlow is free while in beta. No credit card, no trial clock. Paid plans come later, and nothing you do now will cost you.',
   ],
   [
     'Will you change anything in my Jira or ClickUp?',
-    'Never. CostFlow is read-only — a personal API token, used only to read. No comments, no status changes, nothing written back.',
+    'Never. CostFlow connects with a personal API token and only reads. No comments, no status changes, nothing written back.',
   ],
   [
     'How are the numbers calculated?',
-    'From your imported work items and the rates you confirm. Every figure drills down to its formula and inputs — open the sample report to see exactly how.',
+    'From your imported work items and the rates you confirm. Every figure drills down to its formula and inputs. Open the sample report to see exactly how.',
   ],
   [
     'What about privacy and my data?',
@@ -228,7 +228,7 @@ const FAQ_ITEMS: readonly [string, string][] = [
   ],
   [
     'Which tools do you support?',
-    'Jira and ClickUp today. Monday, Asana, and CSV import are proven in our engine and coming to the product soon.',
+    'Jira and ClickUp today. Monday, Asana, and CSV import are next.',
   ],
 ];
 
@@ -253,8 +253,7 @@ function landingJsonLd(): string {
         name: 'CostFlow',
         url: 'https://app.fbx1.com/',
         logo: 'https://app.fbx1.com/brand/icon-512.png',
-        description:
-          'Business Friction Intelligence — price the cost of workflow friction from Jira or ClickUp.',
+        description: 'CostFlow prices the cost of workflow friction from Jira or ClickUp data.',
       },
       {
         '@type': 'WebSite',
@@ -270,7 +269,7 @@ function landingJsonLd(): string {
         operatingSystem: 'Web',
         url: 'https://app.fbx1.com/',
         description:
-          'Connect Jira or ClickUp and CostFlow turns delays, queues, and overdue work into an itemized, ranked cost report — every figure traceable to its formula.',
+          'Connect Jira or ClickUp and CostFlow turns delays, queues, and overdue work into a ranked cost report. Every figure traces back to its formula.',
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         publisher: { '@id': 'https://app.fbx1.com/#org' },
       },
@@ -297,7 +296,7 @@ const ctaBand = `
       <h2 class="lp-cta-h">Find out what your delays<br>are really costing you.</h2>
       <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>
         <a class="lp-cta-link" href="/try">or try a live demo →</a></div>
-      <p class="lp-cta-fine">No credit card · read-only access · delete your data anytime</p>
+      <p class="lp-cta-fine">No credit card. Read-only access. Delete your data at any time.</p>
     </div>
   </div>
 </div></section>`;
@@ -311,7 +310,7 @@ const footer = `
       <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>
     </nav>
   </div>
-  <p class="lp-foot-fine">CostFlow — Business Friction Intelligence. Powered by FBX1.</p>
+  <p class="lp-foot-fine">CostFlow is an FBX1 product.</p>
 </div></footer>`;
 
 /* ------------------------------------------------------------------ *
@@ -525,7 +524,7 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:#4c43d6;filter:bright
 /** Marketing landing shown to logged-out visitors at `/`. */
 export function renderLanding(): string {
   const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero}${how}${traceable}${midCta}${trust}${faq()}${ctaBand}${footer}</div>`;
-  return layout('CostFlow — see what friction costs your team', body, undefined, {
+  return layout('CostFlow: see what workflow friction costs your team', body, undefined, {
     bleed: true,
     canonical: 'https://app.fbx1.com/',
     jsonLd: landingJsonLd(),
@@ -535,7 +534,7 @@ export function renderLanding(): string {
 /** Shared shell for the legal/long-form pages (Terms, Privacy). */
 function legalPage(title: string, inner: string, path: string): string {
   const body = `<article class="panel" style="max-width:46rem;margin-inline:auto">${inner}</article>`;
-  return layout(`${title} — CostFlow`, body, undefined, {
+  return layout(title, body, undefined, {
     canonical: `https://app.fbx1.com${path}`,
   });
 }
@@ -558,8 +557,8 @@ export function renderTerms(): string {
     <ul>
       <li>Do not attempt to disrupt the service, access other organizations' data, or reverse the
       pseudonymization of individuals.</li>
-      <li>The service may change or pause during beta; estimates are decision-support, not financial or
-      legal advice.</li>
+      <li>The service may change or pause while in beta. Estimates support decisions; they are not
+      financial or legal advice.</li>
     </ul>
     <h2>Liability</h2>
     <p>To the maximum extent permitted by law, CostFlow is not liable for decisions made using its
@@ -568,7 +567,7 @@ export function renderTerms(): string {
     <p>Questions: <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</p>
     <p class="note">This beta agreement is intended to be clear and fair; it is not a substitute for
     legal advice and will be reviewed by counsel before general availability.</p>
-    <p style="margin-top:1.5rem"><a href="/">← Home</a> &nbsp;·&nbsp; <a href="/privacy">Privacy</a></p>`,
+    <p style="margin-top:1.5rem"><a href="/">← Home</a>&emsp;<a href="/privacy">Privacy</a></p>`,
     '/terms',
   );
 }
@@ -591,20 +590,20 @@ export function renderPrivacy(): string {
       <li><strong>Individuals are pseudonymized</strong> before analysis; no report, export, or API response
       ranks or scores a named person.</li>
       <li><strong>Isolation:</strong> every organization's data is strictly scoped to that organization.</li>
-      <li><strong>Operational logs</strong> record request shape only — never your data, credentials, or
+      <li><strong>Operational logs</strong> record request shape only, never your data, credentials, or
       identities.</li>
-      <li><strong>Product analytics</strong> during beta are aggregate counts only (how many organizations
-      reach each step) — never your content.</li>
+      <li><strong>Product analytics</strong> are aggregate counts only, such as how many organizations
+      reach each step. Your content is never included.</li>
     </ul>
     <h2>Your rights</h2>
     <ul>
-      <li>Delete a workspace, or your entire organization, at any time — deletion cascades to every
+      <li>Delete a workspace, or your entire organization, at any time. Deletion cascades to every
       derived report (GDPR-style erasure).</li>
       <li>Request help or a data question anytime: <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>.</li>
     </ul>
     <p class="note">This notice is written to be honest and complete for the beta; it will be reviewed by
     counsel before general availability.</p>
-    <p style="margin-top:1.5rem"><a href="/">← Home</a> &nbsp;·&nbsp; <a href="/terms">Terms</a></p>`,
+    <p style="margin-top:1.5rem"><a href="/">← Home</a>&emsp;<a href="/terms">Terms</a></p>`,
     '/privacy',
   );
 }

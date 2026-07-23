@@ -13,7 +13,7 @@ describe('interactive demo', () => {
     const t = makeApp();
     const analysing = await t.app.inject({ method: 'GET', url: '/try' });
     expect(analysing.statusCode).toBe(200);
-    expect(analysing.body).toContain('Analysing a live company');
+    expect(analysing.body).toContain('Analyzing a live company');
     // No-JS handoff to the deterministic report.
     expect(analysing.body).toMatch(
       /http-equiv="refresh" content="\d+; url=\/try\/report\?seed=\d+"/,
@@ -25,7 +25,7 @@ describe('interactive demo', () => {
     const t = makeApp();
     const res = await t.app.inject({ method: 'GET', url: '/try/report?seed=42' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('You just analysed');
+    expect(res.body).toContain('You just analyzed');
     expect(res.body).toContain('Ranked frictions');
     expect(res.body).toContain('Total priced friction');
     expect(res.body).toContain('/signup'); // conversion CTA

@@ -158,7 +158,7 @@ const INDUSTRIES: readonly Industry[] = [
     firstNames: NAMES_A,
     lastNames: NAMES_B,
     summaries: [
-      'Q3 launch campaign — hero video edit',
+      'Q3 launch campaign: hero video edit',
       'Rework landing page for Acme rebrand',
       'Client feedback round 3 on social kit',
       'Photography shoot deliverables',
@@ -261,7 +261,7 @@ const INDUSTRIES: readonly Industry[] = [
       'Site drainage remediation',
       'Elevator commissioning',
       'Structural inspection sign-off',
-      'Punch-list closeout — floor 3',
+      'Punch-list closeout: floor 3',
     ],
     currency: 'USD',
     aging: 21,
@@ -334,7 +334,7 @@ const INDUSTRIES: readonly Industry[] = [
     summaries: [
       'Retool line 3 for the new SKU',
       'Investigate QC failure on batch 4471',
-      'Preventive maintenance — press #2',
+      'Preventive maintenance: press #2',
       'Supplier delay on bearings',
       'Calibrate CNC tolerances',
       'Rework defective housing lot',
@@ -372,7 +372,7 @@ const INDUSTRIES: readonly Industry[] = [
     firstNames: NAMES_A,
     lastNames: NAMES_B,
     summaries: [
-      'Q2 month-end close — intercompany',
+      'Q2 month-end close: intercompany',
       'Reconcile the revenue subledger',
       'SOX control testing remediation',
       'Automate the flux commentary report',
