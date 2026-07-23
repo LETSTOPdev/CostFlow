@@ -1,0 +1,85 @@
+{
+  "86czqa1": {
+    "current_status": {
+      "status": "review",
+      "color": "#a875ff",
+      "total_time": { "by_minute": 17280, "since": "1783468800000" }
+    },
+    "status_history": [
+      {
+        "status": "backlog",
+        "color": "#d3d3d3",
+        "type": "open",
+        "orderindex": 0,
+        "total_time": { "by_minute": 7200, "since": "1781913600000" }
+      },
+      {
+        "status": "in progress",
+        "color": "#5f55ee",
+        "type": "custom",
+        "orderindex": 1,
+        "total_time": { "by_minute": 18720, "since": "1782345600000" }
+      },
+      {
+        "status": "review",
+        "color": "#a875ff",
+        "type": "custom",
+        "orderindex": 2,
+        "total_time": { "by_minute": 17280, "since": "1783468800000" }
+      }
+    ]
+  },
+  "86czqb2": {
+    "current_status": {
+      "status": "in progress",
+      "color": "#5f55ee",
+      "total_time": { "by_minute": 25920, "since": "1782950400000" }
+    },
+    "status_history": [
+      {
+        "status": "backlog",
+        "color": "#d3d3d3",
+        "type": "open",
+        "orderindex": 0,
+        "total_time": { "by_minute": 14400, "since": "1782086400000" }
+      },
+      {
+        "status": "in progress",
+        "color": "#5f55ee",
+        "type": "custom",
+        "orderindex": 1,
+        "total_time": { "by_minute": 25920, "since": "1782950400000" }
+      }
+    ]
+  },
+  "86czqd4": {
+    "current_status": {
+      "status": "complete",
+      "color": "#6bc950",
+      "total_time": { "by_minute": 31680, "since": "1782604800000" }
+    },
+    "status_history": [
+      {
+        "status": "backlog",
+        "color": "#d3d3d3",
+        "type": "open",
+        "orderindex": 0,
+        "total_time": { "by_minute": 2880, "since": "1781049600000" }
+      },
+      {
+        "status": "in progress",
+        "color": "#5f55ee",
+        "type": "custom",
+        "orderindex": 1,
+        "total_time": { "by_minute": 23040, "since": "1781222400000" }
+      },
+      {
+        "status": "complete",
+        "color": "#6bc950",
+        "type": "closed",
+        "orderindex": 3,
+        "total_time": { "by_minute": 31680, "since": "1782604800000" }
+      }
+    ]
+  }
+}

@@ -2055,3 +2055,53 @@ Self-serve signup is an **Auth0 dashboard change** (enable sign-ups, remove the
 invited-testers allowlist). The app already provisions a new organization for
 any authenticated email, so it is launch-ready; see docs/16 §2b. Also set
 `COSTFLOW_ADMIN_EMAILS` and confirm the `support@fbx1.com` mailbox.
+
+## 2026-07-23 — P6: multi-platform connector architecture + ClickUp (ADR-0005)
+
+### What shipped
+
+The product layer stopped being Jira-shaped. `apps/web/src/connectors/` is the
+new platform layer: a `Connector` contract (descriptor + effectful gateway +
+pure adapters over the ingestion transform), a static registry wired in
+`main.ts`, and one module per platform (`jira.ts` — absorbing the old
+`jira-gateway.ts` — and the new `clickup.ts`). `WorkspaceRecord` generalized:
+open `provider` string, `connectionParams` jsonb + one encrypted secret
+replacing the Jira `site`/`email` columns (idempotent in-place backfill),
+`scopeId`/`scopeName` over the legacy project columns, and connector-derived
+`statusHints` captured at scope time. `executeJob` dispatches on
+`workspace.provider` through the registry exactly once; `/connect` gained a
+provider picker with descriptor-driven forms; `/scope` and the mapping steps
+speak each platform's vocabulary. The N4 boundary now covers the web app: a
+new depcruise rule forbids concrete connector imports outside the connectors
+directory, the composition root, and the Jira-shaped demo generator.
+
+ClickUp is the second production connector: List-scoped import over the
+workspace→space→folder hierarchy, token-only auth (raw Authorization header),
+tasks + subtasks + closed tasks, and status history reconstructed from the
+Total-Time-in-Status endpoints under documented derivation rules CU1–CU5
+(J-rule analogs: entry-chain reconstruction by `since` instant, arrival-only
+fallback, first-assignee actor with counted diagnostic, drop/refuse mapping
+asymmetry, hard error on truncated pagination). The gateway absorbs ClickUp's
+100 req/min rate limit with windowed 429 retries and rebalances the bulk
+residency endpoint's 2–100-id chunks. Fields no detector prices (priority,
+estimates, custom fields) are deliberately not canonicalized.
+
+### Proofs
+
+`clickup-transform.test.ts` (19 cases incl. the shared SPI conformance suite);
+golden `demo-clickup` frozen with a hand-computed table (queue-wait backlog
+1110 C / overdue 342 A / aging 297 B / queue-wait review 288 B / overdue 240 A)
+— CU2 feeds F1 (49-day open wait from two facts), terminal-stage due dates
+excluded, CU3 diagnostic visible; `clickup-journey.test.ts` — picker →
+token-only connect → List scope → hint-prefilled mappings → run → report
+reproducing the golden figures via the web, plus platform-switch semantics
+(reset scope/mappings, keep runs). All existing goldens byte-identical; the
+engine did not change.
+
+### Honest ledger
+
+CU1 collapses status bounce sequences (residency keeps only the latest entry
+instant per status): total wait is conserved, but a revisited status's earlier
+stints attribute to the chain's preceding statuses. Documented in the
+transform and the ADR; never overstates total cost. ClickUp status casing
+follows the API (lowercase); the mapping UI shows API truth.

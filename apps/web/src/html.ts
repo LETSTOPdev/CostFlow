@@ -365,7 +365,7 @@ export function layout(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>${esc(title)} — CostFlow</title>
-<meta name="description" content="See what workflow friction is costing your team. Connect Jira and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
+<meta name="description" content="See what workflow friction is costing your team. Connect Jira or ClickUp and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
 <link rel="icon" type="image/svg+xml" href="/brand/logo.svg">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
@@ -374,7 +374,7 @@ export function layout(
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://app.fbx1.com/">
 <meta property="og:title" content="CostFlow — see what workflow friction is costing your team">
-<meta property="og:description" content="Connect Jira and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
+<meta property="og:description" content="Connect Jira or ClickUp and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
 <meta property="og:image" content="https://app.fbx1.com/og.jpg">
 <meta property="og:image:secure_url" content="https://app.fbx1.com/og.jpg">
 <meta property="og:image:type" content="image/jpeg">
@@ -382,7 +382,7 @@ export function layout(
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="CostFlow — see what workflow friction is costing your team">
-<meta name="twitter:description" content="Connect Jira and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
+<meta name="twitter:description" content="Connect Jira or ClickUp and get an itemized, ranked cost report in about a minute — every figure traceable to its formula.">
 <meta name="twitter:image" content="https://app.fbx1.com/og.jpg">
 ${seoHead}
 <style>${STYLES}</style>
@@ -453,8 +453,8 @@ export function loadingPage(): string {
  */
 export function demoAnalyzingPage(seed: number): string {
   const stages = [
-    'Connecting to Jira',
-    'Reading projects & issues',
+    'Connecting to the workspace',
+    'Reading boards & work items',
     'Building the work timeline',
     'Detecting bottlenecks',
     'Pricing hidden costs',

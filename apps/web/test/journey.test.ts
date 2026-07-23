@@ -20,6 +20,7 @@ async function completeJourneyToAssumptions(t: TestApp, cookie: string): Promise
   // 2. connect a Jira workspace (validated against the gateway)
   record(
     await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: TOKEN,
@@ -165,6 +166,7 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
     const t = makeApp();
     const cookie = await signIn(t, 'careless@acme.example');
     await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: TOKEN,
@@ -196,13 +198,14 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
     const report = await get(t, cookie, jobPage.headers['location'] as string);
     expect(report.body).toContain('Unpriced frictions');
     expect(report.body).toContain('vendor-suggested');
-    expect(report.body).toContain('No priced frictions detected'); // nothing priced at all
+    expect(report.body).toContain('No priced friction crossed your thresholds'); // nothing priced at all
   });
 
   it('"Accept all suggested values" (v1) reaches a priced report in one click', async () => {
     const t = makeApp();
     const cookie = await signIn(t, 'fast@acme.example');
     await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: TOKEN,
@@ -237,7 +240,7 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
     const report = await get(t, cookie, jobPage.headers['location'] as string);
     // A priced report, not the all-unpriced gate.
     expect(report.body).toContain('Ranked frictions');
-    expect(report.body).not.toContain('No priced frictions detected');
+    expect(report.body).not.toContain('No priced friction crossed your thresholds');
     expect(report.body).toContain('Confidence');
   });
 });

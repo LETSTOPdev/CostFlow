@@ -5,13 +5,13 @@ import { loadConfig } from '../src/config';
 import { securityHeaders } from '../src/security';
 import { MemoryStore } from '../src/store/memory';
 import {
-  StubJiraGateway,
   SESSION_KEY,
   CREDENTIAL_KEY,
   TOKEN,
   makeApp,
   post,
   signIn,
+  stubConnectors,
 } from './helpers';
 
 describe('security headers + CSP (doc 09 P4.2 §2)', () => {
@@ -52,7 +52,7 @@ describe('health + readiness probes (doc 09 P4.2 §4)', () => {
     const events: TelemetryEvent[] = [];
     const app = buildServer({
       store: brokenStore,
-      gateway: new StubJiraGateway(),
+      connectors: stubConnectors(),
       auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
       telemetry: (e) => events.push(e),
     });
@@ -94,6 +94,7 @@ describe('sanitized operational logging (doc 09 P4.2 §5)', () => {
     const cookie = await signIn(t, 'log@b.example');
     // POST a body carrying the secret token; the log line must not echo it.
     await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://log.atlassian.net',
       email: 'log@b.example',
       token: TOKEN,

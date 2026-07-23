@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GatewayError } from '../src/jira-gateway';
+import { GatewayError } from '../src/connectors/types';
 import { TOKEN, get, makeApp, post, signIn, type TestApp } from './helpers';
 
 /**
@@ -12,6 +12,7 @@ import { TOKEN, get, makeApp, post, signIn, type TestApp } from './helpers';
 async function reachScope(t: TestApp, email: string): Promise<string> {
   const cookie = await signIn(t, email);
   await post(t, cookie, '/connect', {
+    provider: 'jira',
     site: 'https://acme.atlassian.net',
     email,
     token: TOKEN,
@@ -26,11 +27,11 @@ describe('project import (POST /scope)', () => {
     const res = await post(t, cookie, '/scope', { project: '0' }); // OPS
     expect(res.statusCode).toBe(302);
     expect(res.headers['location']).toBe('/mapping/statuses');
-    expect(t.gateway.lastFetchProjectKey).toBe('OPS');
+    expect(t.gateway.lastFetchScopeId).toBe('OPS');
 
     const tenantId = (await t.store.findUserByEmail('ok@acme.example'))!.tenantId;
     const workspace = (await t.store.listWorkspaces(tenantId))[0]!;
-    expect(workspace.projectKey).toBe('OPS');
+    expect(workspace.scopeId).toBe('OPS');
     expect(workspace.onboarding).toBe('scope-selected');
     expect(workspace.observedStatuses.length).toBeGreaterThan(0); // parsed from the import
   });
@@ -44,7 +45,7 @@ describe('project import (POST /scope)', () => {
     expect(scopePage.body).toContain('value="1"'); // MKT
     // Submitting index 1 must fetch MKT, not OPS (position → key mapping).
     await post(t, cookie, '/scope', { project: '1' });
-    expect(t.gateway.lastFetchProjectKey).toBe('MKT');
+    expect(t.gateway.lastFetchScopeId).toBe('MKT');
   });
 
   it('an out-of-range selection is rejected without calling the gateway import', async () => {
@@ -52,7 +53,7 @@ describe('project import (POST /scope)', () => {
     const cookie = await reachScope(t, 'oor@acme.example');
     const res = await post(t, cookie, '/scope', { project: '99' });
     expect(res.statusCode).toBe(400);
-    expect(t.gateway.lastFetchProjectKey).toBeNull();
+    expect(t.gateway.lastFetchScopeId).toBeNull();
   });
 
   it('a removed-endpoint style failure is shown as a sanitized, staged diagnostic (defect signature)', async () => {
@@ -73,7 +74,7 @@ describe('project import (POST /scope)', () => {
     expect(res.body).not.toContain(TOKEN);
 
     // A sanitized diagnostic log line was emitted — class/stage/status only.
-    const diag = t.logs.find((l) => l['msg'] === 'jira-import-failed');
+    const diag = t.logs.find((l) => l['msg'] === 'import-failed');
     expect(diag).toMatchObject({ errorClass: 'fetch-error', stage: 'search', status: 410 });
     const serialized = JSON.stringify(t.logs);
     expect(serialized).not.toContain(TOKEN);
@@ -95,7 +96,7 @@ describe('project import (POST /scope)', () => {
     const res = await post(t, cookie, '/scope', { project: '0' });
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('auth-error');
-    expect(t.logs.find((l) => l['msg'] === 'jira-import-failed')).toMatchObject({
+    expect(t.logs.find((l) => l['msg'] === 'import-failed')).toMatchObject({
       errorClass: 'auth-error',
       stage: 'search',
     });

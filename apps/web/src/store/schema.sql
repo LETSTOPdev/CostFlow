@@ -30,12 +30,16 @@ create index if not exists users_tenant on users (tenant_id);
 -- the org creators, so they backfill to 'owner'.
 alter table users add column if not exists role text not null default 'owner';
 
+-- `site`/`email` are legacy Jira-era columns (pre-ADR-0005), superseded by the
+-- provider-shaped connection_params jsonb; `project_key`/`project_name` are the
+-- legacy column names for the generic scope id/name. Kept (nullable) so the
+-- deployed database migrates in place without a rewrite.
 create table if not exists workspaces (
   id uuid primary key,
   tenant_id uuid not null references tenants (id) on delete cascade,
   provider text not null,
-  site text not null,
-  email text not null,
+  site text,
+  email text,
   token_ciphertext text not null,
   project_key text,
   project_name text,
@@ -48,6 +52,16 @@ create table if not exists workspaces (
   created_at timestamptz not null
 );
 create index if not exists workspaces_tenant on workspaces (tenant_id);
+-- ADR-0005 multi-connector migration (idempotent): relax the Jira-shaped NOT
+-- NULLs, add the generic columns, and backfill connection_params from the
+-- legacy site/email pair exactly once.
+alter table workspaces alter column site drop not null;
+alter table workspaces alter column email drop not null;
+alter table workspaces add column if not exists connection_params jsonb;
+alter table workspaces add column if not exists status_hints jsonb;
+update workspaces
+  set connection_params = jsonb_build_object('site', coalesce(site, ''), 'email', coalesce(email, ''))
+  where connection_params is null and (site is not null or email is not null);
 
 create table if not exists jobs (
   id uuid primary key,

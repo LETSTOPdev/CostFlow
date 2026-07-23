@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GatewayError } from '../src/jira-gateway';
+import { GatewayError } from '../src/connectors/types';
 import { redactPath } from '../src/security';
 import { buildServer } from '../src/server';
 import { MemoryStore } from '../src/store/memory';
@@ -13,6 +13,8 @@ import {
   makeApp,
   post,
   signIn,
+  stubConnectors,
+  StubClickUpGateway,
 } from './helpers';
 
 /**
@@ -59,7 +61,7 @@ describe('global error boundary', () => {
     const logs: Record<string, unknown>[] = [];
     const app = buildServer({
       store: new ThrowingRunsStore(),
-      gateway: new StubJiraGateway(),
+      connectors: stubConnectors(),
       auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
       telemetry: () => undefined,
       logSink: (line) => logs.push(line),
@@ -132,6 +134,7 @@ describe('graceful gateway failure on /scope', () => {
     const t = makeApp();
     const cookie = await signIn(t, 'owner@scope.example');
     await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: 'secret-jira-token-abc123',
@@ -151,6 +154,7 @@ describe('graceful gateway failure on /scope', () => {
       override async fetchAll() {
         // Jira's first page carries the authoritative `total`.
         return {
+          provider: 'jira' as const,
           searchPages: [JSON.stringify({ total: 999_999, issues: [] })],
           supplementaryChangelogs: {},
         };
@@ -160,16 +164,17 @@ describe('graceful gateway failure on /scope', () => {
     const gateway = new HugeGateway();
     const app = buildServer({
       store,
-      gateway,
+      connectors: stubConnectors(gateway),
       auth: { mode: 'dev', sessionKey: SESSION_KEY, credentialKey: CREDENTIAL_KEY },
       telemetry: () => {},
       jobNowFn: () => '2026-07-20T00:00:00Z',
       awaitJobs: true,
       maxIssues: 50_000,
     });
-    const t = { app, store, gateway, events: [], logs: [] };
+    const t = { app, store, gateway, clickup: new StubClickUpGateway(), events: [], logs: [] };
     const cookie = await signIn(t, 'huge@scope.example');
     await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: 'secret-jira-token-abc123',

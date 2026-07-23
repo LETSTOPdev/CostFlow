@@ -3,7 +3,13 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseIsoUtc } from '@costflow/domain';
-import { importCsv, transformAsana, transformJira, transformMonday } from '@costflow/ingestion';
+import {
+  importCsv,
+  transformAsana,
+  transformClickUp,
+  transformJira,
+  transformMonday,
+} from '@costflow/ingestion';
 import type { ImportBatch } from '@costflow/domain';
 import { runAnalysis } from '@costflow/analysis';
 import { buildReportModel, renderMarkdown } from '@costflow/reporting';
@@ -16,9 +22,11 @@ import { appendInteractionEvent, interactionEvent, writeDerivedTelemetry } from 
 import { fetchJira } from './fetchers/jira';
 import { fetchMonday } from './fetchers/monday';
 import { fetchAsana } from './fetchers/asana';
+import { fetchClickUp } from './fetchers/clickup';
 import {
   assumptionSetSchema,
   asanaMappingSchema,
+  clickupMappingSchema,
   jiraMappingSchema,
   mappingTemplateSchema,
   mondayMappingSchema,
@@ -30,11 +38,12 @@ import {
 
 const USAGE = `Usage:
   costflow analyze   --csv <file> --mapping <file> --assumptions <file> [options]
-  costflow analyze   --provider jira|monday|asana --raw <dir> --mapping <file> --assumptions <file> [options]
+  costflow analyze   --provider jira|monday|asana|clickup --raw <dir> --mapping <file> --assumptions <file> [options]
   costflow preflight --csv <file> --mapping <file> [--assumptions <file>] [options]
   costflow fetch     --provider jira --site <url> --email <email> --token-file <file> --project <KEY> --out <dir>
   costflow fetch     --provider monday --token-file <file> --project <board-id> --out <dir>
   costflow fetch     --provider asana --token-file <file> --project <project-gid> --out <dir>
+  costflow fetch     --provider clickup --token-file <file> --project <list-id> --out <dir>
 
 analyze runs the full pipeline and writes artifacts. preflight runs ONLY the
 structural import validation and prints a values-free structure summary — no
@@ -104,7 +113,7 @@ function readNumberedPages(baseDir: string, fileNames: string[], pattern: RegExp
 // P3 interaction telemetry: edge-only, failure-contained, machine-shape
 // fields (unknown user input is never echoed into events).
 const startedMs = Date.now();
-const KNOWN_PROVIDERS = new Set(['csv', 'jira', 'monday', 'asana']);
+const KNOWN_PROVIDERS = new Set(['csv', 'jira', 'monday', 'asana', 'clickup']);
 
 function edgeProvider(): string {
   const index = process.argv.indexOf('--provider');
@@ -170,8 +179,13 @@ function run(): void {
   const subcommand = positionals[0];
   if (subcommand === 'fetch') {
     const provider = values.provider;
-    if (provider !== 'jira' && provider !== 'monday' && provider !== 'asana') {
-      throw new CliError('fetch supports --provider jira, monday, or asana.');
+    if (
+      provider !== 'jira' &&
+      provider !== 'monday' &&
+      provider !== 'asana' &&
+      provider !== 'clickup'
+    ) {
+      throw new CliError('fetch supports --provider jira, monday, asana, or clickup.');
     }
     if (!values['token-file'] || !values.project || !values.out) {
       throw new CliError(USAGE);
@@ -189,6 +203,9 @@ function run(): void {
       }
       if (provider === 'monday') {
         return fetchMonday({ token, boardId: values.project }, out);
+      }
+      if (provider === 'clickup') {
+        return fetchClickUp({ token, listId: values.project }, out);
       }
       return fetchAsana({ token, projectGid: values.project }, out);
     })();
@@ -345,6 +362,43 @@ function run(): void {
       importedAt: now,
       pseudonymization,
     });
+  } else if (provider === 'clickup') {
+    if (!values.raw)
+      throw new CliError('--provider clickup requires --raw <dir> (fetched raw pages).');
+    const clickupMapping = readJsonFile(
+      values.mapping as string,
+      'ClickUp mapping',
+      clickupMappingSchema,
+    );
+    const pseudonymization = resolvePseudonymization(values, true);
+    const { baseDir, fileNames } = listRawDir(values.raw);
+    const taskPages = readNumberedPages(baseDir, fileNames, /^tasks-page-(\d+)\.json$/);
+    if (taskPages.length === 0) {
+      throw new CliError(
+        `No tasks-page-*.json files found in ${baseDir} — run costflow fetch first.`,
+      );
+    }
+    const timeInStatusPages = readNumberedPages(baseDir, fileNames, /^time-in-status-(\d+)\.json$/);
+    const singleTimeInStatusByTask: Record<string, string> = {};
+    for (const f of fileNames.filter((n) => /^time-in-status-single-.+\.json$/.test(n)).sort()) {
+      const match = /^time-in-status-single-(.+)\.json$/.exec(f);
+      if (!match) continue;
+      singleTimeInStatusByTask[match[1] as string] = readTextFile(join(baseDir, f), f);
+    }
+    runId = apiRunId(
+      [...taskPages, ...timeInStatusPages, ...Object.values(singleTimeInStatusByTask)],
+      clickupMapping,
+    );
+    batch = transformClickUp({
+      batchId: `batch-${runId}`,
+      taskPages,
+      timeInStatusPages: timeInStatusPages.length > 0 ? timeInStatusPages : undefined,
+      singleTimeInStatusByTask:
+        Object.keys(singleTimeInStatusByTask).length > 0 ? singleTimeInStatusByTask : undefined,
+      mapping: clickupMapping,
+      importedAt: now,
+      pseudonymization,
+    });
   } else if (provider === 'csv') {
     if (!values.csv) throw new CliError(USAGE);
     const csvText = readTextFile(values.csv, 'CSV file');
@@ -382,7 +436,9 @@ function run(): void {
       pseudonymization,
     });
   } else {
-    throw new CliError(`Unknown provider "${provider}" — supported: csv, jira, monday, asana.`);
+    throw new CliError(
+      `Unknown provider "${provider}" — supported: csv, jira, monday, asana, clickup.`,
+    );
   }
   const analysisRun = runAnalysis({
     runId,

@@ -1,0 +1,148 @@
+{
+  "tasks": [
+    {
+      "id": "86czqa1",
+      "custom_id": null,
+      "name": "Renew SOC 2 evidence collection",
+      "status": { "status": "review", "type": "custom", "orderindex": 2, "color": "#a875ff" },
+      "orderindex": "1.00000000000000000000000000000000",
+      "date_created": "1781913600000",
+      "date_updated": "1784073600000",
+      "date_closed": null,
+      "date_done": null,
+      "archived": false,
+      "creator": { "id": 183, "username": "Noa Legal", "color": "#827718" },
+      "assignees": [
+        {
+          "id": 183,
+          "username": "Noa Legal",
+          "color": "#827718",
+          "initials": "NL",
+          "email": "noa@example.test"
+        }
+      ],
+      "tags": [],
+      "parent": null,
+      "priority": { "color": "#f8ae00", "id": "3", "orderindex": "3", "priority": "normal" },
+      "due_date": "1783641600000",
+      "start_date": null,
+      "points": 3,
+      "time_estimate": "28800000",
+      "custom_fields": [],
+      "list": { "id": "901", "name": "Delivery", "access": true },
+      "folder": { "id": "457", "name": "Operations", "hidden": false, "access": true },
+      "space": { "id": "790" },
+      "url": "https://app.clickup.com/t/86czqa1"
+    },
+    {
+      "id": "86czqb2",
+      "custom_id": null,
+      "name": "Vendor risk review",
+      "status": { "status": "in progress", "type": "custom", "orderindex": 1, "color": "#5f55ee" },
+      "orderindex": "2.00000000000000000000000000000000",
+      "date_created": "1782086400000",
+      "date_updated": "1784332800000",
+      "date_closed": null,
+      "date_done": null,
+      "archived": false,
+      "creator": { "id": 184, "username": "Guy Contractor", "color": "#b660e0" },
+      "assignees": [
+        {
+          "id": 184,
+          "username": "Guy Contractor",
+          "color": "#b660e0",
+          "initials": "GC",
+          "email": "guy@example.test"
+        },
+        {
+          "id": 185,
+          "username": "Mia Backup",
+          "color": "#04a9f4",
+          "initials": "MB",
+          "email": "mia@example.test"
+        }
+      ],
+      "tags": [],
+      "parent": null,
+      "priority": null,
+      "due_date": null,
+      "start_date": null,
+      "points": null,
+      "time_estimate": null,
+      "custom_fields": [],
+      "list": { "id": "901", "name": "Delivery", "access": true },
+      "folder": { "id": "457", "name": "Operations", "hidden": false, "access": true },
+      "space": { "id": "790" },
+      "url": "https://app.clickup.com/t/86czqb2"
+    },
+    {
+      "id": "86czqc3",
+      "custom_id": null,
+      "name": "Quarterly access audit",
+      "status": { "status": "backlog", "type": "open", "orderindex": 0, "color": "#d3d3d3" },
+      "orderindex": "3.00000000000000000000000000000000",
+      "date_created": "1780272000000",
+      "date_updated": "1782345600000",
+      "date_closed": null,
+      "date_done": null,
+      "archived": false,
+      "creator": { "id": 186, "username": "Dan Ops", "color": "#2ea52c" },
+      "assignees": [
+        {
+          "id": 186,
+          "username": "Dan Ops",
+          "color": "#2ea52c",
+          "initials": "DO",
+          "email": "dan@example.test"
+        }
+      ],
+      "tags": [],
+      "parent": null,
+      "priority": { "color": "#f50000", "id": "1", "orderindex": "1", "priority": "urgent" },
+      "due_date": "1782864000000",
+      "start_date": null,
+      "points": null,
+      "time_estimate": null,
+      "custom_fields": [],
+      "list": { "id": "901", "name": "Delivery", "access": true },
+      "folder": { "id": "457", "name": "Operations", "hidden": false, "access": true },
+      "space": { "id": "790" },
+      "url": "https://app.clickup.com/t/86czqc3"
+    },
+    {
+      "id": "86czqd4",
+      "custom_id": null,
+      "name": "Publish incident postmortem",
+      "status": { "status": "complete", "type": "closed", "orderindex": 3, "color": "#6bc950" },
+      "orderindex": "4.00000000000000000000000000000000",
+      "date_created": "1781049600000",
+      "date_updated": "1782604800000",
+      "date_closed": "1782604800000",
+      "date_done": "1782604800000",
+      "archived": false,
+      "creator": { "id": 183, "username": "Noa Legal", "color": "#827718" },
+      "assignees": [
+        {
+          "id": 183,
+          "username": "Noa Legal",
+          "color": "#827718",
+          "initials": "NL",
+          "email": "noa@example.test"
+        }
+      ],
+      "tags": [],
+      "parent": null,
+      "priority": null,
+      "due_date": "1782345600000",
+      "start_date": null,
+      "points": null,
+      "time_estimate": null,
+      "custom_fields": [],
+      "list": { "id": "901", "name": "Delivery", "access": true },
+      "folder": { "id": "457", "name": "Operations", "hidden": false, "access": true },
+      "space": { "id": "790" },
+      "url": "https://app.clickup.com/t/86czqd4"
+    }
+  ],
+  "last_page": true
+}

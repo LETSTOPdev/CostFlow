@@ -306,17 +306,23 @@ export class PgStore implements Store {
   }
 
   private workspaceFromRow(row: Record<string, unknown>): WorkspaceRecord {
+    // connection_params is the source of truth; rows written before the
+    // ADR-0005 migration reconstruct it from the legacy site/email columns.
+    const legacyParams: Record<string, string> = {
+      site: (row['site'] as string | null) ?? '',
+      email: (row['email'] as string | null) ?? '',
+    };
     return {
       id: row['id'] as string,
       tenantId: row['tenant_id'] as string,
-      provider: row['provider'] as 'jira',
-      site: row['site'] as string,
-      email: row['email'] as string,
+      provider: row['provider'] as string,
+      connectionParams: (row['connection_params'] as Record<string, string> | null) ?? legacyParams,
       tokenCiphertext: row['token_ciphertext'] as string,
-      projectKey: (row['project_key'] as string | null) ?? null,
-      projectName: (row['project_name'] as string | null) ?? null,
+      scopeId: (row['project_key'] as string | null) ?? null,
+      scopeName: (row['project_name'] as string | null) ?? null,
       observedStatuses: (row['observed_statuses'] as string[] | null) ?? [],
       observedActors: (row['observed_actors'] as string[] | null) ?? [],
+      statusHints: (row['status_hints'] as WorkspaceRecord['statusHints']) ?? null,
       statusMap: (row['status_map'] as WorkspaceRecord['statusMap']) ?? null,
       actorRoleMap: (row['actor_role_map'] as WorkspaceRecord['actorRoleMap']) ?? null,
       assumptions: (row['assumptions'] as WorkspaceRecord['assumptions']) ?? null,
@@ -327,14 +333,26 @@ export class PgStore implements Store {
 
   async createWorkspace(
     tenantId: string,
-    data: Pick<WorkspaceRecord, 'provider' | 'site' | 'email' | 'tokenCiphertext'>,
+    data: Pick<WorkspaceRecord, 'provider' | 'connectionParams' | 'tokenCiphertext'>,
   ): Promise<WorkspaceRecord> {
     const id = newId();
     const createdAt = this.now();
+    // Rollback safety: `site`/`email` params are ALSO mirrored into the
+    // legacy columns (generic on param keys, not on provider), so a rollback
+    // to a pre-ADR-0005 build keeps working against rows written by this one.
     await this.pool.query(
-      `insert into workspaces (id, tenant_id, provider, site, email, token_ciphertext, created_at)
-       values ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, tenantId, data.provider, data.site, data.email, data.tokenCiphertext, createdAt],
+      `insert into workspaces (id, tenant_id, provider, connection_params, site, email, token_ciphertext, created_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        id,
+        tenantId,
+        data.provider,
+        JSON.stringify(data.connectionParams),
+        data.connectionParams['site'] ?? null,
+        data.connectionParams['email'] ?? null,
+        data.tokenCiphertext,
+        createdAt,
+      ],
     );
     return (await this.getWorkspace(tenantId, id)) as WorkspaceRecord;
   }
@@ -362,12 +380,21 @@ export class PgStore implements Store {
     patch: WorkspacePatch,
   ): Promise<WorkspaceRecord | null> {
     const columns: Record<string, unknown> = {};
-    if (patch.projectKey !== undefined) columns['project_key'] = patch.projectKey;
-    if (patch.projectName !== undefined) columns['project_name'] = patch.projectName;
+    if (patch.provider !== undefined) columns['provider'] = patch.provider;
+    if (patch.connectionParams !== undefined) {
+      columns['connection_params'] = JSON.stringify(patch.connectionParams);
+      // Keep the legacy mirror in sync (see createWorkspace rollback note).
+      columns['site'] = patch.connectionParams['site'] ?? null;
+      columns['email'] = patch.connectionParams['email'] ?? null;
+    }
+    if (patch.scopeId !== undefined) columns['project_key'] = patch.scopeId;
+    if (patch.scopeName !== undefined) columns['project_name'] = patch.scopeName;
     if (patch.observedStatuses !== undefined)
       columns['observed_statuses'] = JSON.stringify(patch.observedStatuses);
     if (patch.observedActors !== undefined)
       columns['observed_actors'] = JSON.stringify(patch.observedActors);
+    if (patch.statusHints !== undefined)
+      columns['status_hints'] = JSON.stringify(patch.statusHints);
     if (patch.statusMap !== undefined) columns['status_map'] = JSON.stringify(patch.statusMap);
     if (patch.actorRoleMap !== undefined)
       columns['actor_role_map'] = JSON.stringify(patch.actorRoleMap);

@@ -9,6 +9,7 @@ export {
   JIRA_DESCRIPTOR,
   MONDAY_DESCRIPTOR,
   ASANA_DESCRIPTOR,
+  CLICKUP_DESCRIPTOR,
 } from './spi';
 export type { JiraMapping, JiraTransformInput } from './providers/jira/transform';
 export { transformJira } from './providers/jira/transform';
@@ -24,3 +25,17 @@ export type { MondayMapping, MondayTransformInput } from './providers/monday/tra
 export { transformMonday } from './providers/monday/transform';
 export type { AsanaMapping, AsanaTransformInput } from './providers/asana/transform';
 export { transformAsana } from './providers/asana/transform';
+export type { ClickUpMapping, ClickUpTransformInput } from './providers/clickup/transform';
+export { transformClickUp, observeClickUpPages } from './providers/clickup/transform';
+export {
+  CLICKUP_PAGE_SIZE,
+  clickupTeamsUrl,
+  clickupSpacesUrl,
+  clickupFoldersUrl,
+  clickupFolderlessListsUrl,
+  clickupTasksUrl,
+  clickupBulkTimeInStatusUrl,
+  clickupTimeInStatusUrl,
+  clickupPageInfo,
+  clickupBulkChunks,
+} from './providers/clickup/urls';

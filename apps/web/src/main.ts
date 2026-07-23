@@ -1,6 +1,8 @@
 import { loadConfig } from './config';
 import { buildServer } from './server';
-import { HttpJiraGateway } from './jira-gateway';
+import { buildJiraConnector, HttpJiraGateway } from './connectors/jira';
+import { buildClickUpConnector, HttpClickUpGateway } from './connectors/clickup';
+import { buildConnectorRegistry } from './connectors/registry';
 import { MemoryStore } from './store/memory';
 import { PgStore } from './store/pg';
 import { fileTelemetrySink } from './telemetry-web';
@@ -30,9 +32,16 @@ async function main(): Promise<void> {
     console.error(`Recovered ${interrupted} job(s) interrupted by the previous shutdown.`);
   }
 
+  // The connector registry is the ONLY place production platform gateways are
+  // wired (ADR-0005). Adding a platform = one connector module + one line here.
+  const connectors = buildConnectorRegistry([
+    buildJiraConnector(new HttpJiraGateway()),
+    buildClickUpConnector(new HttpClickUpGateway()),
+  ]);
+
   const app = buildServer({
     store,
-    gateway: new HttpJiraGateway(),
+    connectors,
     auth: config.auth,
     telemetry: fileTelemetrySink(),
     production: config.production,

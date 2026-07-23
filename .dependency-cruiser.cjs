@@ -86,6 +86,17 @@ module.exports = {
       from: { path: '^packages/(?!ingestion/)' },
       to: { path: 'providers/' },
     },
+    {
+      name: 'web-provider-modules-only-in-connectors',
+      comment:
+        'ADR-0005: the web product speaks only the abstract connector contract. Concrete ' +
+        'connector modules (connectors/jira, connectors/clickup, …) may be imported only by ' +
+        'the composition root (main.ts), the test seam, other connector modules, and ' +
+        'demo-live.ts (which synthesizes Jira-shaped demo data by design).',
+      severity: 'error',
+      from: { path: '^apps/web/src/(?!connectors/|main\\.ts|demo-live\\.ts)' },
+      to: { path: '^apps/web/src/connectors/(?!types|registry|suggest)' },
+    },
   ],
   options: {
     doNotFollow: { path: 'node_modules' },

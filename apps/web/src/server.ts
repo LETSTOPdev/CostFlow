@@ -7,7 +7,6 @@ import fastifyFormbody from '@fastify/formbody';
 import { marked } from 'marked';
 import type { AssumptionSet, Provenance, RangeSpec, StageKind } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
-import { observeJiraSearchPages } from '@costflow/ingestion';
 import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assumptions';
 import { findIndividualAttribution } from './attribution';
 import {
@@ -35,7 +34,8 @@ import { LOGO_SVG } from './brand';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
 import { parseRun, renderReportBody, runSummary } from './report-view';
 import { executeJob } from './jobs';
-import { GatewayError, type JiraGateway } from './jira-gateway';
+import { GatewayError, type ConnectFieldSpec, type Connector } from './connectors/types';
+import type { ConnectorRegistry } from './connectors/registry';
 import { registerSecurity } from './security';
 import {
   onboardingRank,
@@ -58,7 +58,7 @@ import { webEvent, type TelemetrySink } from './telemetry-web';
 
 export interface ServerDeps {
   readonly store: Store;
-  readonly gateway: JiraGateway;
+  readonly connectors: ConnectorRegistry;
   readonly auth: AuthConfig;
   readonly telemetry: TelemetrySink;
   /** Deterministic job time for tests; production uses the wall clock. */
@@ -117,7 +117,7 @@ const PROVENANCE_LABEL: Record<Provenance, string> = {
 const DECIMAL = /^\d+(\.\d+)?$/;
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
-  const { store, gateway, auth, telemetry } = deps;
+  const { store, connectors, auth, telemetry } = deps;
   const app = Fastify({ trustProxy: deps.trustProxy === true });
   void app.register(fastifyCookie);
   void app.register(fastifyFormbody);
@@ -352,10 +352,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return new Set(ids);
   };
 
-  // Sanitized diagnostics for Jira gateway failures (P4.2 defect 2): the
-  // stage, error class, and HTTP status — never URLs, credentials, issue
+  // Sanitized diagnostics for connector gateway failures (P4.2 defect 2): the
+  // stage, error class, and HTTP status — never URLs, credentials, item
   // titles, actor names, or customer data.
-  const jiraFailure = (error: unknown): { errorClass: string; stage: string; status?: number } => {
+  const gatewayFailure = (
+    error: unknown,
+  ): { errorClass: string; stage: string; status?: number } => {
     if (error instanceof GatewayError) {
       return {
         errorClass: error.errorClass,
@@ -373,6 +375,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const soleWorkspace = async (session: Session): Promise<WorkspaceRecord | null> => {
     const workspaces = await store.listWorkspaces(session.tenantId);
     return workspaces[0] ?? null;
+  };
+
+  // Resolve a workspace's connector. Every stored provider id was validated at
+  // /connect, so a miss means the registry shrank — surface it, don't guess.
+  const connectorOf = (workspace: WorkspaceRecord): Connector => {
+    const connector = connectors.get(workspace.provider);
+    if (!connector) {
+      throw new Error(`No connector is registered for provider "${workspace.provider}".`);
+    }
+    return connector;
   };
 
   const requireStep = async (
@@ -407,10 +419,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
   };
 
-  const connection = (workspace: WorkspaceRecord) => ({
-    site: workspace.site,
-    email: workspace.email,
-    token: decryptSecret(workspace.tokenCiphertext, auth.credentialKey),
+  const credentialsOf = (workspace: WorkspaceRecord) => ({
+    params: workspace.connectionParams,
+    secret: decryptSecret(workspace.tokenCiphertext, auth.credentialKey),
   });
 
   // ---------- home / dashboard ----------
@@ -431,7 +442,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/demo', async (_request, reply) => {
     const banner =
       '<div class="info">This is a <strong>sample report</strong> from demo data. ' +
-      '<a href="/login">Sign in</a> to run one on your own Jira — free.</div>';
+      '<a href="/login">Sign in</a> to run one on your own Jira or ClickUp — free.</div>';
     let body: string;
     try {
       body = renderReportBody(parseRun(DEMO_RUN_JSON), { runId: 'demo' });
@@ -441,7 +452,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const cta =
       '<div class="cta-band" style="margin-top:2.5rem">' +
       '<h2>Ready to see your own?</h2>' +
-      '<p class="lead">Connect your Jira in about a minute and get a report like this for your team — free.</p>' +
+      '<p class="lead">Connect Jira or ClickUp in about a minute and get a report like this for your team — free.</p>' +
       '<div class="hero-actions"><a class="btn btn-lg" href="/login">Get started free</a></div>' +
       '</div>';
     return reply
@@ -489,7 +500,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const cta =
       '<div class="cta-band" style="margin-top:2.5rem">' +
       '<h2>Now do it for your own team.</h2>' +
-      '<p class="lead">Connect your Jira in about a minute and get this report on your real board — free, read-only.</p>' +
+      '<p class="lead">Connect Jira or ClickUp in about a minute and get this report on your real board — free, read-only.</p>' +
       '<div class="hero-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>' +
       '<a class="lp-cta-link" href="/try">or try another company →</a></div>' +
       '</div>';
@@ -630,10 +641,12 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         `<div class="panel" style="display:flex;flex-wrap:wrap;gap:1.25rem;align-items:center;justify-content:space-between">
            <div>
              <p class="eyebrow" style="margin-bottom:.5rem">Workspace</p>
-             <h1 style="margin:0 0 .35rem">${esc(workspace.projectName ?? 'Your project')} ${workspace.projectKey ? `<span class="note" style="font-weight:500;font-size:1rem">(${esc(workspace.projectKey)})</span>` : ''}</h1>
-             <p class="note" style="margin:0">Jira site ${esc(workspace.site)} · connected as ${esc(workspace.email)} · credentials encrypted at rest</p>
+             <h1 style="margin:0 0 .35rem">${esc(workspace.scopeName ?? 'Your workspace')} ${workspace.scopeId ? `<span class="note" style="font-weight:500;font-size:1rem">(${esc(workspace.scopeId)})</span>` : ''}</h1>
+             <p class="note" style="margin:0">${esc(connectorOf(workspace).describeConnection(workspace.connectionParams))} · credentials encrypted at rest</p>
            </div>
-           <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run analysis</button></form>
+           <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run analysis</button>
+             <p class="note" style="margin:.6rem 0 0;max-width:16rem;text-align:right">Reads your board read-only and saves a point-in-time report. Safe to run any time — it never changes anything in Jira.</p>
+           </form>
          </div>
          ${
            failed.length > 0
@@ -669,60 +682,122 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     );
   });
 
-  // ---------- step 1: connect ----------
+  // ---------- step 1: connect (provider picker + descriptor-driven form) ----------
+
+  const fieldInput = (
+    field: ConnectFieldSpec,
+    value: string | undefined,
+    autofocus: boolean,
+  ): string => {
+    const type = field.kind === 'secret' ? 'password' : field.kind === 'email' ? 'email' : 'text';
+    const extras = [
+      field.kind === 'url' ? 'inputmode="url"' : '',
+      field.autocomplete ? `autocomplete="${esc(field.autocomplete)}"` : '',
+      field.kind === 'secret' ? 'autocomplete="off"' : '',
+      autofocus ? 'autofocus' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    // Secrets are never echoed back into the form, even after a failed submit.
+    const shown = field.kind === 'secret' ? '' : (value ?? '');
+    return `<label>${esc(field.label)} <input name="${esc(field.name)}" type="${type}" placeholder="${esc(field.placeholder)}" required ${extras} value="${esc(shown)}"></label>`;
+  };
+
+  // Provider picker: shown when nothing is connected yet and no provider was
+  // chosen. Every card leads to the same /connect form, parameterized.
+  const pickerPage = (session: Session): string =>
+    page(
+      session,
+      'Connect a tracker',
+      `${stepsNav('connect')}
+       <p class="eyebrow">Step 1 · Connect</p>
+       <h1 style="margin-top:.6rem">Where does your team track work?</h1>
+       <p class="lead">CostFlow connects read-only, analyses your workflow history, and prices the
+       friction. Credentials are encrypted at rest and never shown again.</p>
+       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(16rem,1fr));gap:1rem;max-width:44rem;margin-top:1.5rem">
+         ${connectors
+           .list()
+           .map(
+             (
+               c,
+             ) => `<a class="panel" style="display:block;text-decoration:none" href="/connect?provider=${esc(c.descriptor.id)}">
+              <h3 style="margin:0 0 .35rem">${esc(c.descriptor.name)}</h3>
+              <p class="note" style="margin:0">${esc(c.descriptor.pickerBlurb)}</p>
+            </a>`,
+           )
+           .join('')}
+       </div>`,
+    );
 
   // One renderer for first visit AND failed submits: an error never strands the
   // user on a dead-end page — the form re-renders with their values preserved
-  // (never the token) and the reason on top.
+  // (never the secret) and the reason on top.
   const connectPage = (
     session: Session,
+    connector: Connector,
     opts: {
-      site?: string;
-      email?: string;
+      values?: Readonly<Record<string, string>>;
       error?: string;
       connectedNote?: string;
       helpOpen?: boolean;
     },
-  ): string =>
-    page(
+  ): string => {
+    const d = connector.descriptor;
+    const switchNote =
+      connectors.list().length > 1
+        ? `<p class="note" style="margin-top:1rem">Not ${esc(d.name)}? <a href="/connect?picker=1">Choose a different tracker.</a></p>`
+        : '';
+    return page(
       session,
-      'Connect Jira',
+      `Connect ${d.name}`,
       `${stepsNav('connect')}
        <p class="eyebrow">Step 1 · Connect</p>
-       <h1 style="margin-top:.6rem">Connect your Jira workspace</h1>
-       <p class="lead">CostFlow reads your Jira with a personal API token — read-only, encrypted at
-       rest, and never shown again. It takes about a minute.</p>
+       <h1 style="margin-top:.6rem">Connect your ${esc(d.connectionNoun)}</h1>
+       <p class="lead">${esc(d.connectLead)}</p>
        <div class="panel" style="max-width:38rem;margin-top:1.5rem">
          ${opts.error ? `<div class="error" role="alert">${opts.error}</div>` : ''}
          ${opts.connectedNote ?? ''}
          <form method="post" action="/connect">${csrfField(session)}
-           <label>Jira site URL <input name="site" placeholder="https://your-org.atlassian.net" required autocomplete="url" inputmode="url" ${opts.site ? '' : 'autofocus '}value="${esc(opts.site ?? '')}"></label>
-           <label>Account email <input name="email" type="email" placeholder="you@company.com" required autocomplete="email" value="${esc(opts.email ?? '')}"></label>
-           <label>API token <input name="token" type="password" required autocomplete="off" placeholder="paste your Atlassian API token"></label>
+           <input type="hidden" name="provider" value="${esc(d.id)}">
+           ${d.fields
+             .map((field, index) =>
+               fieldInput(
+                 field,
+                 opts.values?.[field.name],
+                 index === 0 && !opts.values?.[field.name],
+               ),
+             )
+             .join('\n           ')}
            <button type="submit">Validate &amp; connect</button>
          </form>
          <details style="margin-top:1.25rem"${opts.helpOpen ? ' open' : ''}>
-           <summary>How to get your Jira API token (~60 seconds)</summary>
-           <ol class="note">
-             <li>Open <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer">id.atlassian.com → API tokens</a>.</li>
-             <li>Click <strong>Create API token</strong>, name it "CostFlow", and copy it.</li>
-             <li>Paste it above along with your Jira site URL and the email for that Atlassian account.</li>
-           </ol>
+           ${d.helpHtml}
          </details>
+         ${switchNote}
        </div>`,
     );
+  };
 
   app.get('/connect', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
     const workspace = await soleWorkspace(session);
+    const query = request.query as { provider?: string; picker?: string };
+    const chosen = query.provider !== undefined ? connectors.get(query.provider) : null;
+    // Explicit picker request, or nothing connected and nothing chosen yet.
+    if (query.picker === '1' || (!workspace && !chosen)) {
+      return reply.type('text/html').send(pickerPage(session));
+    }
+    const connector = chosen ?? connectorOf(workspace as WorkspaceRecord);
+    const sameProvider = workspace && workspace.provider === connector.descriptor.id;
     return reply.type('text/html').send(
-      connectPage(session, {
-        site: workspace?.site ?? '',
-        email: workspace?.email ?? '',
-        connectedNote: workspace
-          ? `<div class="info">Connected to <strong>${esc(workspace.site)}</strong> as ${esc(workspace.email)}. Submitting replaces the stored credentials.</div>`
-          : '',
+      connectPage(session, connector, {
+        values: sameProvider ? workspace.connectionParams : {},
+        connectedNote: sameProvider
+          ? `<div class="info">Connected — ${esc(connector.describeConnection(workspace.connectionParams))}. Submitting replaces the stored credentials.</div>`
+          : workspace
+            ? `<div class="info">This workspace is currently connected to ${esc(connectorOf(workspace).descriptor.name)}. Connecting ${esc(connector.descriptor.name)} replaces that connection and restarts setup from scope selection; existing reports are kept.</div>`
+            : '',
         helpOpen: !workspace,
       }),
     );
@@ -732,37 +807,42 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const session = requireSession(request, reply);
     if (!session) return;
     if (!checkCsrf(request, session, reply)) return;
-    const body = request.body as { site?: string; email?: string; token?: string };
-    const site = (body.site ?? '').trim().replace(/\/$/, '');
-    const email = (body.email ?? '').trim();
-    const token = (body.token ?? '').trim();
-    if (!/^https:\/\/[^\s]+$/.test(site) || !email || !token) {
+    const body = request.body as Record<string, unknown>;
+    const providerId = String(body['provider'] ?? '');
+    const connector = connectors.get(providerId);
+    if (!connector) {
       telemetry(
         webEvent('tm-web-workspace-connected', {
-          provider: 'jira',
+          provider: 'unknown',
           ok: false,
           errorClass: 'cli-error',
         }),
       );
+      return reply.redirect('/connect?picker=1');
+    }
+    const provider = connector.descriptor.id;
+    const parsed = connector.parseConnectForm(body);
+    const echoedValues = (): Record<string, string> => {
+      const values: Record<string, string> = {};
+      for (const field of connector.descriptor.fields) {
+        if (field.kind !== 'secret') values[field.name] = String(body[field.name] ?? '').trim();
+      }
+      return values;
+    };
+    if (!parsed.ok) {
+      telemetry(
+        webEvent('tm-web-workspace-connected', { provider, ok: false, errorClass: 'cli-error' }),
+      );
       return reply
         .code(400)
         .type('text/html')
-        .send(
-          connectPage(session, {
-            site,
-            email,
-            error:
-              'All three fields are required, and the site must be an https:// URL — for example <code>https://your-org.atlassian.net</code>.',
-          }),
-        );
+        .send(connectPage(session, connector, { values: echoedValues(), error: parsed.error }));
     }
     try {
-      await gateway.listProjects({ site, email, token });
+      await connector.gateway.listScopes({ params: parsed.params, secret: parsed.secret });
     } catch (error) {
       const errorClass = error instanceof GatewayError ? error.errorClass : 'unexpected';
-      telemetry(
-        webEvent('tm-web-workspace-connected', { provider: 'jira', ok: false, errorClass }),
-      );
+      telemetry(webEvent('tm-web-workspace-connected', { provider, ok: false, errorClass }));
       // Shape only (class + optional HTTP status) — the raw gateway message is
       // never echoed, matching the /scope import-error policy.
       const status = error instanceof GatewayError && error.status ? `, HTTP ${error.status}` : '';
@@ -770,44 +850,62 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         .code(400)
         .type('text/html')
         .send(
-          connectPage(session, {
-            site,
-            email,
-            error: `We couldn't validate this connection (${esc(errorClass)}${status}). Check the site URL, the account email, and that the API token was copied completely, then try again.`,
+          connectPage(session, connector, {
+            values: echoedValues(),
+            error: `We couldn't validate this connection (${esc(errorClass)}${status}). Check every field and that the token was copied completely, then try again.`,
           }),
         );
     }
-    const tokenCiphertext = encryptSecret(token, auth.credentialKey);
+    const tokenCiphertext = encryptSecret(parsed.secret, auth.credentialKey);
     const existing = await soleWorkspace(session);
-    if (existing) {
-      await store.updateWorkspace(session.tenantId, existing.id, { tokenCiphertext });
+    if (existing && existing.provider === provider) {
+      // Same platform: refresh credentials, keep scope/mapping/assumptions.
+      await store.updateWorkspace(session.tenantId, existing.id, {
+        connectionParams: parsed.params,
+        tokenCiphertext,
+      });
+    } else if (existing) {
+      // Platform switch: new connection, so scope and vocabulary start over.
+      // Existing runs are append-only history and are kept.
+      await store.updateWorkspace(session.tenantId, existing.id, {
+        provider,
+        connectionParams: parsed.params,
+        tokenCiphertext,
+        scopeId: null,
+        scopeName: null,
+        observedStatuses: [],
+        observedActors: [],
+        statusHints: null,
+        statusMap: null,
+        actorRoleMap: null,
+        onboarding: 'connected',
+      });
     } else {
       await store.createWorkspace(session.tenantId, {
-        provider: 'jira',
-        site,
-        email,
+        provider,
+        connectionParams: parsed.params,
         tokenCiphertext,
       });
     }
-    telemetry(
-      webEvent('tm-web-workspace-connected', { provider: 'jira', ok: true, errorClass: null }),
-    );
+    telemetry(webEvent('tm-web-workspace-connected', { provider, ok: true, errorClass: null }));
     return reply.redirect('/scope');
   });
 
-  // ---------- step 2: scope (project selection) ----------
+  // ---------- step 2: scope selection ----------
 
   app.get('/scope', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
     const workspace = await requireStep(session, reply, 'connected');
     if (!workspace) return;
-    let projects;
+    const connector = connectorOf(workspace);
+    const d = connector.descriptor;
+    let scopes;
     try {
-      projects = await gateway.listProjects(connection(workspace));
+      scopes = await connector.gateway.listScopes(credentialsOf(workspace));
     } catch (error) {
-      const f = jiraFailure(error);
-      logLine({ level: 'warn', msg: 'jira-list-projects-failed', ...f });
+      const f = gatewayFailure(error);
+      logLine({ level: 'warn', msg: 'connector-list-scopes-failed', provider: d.id, ...f });
       return reply.type('text/html').send(page(session, 'Choose scope', importErrorHtml(f)));
     }
     return reply.type('text/html').send(
@@ -816,28 +914,27 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         'Choose scope',
         `${stepsNav('scope')}
          <p class="eyebrow">Step 2 · Scope</p>
-         <h1 style="margin-top:.6rem">Choose the project to import</h1>
-         <p class="lead">Pick the Jira project you want CostFlow to analyse. You can reconnect and switch it later.</p>
+         <h1 style="margin-top:.6rem">Choose the ${esc(d.scopeNoun.singular)} to import</h1>
+         <p class="lead">Pick the ${esc(d.name)} ${esc(d.scopeNoun.singular)} you want CostFlow to analyse. You can reconnect and switch it later.</p>
          ${
-           projects.length === 0
+           scopes.length === 0
              ? `<div class="empty" style="max-width:38rem">
-                  <h3>No projects found</h3>
-                  <p>This account can't see any Jira projects. Check that the API token belongs to a user with project access, then reconnect.</p>
+                  <h3>No ${esc(d.scopeNoun.plural)} found</h3>
+                  <p>This account can't see any ${esc(d.name)} ${esc(d.scopeNoun.plural)}. Check that the API token belongs to a user with access, then reconnect.</p>
                   <a class="btn" href="/connect">Back to connection</a>
                 </div>`
              : `<form method="post" action="/scope" class="panel" style="max-width:40rem;margin-top:1.5rem">${csrfField(session)}
-                 ${projects
+                 ${scopes
                    .map(
-                     (p, index) =>
-                       `<label class="pick"><input type="radio" name="project" value="${index}" ${
-                         workspace.projectKey === p.key ||
-                         (!workspace.projectKey && projects.length === 1)
+                     (s, index) =>
+                       `<label class="pick"><input type="radio" name="scope" value="${index}" ${
+                         workspace.scopeId === s.id || (!workspace.scopeId && scopes.length === 1)
                            ? 'checked'
                            : ''
-                       } required><span><span style="flex:1">${esc(p.name)} (${esc(p.key)})</span></span></label>`,
+                       } required><span><span style="flex:1">${esc(s.name)} (${esc(s.id)})</span></span></label>`,
                    )
                    .join('')}
-                 <button type="submit" style="margin-top:.5rem">Import this project</button>
+                 <button type="submit" style="margin-top:.5rem">Import this ${esc(d.scopeNoun.singular)}</button>
                </form>`
          }`,
       ),
@@ -850,21 +947,26 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     if (!checkCsrf(request, session, reply)) return;
     const workspace = await requireStep(session, reply, 'connected');
     if (!workspace) return;
-    const conn = connection(workspace);
-    let projects;
+    const connector = connectorOf(workspace);
+    const d = connector.descriptor;
+    const credentials = credentialsOf(workspace);
+    let scopes;
     try {
-      projects = await gateway.listProjects(conn);
+      scopes = await connector.gateway.listScopes(credentials);
     } catch (error) {
-      const f = jiraFailure(error);
-      logLine({ level: 'warn', msg: 'jira-list-projects-failed', ...f });
+      const f = gatewayFailure(error);
+      logLine({ level: 'warn', msg: 'connector-list-scopes-failed', provider: d.id, ...f });
       return reply
         .code(400)
         .type('text/html')
         .send(page(session, 'Choose scope', importErrorHtml(f)));
     }
-    const index = Number((request.body as { project?: string }).project);
-    const project = projects[index];
-    if (!project) {
+    const body = request.body as { scope?: string; project?: string };
+    // "project" is the pre-ADR-0005 field name; accepted so an in-flight form
+    // submitted across a deploy still lands.
+    const index = Number(body.scope ?? body.project);
+    const scope = scopes[index];
+    if (!scope) {
       return reply
         .code(400)
         .type('text/html')
@@ -872,38 +974,25 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           page(
             session,
             'Choose scope',
-            `<div class="error" role="alert">That project selection is no longer valid — the project list may have changed.</div>
-             <p><a class="btn btn-ghost" href="/scope">Back to project selection</a></p>`,
+            `<div class="error" role="alert">That selection is no longer valid — the ${esc(d.scopeNoun.singular)} list may have changed.</div>
+             <p><a class="btn btn-ghost" href="/scope">Back to selection</a></p>`,
           ),
         );
     }
     const maxIssues = deps.maxIssues ?? 50_000;
     let observed;
     try {
-      const { searchPages } = await gateway.fetchAll(conn, project.key);
-      // Reliability guard: count before the memory-heavy analysis. `total` is
-      // authoritative from Jira's first page; fall back to counting embedded
-      // issues if absent.
-      const issueCount = ((): number => {
-        try {
-          const first = JSON.parse(searchPages[0] ?? '{}') as {
-            total?: number;
-            issues?: unknown[];
-          };
-          if (typeof first.total === 'number') return first.total;
-        } catch {
-          /* fall through to counting */
-        }
-        return searchPages.reduce((acc, p) => {
-          try {
-            return acc + ((JSON.parse(p) as { issues?: unknown[] }).issues?.length ?? 0);
-          } catch {
-            return acc;
-          }
-        }, 0);
-      })();
-      if (issueCount > maxIssues) {
-        logLine({ level: 'warn', msg: 'jira-import-too-large', issueCount, maxIssues });
+      const raw = await connector.gateway.fetchAll(credentials, scope.id);
+      observed = connector.observe(raw);
+      // Reliability guard: count before the memory-heavy analysis.
+      if (observed.itemCount > maxIssues) {
+        logLine({
+          level: 'warn',
+          msg: 'import-too-large',
+          provider: d.id,
+          itemCount: observed.itemCount,
+          maxIssues,
+        });
         return reply
           .code(400)
           .type('text/html')
@@ -911,57 +1000,42 @@ Sitemap: https://app.fbx1.com/sitemap.xml
             page(
               session,
               'Choose scope',
-              `<div class="error" role="alert">This project has <strong>${issueCount.toLocaleString('en-US')}</strong> issues, which is above the current per-project limit of <strong>${maxIssues.toLocaleString('en-US')}</strong>. Narrow the project (or a board/filter) and reconnect, or email <a href="mailto:support@fbx1.com">support@fbx1.com</a> to enable a larger import.</div>
-               <p><a class="btn btn-ghost" href="/scope">Back to project selection</a></p>`,
+              `<div class="error" role="alert">This ${esc(d.scopeNoun.singular)} has <strong>${observed.itemCount.toLocaleString('en-US')}</strong> ${esc(d.itemNoun)}, which is above the current per-${esc(d.scopeNoun.singular)} limit of <strong>${maxIssues.toLocaleString('en-US')}</strong>. Narrow the scope and reconnect, or email <a href="mailto:support@fbx1.com">support@fbx1.com</a> to enable a larger import.</div>
+               <p><a class="btn btn-ghost" href="/scope">Back to selection</a></p>`,
             ),
           );
       }
-      observed = observeJiraSearchPages(searchPages);
     } catch (error) {
-      const f = jiraFailure(error);
-      logLine({ level: 'warn', msg: 'jira-import-failed', ...f });
+      const f = gatewayFailure(error);
+      logLine({ level: 'warn', msg: 'import-failed', provider: d.id, ...f });
       return reply
         .code(400)
         .type('text/html')
         .send(page(session, 'Choose scope', importErrorHtml(f)));
     }
     await store.updateWorkspace(session.tenantId, workspace.id, {
-      projectKey: project.key,
-      projectName: project.name,
+      scopeId: scope.id,
+      scopeName: scope.name,
       observedStatuses: observed.statuses,
       observedActors: observed.actors,
+      statusHints: observed.statusHints,
       onboarding:
         onboardingRank(workspace.onboarding) > onboardingRank('scope-selected')
           ? workspace.onboarding
           : 'scope-selected',
     });
-    telemetry(webEvent('tm-web-scope-selected', { provider: 'jira' }));
+    telemetry(webEvent('tm-web-scope-selected', { provider: d.id }));
     return reply.redirect('/mapping/statuses');
   });
 
   // ---------- step 3: status mapping ----------
-
-  // Pre-selection heuristic for common Jira status names. Purely a FORM
-  // DEFAULT: nothing is stored until the user reviews and submits, so the
-  // "you approved every mapping" invariant is untouched — this only turns
-  // N dropdown selections into a review pass for typical boards.
-  const guessStageKind = (status: string): StageKind | null => {
-    const s = status.toLowerCase();
-    if (/(done|closed|complete|resolved|released|shipped|deployed|live)/.test(s)) return 'done';
-    if (/(cancel|abandon|won'?t|rejected|discard|invalid|obsolete)/.test(s)) return 'abandoned';
-    if (/(block|on hold|hold|stuck|imped|paused|waiting)/.test(s)) return 'blocked';
-    if (/(review|approv|qa|test|verif|validat)/.test(s)) return 'review';
-    if (/(progress|develop|doing|active|implement|build|working|started)/.test(s)) return 'active';
-    if (/(backlog|to ?do|open|new|triage|queue|ready|selected|refin|planned)/.test(s))
-      return 'queue';
-    return null;
-  };
 
   app.get('/mapping/statuses', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
     const workspace = await requireStep(session, reply, 'scope-selected');
     if (!workspace) return;
+    const providerName = connectorOf(workspace).descriptor.name;
     return reply.type('text/html').send(
       page(
         session,
@@ -969,13 +1043,17 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         `${stepsNav('statuses')}
          <p class="eyebrow">Step 3 · Statuses</p>
          <h1 style="margin-top:.6rem">Map every status to a stage kind</h1>
-         <p class="lead">All ${workspace.observedStatuses.length} statuses observed in the project (current and historical) must be mapped — history through an unmapped status would make the analysis refuse.</p>
+         <p class="lead">All ${workspace.observedStatuses.length} statuses observed (current and historical) must be mapped — history through an unmapped status would make the analysis refuse.</p>
          <form method="post" action="/mapping/statuses" class="panel" style="margin-top:1.5rem">${csrfField(session)}
-           <div class="info">We've pre-selected suggestions for common status names — review each one, adjust anything that's off, and save.</div>
-           <div class="table-wrap"><table><tr><th>Status in Jira</th><th>Stage kind</th></tr>
+           <div class="info">We've pre-selected suggestions from the ${esc(providerName)} workflow — review each one, adjust anything that's off, and save.</div>
+           <div class="table-wrap"><table><tr><th>Status in ${esc(providerName)}</th><th>Stage kind</th></tr>
            ${workspace.observedStatuses
              .map((status, index) => {
-               const chosen = workspace.statusMap?.[status] ?? guessStageKind(status);
+               // Saved mapping wins; then the connector's hint (captured at
+               // scope time from provider metadata or name heuristics). Form
+               // defaults only — the user approves every row (invariant 6).
+               const chosen =
+                 workspace.statusMap?.[status] ?? workspace.statusHints?.[status] ?? null;
                return `<tr><td>${esc(status)}</td><td><select name="s${index}" required>
                     <option value="" ${chosen === null ? 'selected' : ''} disabled>choose…</option>
                     ${STAGE_KINDS.map(
@@ -1051,7 +1129,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
          pseudonymized — never stored by name — and priced at the default rate with reduced confidence.</p>
          <form method="post" action="/mapping/actors" class="panel" style="margin-top:1.5rem">${csrfField(session)}
            <div class="info">This step is optional — leaving everything blank is fine and is the fastest path to your first report. You can refine roles later.</div>
-           <div class="table-wrap"><table><tr><th>Person (from Jira)</th><th>Role (blank = pseudonymize)</th></tr>
+           <div class="table-wrap"><table><tr><th>Person (from ${esc(connectorOf(workspace).descriptor.name)})</th><th>Role (blank = pseudonymize)</th></tr>
            ${workspace.observedActors
              .map(
                (actor, index) =>
@@ -1393,7 +1471,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const execution = executeJob(
       {
         store,
-        gateway,
+        connectors,
         credentialKey: auth.credentialKey,
         ...(deps.jobNowFn ? { nowFn: deps.jobNowFn } : {}),
       },
@@ -1403,7 +1481,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       const finished = await store.getJob(session.tenantId, job.id);
       telemetry(
         webEvent('tm-web-run', {
-          provider: 'jira',
+          provider: workspace.provider,
           ok: finished?.status === 'succeeded',
           errorClass: finished?.errorClass ?? null,
           durationMs: Date.now() - startedMs,
@@ -1612,8 +1690,8 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       .map(
         (w) =>
           `<div class="danger">
-             <h3>${esc(w.projectName ?? 'Unconfigured workspace')} (${esc(w.projectKey ?? w.provider)})</h3>
-             <p class="note">Jira site ${esc(w.site)} · deletes this workspace and every run and job derived from it. This cannot be undone.</p>
+             <h3>${esc(w.scopeName ?? 'Unconfigured workspace')} (${esc(w.scopeId ?? w.provider)})</h3>
+             <p class="note">${esc(connectors.get(w.provider)?.describeConnection(w.connectionParams) ?? w.provider)} · deletes this workspace and every run and job derived from it. This cannot be undone.</p>
              <form method="post" action="/workspaces/${esc(w.id)}/delete">${csrfField(session)}
                <label>Type <strong>${DELETE_WORKSPACE_PHRASE}</strong> to confirm <input name="confirm" autocomplete="off" required></label>
                <button type="submit">Delete this workspace's data</button>
@@ -1868,7 +1946,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
             : `<form method="post" action="/workspaces/${esc(w.id)}/members" class="inline" style="margin-top:.9rem">${csrfField(session)}
                  <select name="userId">${addable.map((u) => `<option value="${esc(u.id)}">${esc(u.email)}</option>`).join('')}</select>
                  <button type="submit">Grant access</button></form>`;
-        return `<div class="ws"><h4>${esc(w.projectName ?? 'Unconfigured workspace')} (${esc(w.projectKey ?? w.provider)})</h4>${memberList}${addForm}</div>`;
+        return `<div class="ws"><h4>${esc(w.scopeName ?? 'Unconfigured workspace')} (${esc(w.scopeId ?? w.provider)})</h4>${memberList}${addForm}</div>`;
       })
       .join('');
 

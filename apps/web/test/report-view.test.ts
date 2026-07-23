@@ -26,8 +26,7 @@ async function seedRun(
     (await t.store.listWorkspaces(tenantId))[0] ??
     (await t.store.createWorkspace(tenantId, {
       provider: 'jira',
-      site: 'https://acme.atlassian.net',
-      email,
+      connectionParams: { site: 'https://acme.atlassian.net', email },
       tokenCiphertext: 'tok',
     }));
   if (observedActors.length > 0) {

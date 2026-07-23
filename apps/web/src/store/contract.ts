@@ -73,14 +73,27 @@ export function onboardingRank(state: OnboardingState): number {
 export interface WorkspaceRecord {
   readonly id: string;
   readonly tenantId: string;
-  readonly provider: 'jira';
-  readonly site: string;
-  readonly email: string;
+  /** Connector id ('jira', 'clickup', …) — resolved via the connector registry. */
+  readonly provider: string;
+  /**
+   * Non-secret connection parameters whose shape belongs to the connector
+   * (Jira: {site, email}; ClickUp: {}). The secret itself is only ever in
+   * tokenCiphertext. Stored as `connection_params` (legacy Jira rows are
+   * backfilled from the old site/email columns by the idempotent migration).
+   */
+  readonly connectionParams: Readonly<Record<string, string>>;
   readonly tokenCiphertext: string;
-  readonly projectKey: string | null;
-  readonly projectName: string | null;
+  /** Selected import scope (a Jira project key, a ClickUp List id). Stored in the legacy project_key/project_name columns. */
+  readonly scopeId: string | null;
+  readonly scopeName: string | null;
   readonly observedStatuses: readonly string[];
   readonly observedActors: readonly string[];
+  /**
+   * Connector-suggested status→stage defaults captured at scope time (e.g.
+   * ClickUp status types). FORM DEFAULTS only — the user reviews and submits
+   * every mapping (invariant 6); nothing prices off a hint.
+   */
+  readonly statusHints: Readonly<Record<string, StageKind>> | null;
   readonly statusMap: Readonly<Record<string, StageKind>> | null;
   readonly actorRoleMap: Readonly<Record<string, string>> | null;
   readonly assumptions: AssumptionSet | null;
@@ -91,10 +104,13 @@ export interface WorkspaceRecord {
 export type WorkspacePatch = Partial<
   Pick<
     WorkspaceRecord,
-    | 'projectKey'
-    | 'projectName'
+    | 'provider'
+    | 'connectionParams'
+    | 'scopeId'
+    | 'scopeName'
     | 'observedStatuses'
     | 'observedActors'
+    | 'statusHints'
     | 'statusMap'
     | 'actorRoleMap'
     | 'assumptions'
@@ -195,7 +211,7 @@ export interface Store {
 
   createWorkspace(
     tenantId: string,
-    data: Pick<WorkspaceRecord, 'provider' | 'site' | 'email' | 'tokenCiphertext'>,
+    data: Pick<WorkspaceRecord, 'provider' | 'connectionParams' | 'tokenCiphertext'>,
   ): Promise<WorkspaceRecord>;
   getWorkspace(tenantId: string, workspaceId: string): Promise<WorkspaceRecord | null>;
   listWorkspaces(tenantId: string): Promise<WorkspaceRecord[]>;

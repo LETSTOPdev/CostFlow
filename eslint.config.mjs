@@ -41,7 +41,7 @@ const purityRestrictions = {
 };
 
 export default tseslint.config(
-  { ignores: ['node_modules/**', 'dist/**', 'out/**', 'tools/golden/expected/**'] },
+  { ignores: ['node_modules/**', 'dist/**', 'out/**', 'tools/golden/expected/**', '.claude/**'] },
   ...tseslint.configs.recommended,
   {
     files: ['packages/**/*.ts', 'apps/**/*.ts'],

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { makeApp, signIn, post, get, csrfOf } from './helpers';
-import { GatewayError, type JiraConnection, type JiraGateway } from '../src/jira-gateway';
+import { makeApp, signIn, post, get, csrfOf, stubConnectors } from './helpers';
+import {
+  GatewayError,
+  type ConnectorCredentials,
+  type ConnectorGateway,
+} from '../src/connectors/types';
+import type { JiraRawFetch } from '../src/connectors/jira';
 
 /**
  * QA regression (adversarial audit): a single friction can aggregate tens of
@@ -31,25 +36,26 @@ function agingIssues(n: number): string[] {
   return pages;
 }
 
-class BulkGateway implements JiraGateway {
+class BulkGateway implements ConnectorGateway {
   constructor(private readonly pages: string[]) {}
-  async listProjects() {
-    return [{ key: 'AGE', name: 'Aging Project' }];
+  async listScopes() {
+    return [{ id: 'AGE', name: 'Aging Project' }];
   }
-  async fetchAll(_c: JiraConnection, key: string) {
-    if (key !== 'AGE') throw new GatewayError('fetch-error', 'search', 'unknown');
-    return { searchPages: this.pages, supplementaryChangelogs: {} };
+  async fetchAll(_c: ConnectorCredentials, scopeId: string): Promise<JiraRawFetch> {
+    if (scopeId !== 'AGE') throw new GatewayError('fetch-error', 'search', 'unknown');
+    return { provider: 'jira', searchPages: this.pages, supplementaryChangelogs: {} };
   }
 }
 
 describe('report drill-down scale cap', () => {
   it('caps a huge friction breakdown and states how many items are hidden', async () => {
     const gateway = new BulkGateway(agingIssues(200));
-    const t = makeApp({ gateway });
+    const t = makeApp({ connectors: stubConnectors(gateway) });
     const cookie = await signIn(t, 'scale@example.com');
     const csrf = csrfOf(cookie);
 
     await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://acme.atlassian.net',
       email: 'ops@acme.example',
       token: 'secret-token',

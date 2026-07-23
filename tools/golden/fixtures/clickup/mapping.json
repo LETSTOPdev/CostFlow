@@ -1,0 +1,14 @@
+{
+  "id": "clickup-delivery-list",
+  "version": "1",
+  "statusMap": {
+    "backlog": "queue",
+    "in progress": "active",
+    "review": "review",
+    "complete": "done"
+  },
+  "actorRoleMap": {
+    "Noa Legal": "Legal",
+    "Dan Ops": "Ops"
+  }
+}

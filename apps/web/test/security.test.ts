@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GatewayError } from '../src/jira-gateway';
+import { GatewayError } from '../src/connectors/types';
 import { TOKEN, get, makeApp, post, signIn } from './helpers';
 
 describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', () => {
@@ -24,6 +24,7 @@ describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', 
     const t = makeApp();
     const alice = await signIn(t, 'alice@one.example');
     await post(t, alice, '/connect', {
+      provider: 'jira',
       site: 'https://one.atlassian.net',
       email: 'alice@one.example',
       token: TOKEN,
@@ -72,7 +73,8 @@ describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', 
       method: 'POST',
       url: '/connect',
       headers: { 'content-type': 'application/x-www-form-urlencoded', cookie },
-      payload: 'site=https%3A%2F%2Fx.atlassian.net&email=a%40b.example&token=tttttttttt',
+      payload:
+        'provider=jira&site=https%3A%2F%2Fx.atlassian.net&email=a%40b.example&token=tttttttttt',
     });
     expect(response.statusCode).toBe(403);
     expect(
@@ -89,6 +91,7 @@ describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', 
     expect(scope.headers['location']).toBe('/connect');
 
     await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://g.atlassian.net',
       email: 'g@b.example',
       token: TOKEN,
@@ -114,6 +117,7 @@ describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', 
     );
     const cookie = await signIn(t, 'r@b.example');
     const response = await post(t, cookie, '/connect', {
+      provider: 'jira',
       site: 'https://r.atlassian.net',
       email: 'r@b.example',
       token: TOKEN,

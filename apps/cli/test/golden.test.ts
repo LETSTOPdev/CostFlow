@@ -4,13 +4,20 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { importCsv, transformAsana, transformJira, transformMonday } from '@costflow/ingestion';
+import {
+  importCsv,
+  transformAsana,
+  transformClickUp,
+  transformJira,
+  transformMonday,
+} from '@costflow/ingestion';
 import { runAnalysis } from '@costflow/analysis';
 import { buildReportModel, renderMarkdown } from '@costflow/reporting';
 import { buildPseudonymizationContext } from '../src/pseudonym';
 import {
   assumptionSetSchema,
   asanaMappingSchema,
+  clickupMappingSchema,
   jiraMappingSchema,
   mappingTemplateSchema,
   mondayMappingSchema,
@@ -365,6 +372,88 @@ describe('golden dataset: demo-asana (P2: the SPI promise test, second half)', (
     );
     expect(model.unpriced).toHaveLength(0);
     expect(model.run.batch.provider).toBe('asana');
+  });
+});
+
+describe('golden dataset: demo-clickup (ADR-0005: the connector-architecture promise test)', () => {
+  function clickupGoldenRun() {
+    const dir = join(FIXTURES, 'clickup');
+    return runAnalysis({
+      runId: 'golden-demo-clickup',
+      now: NOW,
+      batch: transformClickUp({
+        batchId: 'batch-golden-demo-clickup',
+        taskPages: [readFileSync(join(dir, 'raw', 'tasks-page-0.json'), 'utf8')],
+        timeInStatusPages: [readFileSync(join(dir, 'raw', 'time-in-status-0.json'), 'utf8')],
+        mapping: clickupMappingSchema.parse(
+          JSON.parse(readFileSync(join(dir, 'mapping.json'), 'utf8')),
+        ),
+        importedAt: NOW,
+        pseudonymization: pseudonymization(),
+      }),
+      assumptions: assumptionSetSchema.parse(
+        JSON.parse(readFileSync(join(dir, 'assumptions.json'), 'utf8')),
+      ),
+    });
+  }
+
+  it('reproduces the frozen artifacts byte-exactly and deterministically', () => {
+    const artifact = JSON.stringify(clickupGoldenRun(), null, 2) + '\n';
+    expect(artifact).toBe(readFileSync(join(EXPECTED, 'demo-clickup', 'run.json'), 'utf8'));
+    const report = renderMarkdown(buildReportModel(clickupGoldenRun()));
+    expect(report).toBe(readFileSync(join(EXPECTED, 'demo-clickup', 'report.md'), 'utf8'));
+    expect(JSON.stringify(clickupGoldenRun())).toBe(JSON.stringify(clickupGoldenRun()));
+  });
+
+  it('matches the hand-computed table (CU1 chains + CU2 arrival + terminal-due exclusion)', () => {
+    const model = buildReportModel(clickupGoldenRun());
+    expect(
+      model.ranked.map((r) => [
+        r.instance.frictionType,
+        r.instance.location.stage.name,
+        r.estimate.cost.expected,
+        r.estimate.confidence.tier,
+      ]),
+    ).toEqual([
+      ['queue-wait', 'backlog', '1110', 'C'],
+      ['overdue', 'backlog', '342', 'A'],
+      ['aging', 'backlog', '297', 'B'],
+      ['queue-wait', 'review', '288', 'B'],
+      ['overdue', 'review', '240', 'A'],
+    ]);
+    // CU2 feeds F1: 86czqc3 has NO time-in-status document, yet its 49-day
+    // open backlog wait derives from date_created + current status.
+    const queueTop = model.ranked[0];
+    expect(queueTop?.instance.evidence[0]).toMatchObject({
+      workItemId: '86czqc3',
+      waitHours: 1176,
+      openAtAnalysisTime: true,
+    });
+    // CU1 chain: 86czqa1's residency reconstructs backlog(5d) → in
+    // progress → review, so its closed backlog interval prices (120h wait).
+    const backlogWait = queueTop?.instance;
+    if (backlogWait?.frictionType !== 'queue-wait') throw new Error('expected queue-wait first');
+    expect(backlogWait.evidence.map((e) => [e.workItemId, e.waitHours])).toEqual([
+      ['86czqc3', 1176],
+      ['86czqb2', 240],
+      ['86czqa1', 120],
+      ['86czqd4', 48],
+    ]);
+    // Terminal-stage exclusion: 86czqd4 is complete (done) with a past due
+    // date — it must NOT surface as overdue (same semantics as demo-asana).
+    for (const ranked of model.ranked) {
+      if (ranked.instance.frictionType !== 'overdue') continue;
+      expect(ranked.instance.evidence.map((e) => e.workItemId)).not.toContain('86czqd4');
+    }
+    // CU3 is visible, never silent: the second assignee on 86czqb2 counted.
+    expect(model.run.batch.diagnostics.map((d) => d.message).join(' ')).toContain(
+      '1 additional assignee(s)',
+    );
+    // The unmapped actor (Guy Contractor) is pseudonymized and priced at the
+    // default rate — visible as the C-tier constraint on queue-wait.
+    expect(queueTop?.estimate.confidence.reasons.join(' ')).toContain('unmapped');
+    expect(model.unpriced).toHaveLength(0);
+    expect(model.run.batch.provider).toBe('clickup');
   });
 });
 

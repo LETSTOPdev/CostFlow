@@ -3,6 +3,7 @@ import type { AssumptionSet } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
 import type {
   AsanaMapping,
+  ClickUpMapping,
   JiraMapping,
   MappingTemplate,
   MondayMapping,
@@ -126,3 +127,12 @@ export const asanaMappingSchema = z
   .refine((m) => m.statusMap[m.completedStatus] !== undefined, {
     message: 'completedStatus must be a statusMap key',
   }) satisfies z.ZodType<AsanaMapping, z.ZodTypeDef, unknown>;
+
+export const clickupMappingSchema = z
+  .object({
+    id: z.string().min(1),
+    version: z.string().min(1),
+    statusMap: z.record(z.string(), stageKind),
+    actorRoleMap: z.record(z.string(), z.string().min(1)).optional(),
+  })
+  .strict() satisfies z.ZodType<ClickUpMapping, z.ZodTypeDef, unknown>;

@@ -16,6 +16,7 @@ function csrfFromHtml(html: string): string {
 async function connectOnly(t: TestApp, email: string): Promise<string> {
   const cookie = await signIn(t, email);
   await post(t, cookie, '/connect', {
+    provider: 'jira',
     site: 'https://acme.atlassian.net',
     email,
     token: TOKEN,

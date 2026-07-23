@@ -18,7 +18,7 @@ export interface AppConfig {
   readonly trustProxy: boolean;
   /** Emails allowed to view the founder analytics page (COSTFLOW_ADMIN_EMAILS). */
   readonly adminEmails: string[];
-  /** Max issues imported per project (COSTFLOW_MAX_ISSUES); undefined → server default. */
+  /** Max work items imported per scope, any provider (COSTFLOW_MAX_ISSUES); undefined → server default. */
   readonly maxIssues: number | undefined;
 }
 

@@ -16,13 +16,12 @@ async function seedTenantWithRun(
   const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
   const workspace = await t.store.createWorkspace(tenantId, {
     provider: 'jira',
-    site: 'https://x.example',
-    email,
+    connectionParams: { site: 'https://x.example', email },
     tokenCiphertext: 'tok',
   });
   await t.store.updateWorkspace(tenantId, workspace.id, {
-    projectKey: 'OPS',
-    projectName: 'Operations',
+    scopeId: 'OPS',
+    scopeName: 'Operations',
   });
   const job = await t.store.createJob(tenantId, workspace.id);
   await t.store.updateJob(tenantId, job.id, {

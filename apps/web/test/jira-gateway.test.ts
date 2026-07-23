@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { GatewayError, HttpJiraGateway, type JiraConnection } from '../src/jira-gateway';
+import { HttpJiraGateway } from '../src/connectors/jira';
+import { GatewayError, type ConnectorCredentials } from '../src/connectors/types';
 
 /**
  * HttpJiraGateway against a mocked Jira (P4.2 defect 2). Proves the import
@@ -8,10 +9,9 @@ import { GatewayError, HttpJiraGateway, type JiraConnection } from '../src/jira-
  * by cursor, and maps failures to sanitized {errorClass, stage, status}.
  */
 
-const CONNECTION: JiraConnection = {
-  site: 'https://acme.atlassian.net',
-  email: 'me@acme.example',
-  token: 'super-secret-jira-token',
+const CONNECTION: ConnectorCredentials = {
+  params: { site: 'https://acme.atlassian.net', email: 'me@acme.example' },
+  secret: 'super-secret-jira-token',
 };
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -67,8 +67,8 @@ describe('HttpJiraGateway (mocked Jira)', () => {
     });
     const gateway = new HttpJiraGateway(fetch);
 
-    const projects = await gateway.listProjects(CONNECTION);
-    expect(projects).toEqual([{ key: 'KAN', name: 'CostFlow Test' }]);
+    const projects = await gateway.listScopes(CONNECTION);
+    expect(projects).toEqual([{ id: 'KAN', name: 'CostFlow Test' }]);
 
     const result = await gateway.fetchAll(CONNECTION, 'KAN');
     expect(result.searchPages).toHaveLength(2); // followed the cursor
@@ -133,8 +133,8 @@ describe('HttpJiraGateway (mocked Jira)', () => {
     } catch (error) {
       const e = error as GatewayError;
       const serialized = `${e.message} ${JSON.stringify({ errorClass: e.errorClass, stage: e.stage, status: e.status })}`;
-      expect(serialized).not.toContain(CONNECTION.token);
-      expect(serialized).not.toContain(CONNECTION.email);
+      expect(serialized).not.toContain(CONNECTION.secret);
+      expect(serialized).not.toContain('me@acme.example');
       expect(serialized).not.toContain('atlassian.net');
     }
   });

@@ -12,7 +12,7 @@
 ## 0. What CostFlow is, in one screen
 
 CostFlow is a **Business Friction Intelligence** product. It connects to a work-tracking system
-(Jira today), reads the work items and their history, detects **friction** (delays, queues,
+(Jira and ClickUp today), reads the work items and their history, detects **friction** (delays, queues,
 overdue work), and prices that friction into an **itemized, ranked dollar estimate** — where every
 figure is traceable to its formula, inputs, and assumptions.
 
@@ -44,7 +44,7 @@ packages/                 PURE domain logic. No I/O, no node builtins, determini
   cost-engine/            Money math (decimal), rates, ranges, confidence, cost estimates + traces.
                           domain + friction types only. (ADR-0001: decimal arithmetic.)
   ingestion/              Provider SPI + transforms: raw provider JSON → canonical ImportBatch.
-                          Jira/Monday/Asana/CSV live under providers/. domain only.
+                          Jira/ClickUp/Monday/Asana/CSV live under providers/. domain only.
   analysis/              Orchestrates ingestion→friction→cost-engine into the immutable AnalysisRun
                           (run.json). domain + friction + cost-engine + ingestion.
   reporting/             Deterministic report model + markdown. domain + analysis + cost-engine.
@@ -53,6 +53,9 @@ packages/                 PURE domain logic. No I/O, no node builtins, determini
 apps/
   cli/                    `costflow` CLI: preflight, analyze, golden generation.
   web/                    The Fastify SSR app (all customer-facing product). Impure edge.
+                          src/connectors/ = the platform layer (ADR-0005): one module per
+                          provider (gateway + descriptor + adapters) behind a static registry;
+                          provider names may not appear anywhere else in the app (depcruise).
 tools/
   golden/                 Frozen fixtures + expected/ outputs. The determinism contract.
   partner/                Partner-run tooling (gitignored outputs under partner-runs/).
@@ -74,7 +77,7 @@ Browser ──HTTPS──> Railway edge (TLS) ──> Fastify (apps/web, SSR, no
                                               │
    Auth0 (OIDC) ◄── /login,/signup,/auth/callback ──► session cookie (HMAC-signed)
                                               │
-   Jira Cloud REST ◄── HttpJiraGateway ──────┤ (read-only API token, AES-256-GCM at rest)
+   Provider APIs  ◄── connector gateways ────┤ (Jira, ClickUp; read-only tokens, AES-256-GCM at rest)
                                               │
                                        ┌──────┴───────┐
                                        │  Job runner  │  (apps/web/jobs.ts) — async analysis
@@ -103,7 +106,8 @@ connected → scope-selected → statuses-mapped → actors-mapped → assumptio
 ```
 
 Route → step mapping (all in `apps/web/src/server.ts`):
-`/connect` (creds) → `/scope` (project) → `/mapping/statuses` → `/mapping/actors` (roles, optional)
+`/connect` (provider picker → creds; fields/copy come from the connector descriptor) →
+`/scope` (a Jira project / a ClickUp List) → `/mapping/statuses` → `/mapping/actors` (roles, optional)
 → `/assumptions` → `/dashboard` → POST `/runs` (kick job) → `/jobs/:id` (loading, meta-refresh) →
 `/reports/:id`. `requireStep(minimum)` gates each route; a user below the minimum is redirected to
 the right next step. `/` routes a returning manager to `nextStepPath(workspace)`.
@@ -139,6 +143,11 @@ the right next step. `/` routes a returning manager to `nextStepPath(workspace)`
    `migrate && start` froze production once (the migrate process blocks; healthcheck times out).
 8. **CSP is `script-src 'none'`.** There is no client JS and there must not be. All interactivity is
    HTML/CSS/SSR. Adding a script tag breaks the CSP and the security posture; don't.
+9. **Provider names never leak past the connector boundary** (ADR-0005). In the engine, provider
+   code lives only under `ingestion/providers/<id>/`; in the web app, only under
+   `apps/web/src/connectors/` (+ the composition root and the Jira-shaped demo generator). Both are
+   dependency-cruiser `error` rules. The job runner dispatches on `workspace.provider` through the
+   registry exactly once; everything downstream sees only the canonical model.
 
 ---
 
@@ -202,10 +211,12 @@ more inference or missing inputs. Each drill-down states the binding reason.
 ## 6. Backend (`apps/web/src/server.ts` and friends)
 
 - **Framework:** Fastify. `buildServer(deps: ServerDeps)` assembles routes; `main.ts` wires real
-  deps (`HttpJiraGateway`, Postgres store, file telemetry sink) from `loadConfig(env)`.
+  deps (the connector registry over `HttpJiraGateway`/`HttpClickUpGateway`, Postgres store, file
+  telemetry sink) from `loadConfig(env)`.
 - **`ServerDeps`** (injectable seam — this is why tests drive the *real* server in-process):
-  `store, gateway, auth, telemetry, jobNowFn?, awaitJobs?, production?, trustProxy?, logSink?,
-  adminEmails?, maxIssues?`.
+  `store, connectors, auth, telemetry, jobNowFn?, awaitJobs?, production?, trustProxy?, logSink?,
+  adminEmails?, maxIssues?`. `connectors` is the ADR-0005 registry; tests wire stub gateways into
+  real connectors (`helpers.ts stubConnectors`).
 - **Job runner** (`jobs.ts`): POST `/runs` creates a job, runs `executeJob` (fetch → engine →
   persist run) **asynchronously** (production) so the request returns immediately to a loading page;
   tests pass `awaitJobs:true`. On boot, `markInterruptedJobs` fails any job left `running` by a crash.
@@ -223,8 +234,9 @@ more inference or missing inputs. Each drill-down states the binding reason.
 The **`Store` interface** (`apps/web/src/store/contract.ts`) is the whole persistence API. Two
 implementations, **contract-tested identically**: `MemoryStore` (tests/dev) and `PgStore` (prod).
 Every method is tenant-scoped. Record types: `TenantRecord`, `UserRecord` (role owner/admin/member),
-`InvitationRecord`, `WorkspaceRecord` (provider creds ciphertext, observed statuses/actors, statusMap,
-actorRoleMap, assumptions, onboarding), `JobRecord` (status queued/running/succeeded/failed +
+`InvitationRecord`, `WorkspaceRecord` (provider id + `connectionParams` jsonb + one encrypted
+secret, scopeId/scopeName on the legacy project_key/project_name columns, observed
+statuses/actors, statusHints, statusMap, actorRoleMap, assumptions, onboarding), `JobRecord` (status queued/running/succeeded/failed +
 errorClass), `RunRecord` (**`runJson`, `reportMd`, `telemetryJsonl`** blobs + viewed marker).
 
 Notable methods: `deleteWorkspace` / `deleteTenantData` return a `DeletionSummary` and **cascade**
@@ -441,8 +453,12 @@ Deep: `docs/16-operations.md`, `docs/17-launch-operations.md`.
   surrounding code's idiom and comment density. Comments explain *why* (invariants, tradeoffs), not
   *what*. No `any` in product code. Errors never leak internals to the user (global boundary logs the
   error *name* only).
-- **Adding a provider:** implement the SPI transform under `ingestion/providers/<name>/`, add a
-  descriptor, generate a golden, and keep provider names out of every other package (boundary rule).
+- **Adding a provider:** (1) pure transform under `ingestion/providers/<name>/` with documented
+  derivation rules (J1/CU1-style), run `describeProviderConformance`; (2) golden fixtures + a
+  `golden:update:demo-<name>` script + a golden test; (3) CLI fetcher + mapping schema + dispatch;
+  (4) a web connector module in `apps/web/src/connectors/<name>.ts` (gateway + descriptor +
+  adapters) and one registry line in `main.ts`; (5) journey test. Provider names stay inside those
+  directories (boundary rules on both sides).
 
 ---
 
@@ -451,8 +467,8 @@ Deep: `docs/16-operations.md`, `docs/17-launch-operations.md`.
 - **No billing.** Free beta. Paying customers require a checkout/subscription flow (not built).
 - **No email sending.** Welcome/nudge/report-ready emails and email-based invites are deferred; invites
   are shareable links only. Auth0 sends verification email but does not gate login.
-- **Jira only in-product.** Monday/Asana/CSV transforms exist in the engine but aren't wired into the
-  onboarding UI.
+- **Jira + ClickUp in-product.** Monday/Asana/CSV transforms exist in the engine (goldens + conformance)
+  but aren't wired into the onboarding UI — each needs only a connector module + registry line (ADR-0005).
 - **`run.json` blob size** grows with issues (the DB-growth driver); slimming is deferred (§14.5).
 - **No response compression / CDN** (§14.2–3).
 - **Analysis is in-process** (not a worker queue) — the `maxIssues` ceiling is the interim guard (§14.4).
@@ -508,7 +524,7 @@ proper referral program; billing + paid plans.
 `11` partner-run workflow · `12` overdue detector · `13` detector prioritization · `14` signal
 taxonomy (telemetry privacy) · `15` productization roadmap · `16` operations · `17` launch operations.
 ADRs: `0001` decimal arithmetic · `0002` attribution-guard boundary · `0003` transactional erasure ·
-`0004` org roles & permissions.
+`0004` org roles & permissions · `0005` multi-platform connector architecture.
 
 *Keep this file current. When you change an invariant, a runbook, or a dangerous zone, update §3/§15/
 §16 in the same PR. The best documentation is the kind you can trust without asking.*

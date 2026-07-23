@@ -5,3 +5,4 @@ apps/web/src/demo/
 out/
 docs/
 apps/web/src/assets/
+.claude/
