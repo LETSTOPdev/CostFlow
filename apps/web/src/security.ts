@@ -113,6 +113,8 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
       path: redactPath(request.url.split('?')[0] ?? request.url),
       status,
       error: error.name,
+      errorMessage: error.message,
+      errorStack: error.stack,
     });
     return reply
       .code(status)

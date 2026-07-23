@@ -1,0 +1,20 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "costflow-web",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "COSTFLOW_AUTH=dev",
+        "COSTFLOW_STORE=memory",
+        "COSTFLOW_SESSION_KEY=Wrp1VTP6Ki457Y4UzH0/1MT18J8pphCaRiSkkjQVtR8=",
+        "COSTFLOW_CREDENTIAL_KEY=qrbiduMPCaAEu5cIAReoSNulbMZmEKck4cxBY8ib9R8=",
+        "PORT=3900",
+        "npx",
+        "tsx",
+        "apps/web/src/main.ts"
+      ],
+      "port": 3900
+    }
+  ]
+}
