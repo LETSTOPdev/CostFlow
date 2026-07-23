@@ -118,7 +118,7 @@ actually open the doors:
 4. **Critical**: restore only works with the SAME `COSTFLOW_CREDENTIAL_KEY`
    that was in force when the backup was taken — the salts and tokens are
    encrypted with it. Losing that key makes stored provider tokens
-   undecryptable (customers simply reconnect Jira; no data is exposed).
+   undecryptable (customers simply reconnect their tracker; no data is exposed).
 
 ## 6. Credential rotation
 
@@ -131,11 +131,11 @@ actually open the doors:
   and re-encrypts with the new (a scripted job — not yet built; P4.2 records
   it as the rotation design, to be implemented before the first external
   customer). Until that job exists, rotation = require affected tenants to
-  reconnect Jira (tokens re-encrypt under the new key on reconnect) and
+  reconnect their tracker (tokens re-encrypt under the new key on reconnect) and
   regenerate salts. **Never log either key.**
 - **Auth0 client secret**: rotate in Auth0, then update
   `COSTFLOW_OIDC_CLIENT_SECRET` and redeploy.
-- **A tenant's Jira token**: the customer revokes it in Atlassian and
+- **A tenant's provider token**: the customer revokes it at the source (Atlassian, ClickUp) and
   reconnects through the UI; the new token is validated and re-encrypted.
 
 ## 7. Rollback

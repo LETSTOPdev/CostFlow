@@ -4,7 +4,7 @@
 >
 > This is the single authoritative onboarding document for CostFlow. It is written so a
 > world-class engineer can take over with zero verbal handoff. It summarizes the whole system
-> and points to the deep docs (`docs/00`–`docs/17`, `docs/adr/*`) for detail. When this file and
+> and points to the deep docs (`docs/00`–`docs/18`, `docs/adr/*`) for detail. When this file and
 > a deep doc disagree, **the code is the source of truth**; fix whichever doc is stale.
 
 ---
@@ -12,7 +12,7 @@
 ## 0. What CostFlow is, in one screen
 
 CostFlow is a **Business Friction Intelligence** product. It connects to a work-tracking system
-(Jira today), reads the work items and their history, detects **friction** (delays, queues,
+(Jira and ClickUp today), reads the work items and their history, detects **friction** (delays, queues,
 overdue work), and prices that friction into an **itemized, ranked dollar estimate** — where every
 figure is traceable to its formula, inputs, and assumptions.
 
@@ -44,7 +44,7 @@ packages/                 PURE domain logic. No I/O, no node builtins, determini
   cost-engine/            Money math (decimal), rates, ranges, confidence, cost estimates + traces.
                           domain + friction types only. (ADR-0001: decimal arithmetic.)
   ingestion/              Provider SPI + transforms: raw provider JSON → canonical ImportBatch.
-                          Jira/Monday/Asana/CSV live under providers/. domain only.
+                          Jira/ClickUp/Monday/Asana/CSV live under providers/. domain only.
   analysis/              Orchestrates ingestion→friction→cost-engine into the immutable AnalysisRun
                           (run.json). domain + friction + cost-engine + ingestion.
   reporting/             Deterministic report model + markdown. domain + analysis + cost-engine.
@@ -56,7 +56,7 @@ apps/
 tools/
   golden/                 Frozen fixtures + expected/ outputs. The determinism contract.
   partner/                Partner-run tooling (gitignored outputs under partner-runs/).
-docs/                     00–17 numbered design docs + adr/ (see §17). THIS file = BIBLE.md.
+docs/                     00–18 numbered design docs + adr/ (see §17). THIS file = BIBLE.md.
 ```
 
 **The dependency rule (enforced by `pnpm depcruise`, `error` severity):** dependencies point only
@@ -74,7 +74,7 @@ Browser ──HTTPS──> Railway edge (TLS) ──> Fastify (apps/web, SSR, no
                                               │
    Auth0 (OIDC) ◄── /login,/signup,/auth/callback ──► session cookie (HMAC-signed)
                                               │
-   Jira Cloud REST ◄── HttpJiraGateway ──────┤ (read-only API token, AES-256-GCM at rest)
+   Provider REST APIs ◄─ connector registry ──┤ (jira, clickup — read-only tokens, AES-256-GCM at rest)
                                               │
                                        ┌──────┴───────┐
                                        │  Job runner  │  (apps/web/jobs.ts) — async analysis
@@ -90,7 +90,7 @@ Browser ──HTTPS──> Railway edge (TLS) ──> Fastify (apps/web, SSR, no
 ```
 
 **Golden rule of the data flow:** the **pure engine is a pure function** `inputs → AnalysisRun`.
-The web app is the only impure layer (HTTP, DB, Jira, Auth0, clock, crypto). Rendering **never
+The web app is the only impure layer (HTTP, DB, provider APIs, Auth0, clock, crypto). Rendering **never
 recomputes a number** — it displays the immutable `run.json` through the engine's single sanctioned
 money formatter. This is why the report can never disagree with the golden tests.
 
@@ -149,9 +149,12 @@ Deep docs: `docs/02` (domain), `docs/03` (cost engine), `docs/07` (decision engi
 
 1. **Ingest** (`ingestion`): raw provider JSON → canonical `ImportBatch` = work items + a strictly
    **ordered, validated event stream** + a `capability` descriptor (does the source have event
-   history? due dates? last-updated? actors?) + import diagnostics. Jira specifics (`providers/jira/
-   transform.ts`): J1 initial-status interval derived from `created` + first transition; J2 history
-   truncation = hard error; J3 transition through an unmapped status = hard error.
+   history? due dates? last-updated? actors?) + import diagnostics. Provider specifics live as
+   numbered rules in each transform's header — Jira (`providers/jira/transform.ts`): J1
+   initial-status interval derived from `created` + first transition; J2 history truncation = hard
+   error; J3 transition through an unmapped status = hard error. ClickUp
+   (`providers/clickup/transform.ts`): CU1–CU8 (ms-epoch dates, pagination-truncation refusal,
+   deterministic multi-assignee primary, structurally zero events, multi-list dedup — doc 18 §5).
 2. **Stages** (`domain`): every status maps to a `StageKind` ∈
    `queue | active | review | blocked | done | abandoned`. `TERMINAL_STAGE_KINDS` = done/abandoned.
 3. **Detect friction** (`friction`): pure detectors over items/events. Current signals:
@@ -202,10 +205,14 @@ more inference or missing inputs. Each drill-down states the binding reason.
 ## 6. Backend (`apps/web/src/server.ts` and friends)
 
 - **Framework:** Fastify. `buildServer(deps: ServerDeps)` assembles routes; `main.ts` wires real
-  deps (`HttpJiraGateway`, Postgres store, file telemetry sink) from `loadConfig(env)`.
+  deps (the connector registry, Postgres store, file telemetry sink) from `loadConfig(env)`.
 - **`ServerDeps`** (injectable seam — this is why tests drive the *real* server in-process):
-  `store, gateway, auth, telemetry, jobNowFn?, awaitJobs?, production?, trustProxy?, logSink?,
-  adminEmails?, maxIssues?`.
+  `store, connectors, auth, telemetry, jobNowFn?, awaitJobs?, production?, trustProxy?, logSink?,
+  adminEmails?, maxIssues?`. `connectors` is the **web connector registry**
+  (`apps/web/src/connectors/`, doc 18 §4): one `WebConnector` per provider (jira, clickup) —
+  credential form + validation, scope listing, raw fetch, count/observe, and a delegate to the
+  provider's PURE transform. Routes and the job runner dispatch on `workspace.provider` and never
+  name a provider.
 - **Job runner** (`jobs.ts`): POST `/runs` creates a job, runs `executeJob` (fetch → engine →
   persist run) **asynchronously** (production) so the request returns immediately to a loading page;
   tests pass `awaitJobs:true`. On boot, `markInterruptedJobs` fails any job left `running` by a crash.
@@ -289,7 +296,7 @@ main DB-size pressure. The `maxIssues` ceiling bounds it. See §12/§14.
 | `COSTFLOW_ENV` | prod | `production` enables strict posture (OIDC-only, HSTS, trustProxy). |
 | `COSTFLOW_AUTH` | yes | `oidc` (prod) or `dev` (dev only; refused in prod). |
 | `COSTFLOW_SESSION_KEY` | yes | 32-byte key (hex) for HMAC session signing. Rotating logs everyone out. |
-| `COSTFLOW_CREDENTIAL_KEY` | yes | 32-byte key (hex) for AES-256-GCM of Jira tokens. **Rotating orphans stored creds** — see §11. |
+| `COSTFLOW_CREDENTIAL_KEY` | yes | 32-byte key (hex) for AES-256-GCM of provider tokens. **Rotating orphans stored creds** — see §11. |
 | `COSTFLOW_OIDC_ISSUER` | oidc | Auth0 issuer URL. |
 | `COSTFLOW_OIDC_CLIENT_ID` | oidc | Auth0 app client id. |
 | `COSTFLOW_OIDC_CLIENT_SECRET` | oidc | Auth0 app client secret. |
@@ -314,7 +321,7 @@ Deep: `docs/16-operations.md`, ADR-0002/0003/0004.
   'self'; base-uri 'none'`. Plus `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
   `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy: same-origin`, `Permissions-Policy`
   (geo/cam/mic off), and **HSTS in production**.
-- **Secrets:** Jira tokens AES-256-GCM at rest; keys from env, never in code/logs. Sessions
+- **Secrets:** provider tokens (Jira, ClickUp) AES-256-GCM at rest; keys from env, never in code/logs. Sessions
   HMAC-signed. Auth passwords never touch CostFlow (Auth0 hosts login).
 - **CSRF:** per-session token required on every mutating POST (`checkCsrf` → 403).
 - **AuthZ:** role gating (`owner`/`admin`/`member`, ADR-0004); owner-only org deletion; member cannot
@@ -396,13 +403,13 @@ Deep: `docs/16-operations.md`, `docs/17-launch-operations.md`.
   or a leftover tester allowlist). Fix in Auth0 → Actions → Triggers → Login; remove/disable the
   `api.access.deny(...)` Action. Not a code change.
 - **A run is stuck `running`:** the boot-time `markInterruptedJobs` fails orphaned jobs; the user sees
-  a failed-run page with retry. If a job fails repeatedly, check the Jira gateway error class in the
+  a failed-run page with retry. If a job fails repeatedly, check the connector error class in the
   job record / logs (auth/fetch/import/unexpected).
 - **"Report withheld":** the attribution guard fired — a raw identity reached the rendered bytes.
   Investigate pseudonymization for that workspace; **do not** disable the guard. Sanitized log line:
   `attribution-guard-blocked`.
-- **Rotate a leaked `COSTFLOW_CREDENTIAL_KEY`:** rotating orphans all stored Jira tokens (they can't
-  be decrypted). Users must reconnect Jira. Communicate before rotating. `COSTFLOW_SESSION_KEY`
+- **Rotate a leaked `COSTFLOW_CREDENTIAL_KEY`:** rotating orphans all stored provider tokens (they cannot
+  be decrypted). Users must reconnect their tracker. Communicate before rotating. `COSTFLOW_SESSION_KEY`
   rotation logs everyone out (safe, lower blast radius).
 
 ---
@@ -435,14 +442,17 @@ Deep: `docs/16-operations.md`, `docs/17-launch-operations.md`.
   Postgres contract suite runs the **real engine** with **zero skips** (`test:pg`, needs
   `COSTFLOW_TEST_DATABASE_URL`).
 - **Tests drive the real server in-process** via `ServerDeps` injection (`apps/web/test/helpers.ts`) —
-  no mocking of our own logic; only the Jira gateway and clock are stubbed. This is why a passing test
+  no mocking of our own logic; only the connectors' HTTP halves and the clock are stubbed. This is why a passing test
   suite is strong evidence of production correctness.
 - **Style:** TypeScript strict, `exactOptionalPropertyTypes`. Prettier + ESLint enforced. Match the
   surrounding code's idiom and comment density. Comments explain *why* (invariants, tradeoffs), not
   *what*. No `any` in product code. Errors never leak internals to the user (global boundary logs the
   error *name* only).
-- **Adding a provider:** implement the SPI transform under `ingestion/providers/<name>/`, add a
-  descriptor, generate a golden, and keep provider names out of every other package (boundary rule).
+- **Adding a provider:** follow the doc 18 §6 recipe — pure transform under
+  `ingestion/providers/<name>/` (numbered rules, conformance suite), descriptor, hand-computed
+  golden, CLI fetcher + schema + dispatch, and a `WebConnector` registered in
+  `apps/web/src/connectors/index.ts`. Provider names stay out of every other package (boundary
+  rule); the engine is NEVER touched by a connector.
 
 ---
 
@@ -451,8 +461,10 @@ Deep: `docs/16-operations.md`, `docs/17-launch-operations.md`.
 - **No billing.** Free beta. Paying customers require a checkout/subscription flow (not built).
 - **No email sending.** Welcome/nudge/report-ready emails and email-based invites are deferred; invites
   are shareable links only. Auth0 sends verification email but does not gate login.
-- **Jira only in-product.** Monday/Asana/CSV transforms exist in the engine but aren't wired into the
-  onboarding UI.
+- **Jira + ClickUp in-product.** Monday/Asana/CSV transforms exist in the engine but aren't wired
+  into the onboarding UI — each is a bounded add now that onboarding is provider-blind (doc 18 §7).
+- **ClickUp has no event history** on the standard API (Time-in-Status is plan-gated and
+  aggregate-only), so queue-wait skips visibly for ClickUp workspaces. Honest, not a defect.
 - **`run.json` blob size** grows with issues (the DB-growth driver); slimming is deferred (§14.5).
 - **No response compression / CDN** (§14.2–3).
 - **Analysis is in-process** (not a worker queue) — the `maxIssues` ceiling is the interim guard (§14.4).
@@ -472,7 +484,7 @@ uptime/error alerting; data-export endpoint (Terms already promises "export anyt
 telemetry sink (events → Postgres for week-over-week funnels); a "Powered by CostFlow" line on the
 exported report (the organic referral loop). Mid: email flows + email invites; per-tenant run
 caps/concurrency; worker-queue for analysis; run.json slimming; formal axe a11y pass; DPA/SOC-2 path.
-Later: retention features (weekly digest, scheduled re-runs, trend alerts); Monday/Asana/CSV in-product;
+Later: retention features (weekly digest, scheduled re-runs, trend alerts); Monday/Asana/CSV in-product (bounded adds per doc 18 §7);
 proper referral program; billing + paid plans.
 
 ---
@@ -481,7 +493,7 @@ proper referral program; billing + paid plans.
 
 - **What must survive:** PostgreSQL (all customer data + immutable run artifacts) and the two crypto
   keys (`COSTFLOW_SESSION_KEY`, `COSTFLOW_CREDENTIAL_KEY`). **Without `COSTFLOW_CREDENTIAL_KEY`, stored
-  Jira tokens are unrecoverable** — back up the keys in a secrets manager, separately from the DB.
+  provider tokens are unrecoverable** — back up the keys in a secrets manager, separately from the DB.
 - **Backups:** enable and **verify** managed Postgres backups (point-in-time if available). A backup
   you have never restored is not a backup — do a test restore. This is currently an **unclosed ops
   action** and the top DR gap.
@@ -494,7 +506,7 @@ proper referral program; billing + paid plans.
     or `git revert` + push. There is no destructive forward-only migration assumption, but **review
     any migration for reversibility** before shipping.
   - *Key compromise:* rotate `SESSION_KEY` (logs everyone out) immediately; rotate `CREDENTIAL_KEY`
-    only with user comms (forces Jira reconnect). Revoke the Auth0 client secret in the dashboard.
+    only with user comms (forces tracker reconnect). Revoke the Auth0 client secret in the dashboard.
 - **RPO/RTO:** bounded by the managed-Postgres backup cadence and Railway redeploy time (~minutes),
   once backups are enabled and drilled. Until then, treat DR as **not yet proven**.
 
@@ -506,7 +518,8 @@ proper referral program; billing + paid plans.
 `05` architecture · `06` constraints/open-questions/risks · `07` decision engine · `08` roadmap ·
 `09` **implementation log** (the running build diary + phase records) · `10` engineering review ·
 `11` partner-run workflow · `12` overdue detector · `13` detector prioritization · `14` signal
-taxonomy (telemetry privacy) · `15` productization roadmap · `16` operations · `17` launch operations.
+taxonomy (telemetry privacy) · `15` productization roadmap · `16` operations · `17` launch operations · `18` **connector architecture**
+(multi-platform audit, web connector SPI, ClickUp rules, add-a-connector recipe).
 ADRs: `0001` decimal arithmetic · `0002` attribution-guard boundary · `0003` transactional erasure ·
 `0004` org roles & permissions.
 

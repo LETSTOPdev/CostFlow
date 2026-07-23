@@ -97,8 +97,8 @@ const hero = `
   <div class="lp-aurora" aria-hidden="true"></div>
   <div class="container lp-hero-inner">
     <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Free during beta · try a live demo — no signup →</a>
-    <h1 class="lp-h1">See what delays in your Jira<br><span class="lp-grad">are costing you — in dollars.</span></h1>
-    <p class="lp-sub">Connect Jira. Get an itemized, ranked cost report in about a minute —
+    <h1 class="lp-h1">See what delays in Jira or ClickUp<br><span class="lp-grad">are costing you — in dollars.</span></h1>
+    <p class="lp-sub">Connect Jira or ClickUp. Get an itemized, ranked cost report in about a minute —
       every figure traceable to its formula.</p>
     <div class="lp-cta">
       <a class="btn btn-lg" href="/signup">Get started free</a>
@@ -126,8 +126,8 @@ const how = `
           <div class="lp-mini-btn">Validate &amp; connect</div>
         </div>
         <div class="lp-step-num">01</div>
-        <h3>Connect Jira</h3>
-        <p>Paste a read-only API token. We never write to your board.</p>
+        <h3>Connect your tracker</h3>
+        <p>Jira or ClickUp — paste a read-only API token. We never write to your board.</p>
       </div>
       <div class="lp-step">
         <div class="lp-step-viz lp-viz-map">
@@ -216,7 +216,7 @@ const FAQ_ITEMS: readonly [string, string][] = [
     'No catch. CostFlow is a free public beta — no credit card, no trial clock. Paid plans come later; nothing you do now will cost you.',
   ],
   [
-    'Will you change anything in my Jira?',
+    'Will you change anything in my Jira or ClickUp?',
     'Never. CostFlow is read-only — a personal API token, used only to read. No comments, no status changes, nothing written back.',
   ],
   [
@@ -229,7 +229,7 @@ const FAQ_ITEMS: readonly [string, string][] = [
   ],
   [
     'Which tools do you support?',
-    'Jira today. Monday, Asana, and CSV import are proven in our engine and coming to the product soon.',
+    'Jira and ClickUp today. Monday, Asana, and CSV import are proven in our engine and coming to the product soon.',
   ],
 ];
 
@@ -255,7 +255,7 @@ function landingJsonLd(): string {
         url: 'https://app.fbx1.com/',
         logo: 'https://app.fbx1.com/brand/logo.svg',
         description:
-          'Business Friction Intelligence — price the cost of workflow friction from Jira.',
+          'Business Friction Intelligence — price the cost of workflow friction from Jira and ClickUp.',
       },
       {
         '@type': 'WebSite',
@@ -271,7 +271,7 @@ function landingJsonLd(): string {
         operatingSystem: 'Web',
         url: 'https://app.fbx1.com/',
         description:
-          'Connect Jira and CostFlow turns delays, queues, and overdue work into an itemized, ranked cost report — every figure traceable to its formula.',
+          'Connect Jira or ClickUp and CostFlow turns delays, queues, and overdue work into an itemized, ranked cost report — every figure traceable to its formula.',
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         publisher: { '@id': 'https://app.fbx1.com/#org' },
       },

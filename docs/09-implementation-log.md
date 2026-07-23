@@ -2055,3 +2055,81 @@ Self-serve signup is an **Auth0 dashboard change** (enable sign-ups, remove the
 invited-testers allowlist). The app already provisions a new organization for
 any authenticated email, so it is launch-ready; see docs/16 §2b. Also set
 `COSTFLOW_ADMIN_EMAILS` and confirm the `support@fbx1.com` mailbox.
+
+## Multi-Platform Connectors — Jira becomes connector #1; ClickUp ships (2026-07-23)
+
+Mission (founder-directed, branch `feature/multi-platform-connectors`): redesign
+ingestion so the product — not just the engine — is platform-agnostic, and ship
+a production ClickUp connector. Full audit + design in **doc 18**.
+
+### What shipped
+
+1. **Audit (doc 18 §3).** The engine/SPI were verified already-clean (the P1/P2
+   investment held); every Jira leak was in `apps/web` (L1–L21 classified).
+2. **Web connector SPI** (`apps/web/src/connectors/`): `WebConnector` contract
+   (credential form spec + parse, scope listing, verbatim raw fetch,
+   count/observe, transform DELEGATING to the pure package), static registry
+   (R-11), sanitized `GatewayError` unchanged. `jira-gateway.ts` deleted; its
+   HTTP logic lives verbatim in `connectors/jira.ts`. `ServerDeps.gateway` →
+   `ServerDeps.connectors`; jobs + every onboarding route dispatch on
+   `workspace.provider` and never name a provider.
+3. **Store D-21.** `WorkspaceRecord.provider: string`; non-secret display
+   fields in new `connection_json` (site/email columns kept NULL-able +
+   mirrored on jira rows for rollback safety; read-time backfill for old rows);
+   TS `scopeKey`/`scopeName` over the existing `project_key/name` columns (no
+   column rename on the deployed DB). Idempotent migration.
+4. **Onboarding**: `/connect` provider picker + `/connect/:provider` forms
+   (manager-gated); same-provider reconnect keeps progress; provider SWITCH
+   resets scope/vocabulary/mappings to `connected` while append-only runs stay.
+5. **ClickUp connector** (pure: CU1–CU8 in `providers/clickup/`; edges: CLI
+   fetcher + web connector with bounded 429 retry honoring Retry-After).
+   Grounded in the cu01 partner run: `eventHistory: false` structurally
+   (Time-in-Status is plan-gated + aggregate-only), so queue-wait skips
+   VISIBLY; multi-assignee resolves to lowest-user-id with a diagnostic;
+   multi-list tasks dedup (CU8); epoch corruption degrades to diagnostics
+   (found by the adversarial pass — beyond ±8.64e15 ms Date.toISOString
+   throws; now guarded).
+6. **Golden `demo-clickup`** matched the doc 18 §5 hand-computed table FIRST
+   TRY: aging 65 item-days → 400/801/1,602 USD tier C; overdue 10 item-days →
+   120/240/480 USD tier A; queue-wait skipped; CU3 diagnostic; context 2-of-3
+   (67%), pool "to do" (2). Conformance ×5 providers.
+7. **Copy/docs**: landing + meta + demo CTAs platform-aware ("Jira or
+   ClickUp"); BIBLE §0/§1/§2/§4/§6/§17/§18/§21 updated; ops doc 16 rotation
+   runbook now provider-neutral.
+
+### Proofs
+
+Full gate green — **378 passed / 1 skipped (53 files)**, 0 boundary
+violations; demo-ops/flow/jira/monday/asana goldens byte-identical
+(engine untouched). New suites: clickup transform (21), stress/adversarial
+(7: 20k tasks bounded + byte-deterministic, hostile strings inert,
+500-assignee determinism, corruption drops visibly, CU2 refusal at scale),
+web clickup connector (7, incl. 429 retry), full ClickUp web journey ×3
+(picker→report reproduces the golden figures via the real engine; provider
+switch resets setup, keeps runs).
+
+### Incident record (honesty ledger)
+
+While this branch was in flight, a concurrent session twice deleted the
+branch's worktree from `.claude/worktrees/`; the first removal archived the
+uncommitted state as `6d62902 wip(archive)` whose message claims the branch
+is "superseded by ADR-0005 committed on main". **Verified false at the time
+of writing: main and origin/main are at d8ed1ff with ADRs 0001–0004 only; no
+docs/adr/0005 exists on any ref.** Work continued from the archive commit in
+a worktree outside the repo directory; the branch is pushed to
+`origin/feature/multi-platform-connectors` for durability. Reviewer should
+reconcile if a competing implementation lands on main later.
+
+### Honest limits, named
+
+- ClickUp priorities, time estimates, custom fields, and parent links are
+  FETCHED into the raw documents but not mapped — no detector consumes them;
+  canonical extensions ride with a consuming detector, never a connector
+  (doc 18 §4.4).
+- The ClickUp HTTP halves are proven against mocked responses; a live
+  workspace shakedown (cu01 re-fetch via `costflow fetch --provider clickup`)
+  awaits founder-provided credentials — same posture as P1's Jira fetcher.
+- monday/asana remain engine-only; each is ~1 day of web-connector work now
+  (doc 18 §7). CSV upload needs a different UX shape (~2–3 days).
+- Legacy `site`/`email` columns stay mirrored until a deliberate follow-up
+  migration retires them (rollback-safety trade, D-21).
