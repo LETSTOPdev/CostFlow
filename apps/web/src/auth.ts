@@ -16,10 +16,23 @@ export const SESSION_COOKIE = 'cf_session';
 /** Signed cookie carrying a pending invitation token through the sign-in hop. */
 export const INVITE_COOKIE = 'cf_invite';
 
+/**
+ * Absolute session lifetime. Without one, a signed cookie is valid forever —
+ * a leaked or exfiltrated cookie could be replayed indefinitely. Seven days
+ * bounds that exposure; signing in again is cheap (OIDC SSO usually makes it
+ * one click).
+ */
+export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
 export interface Session {
   readonly userId: string;
   readonly tenantId: string;
   readonly csrf: string;
+}
+
+/** Wire shape of the signed cookie payload: the session plus its expiry. */
+interface SessionEnvelope extends Session {
+  readonly exp: number;
 }
 
 export interface AuthConfig {
@@ -69,7 +82,13 @@ export function oidcLogoutUrl(oidc: {
 
 export function sessionFrom(request: FastifyRequest, key: Buffer): Session | null {
   const raw = request.cookies[SESSION_COOKIE];
-  return verifyValue<Session>(raw, key);
+  const envelope = verifyValue<SessionEnvelope>(raw, key);
+  if (!envelope) return null;
+  // Reject cookies without an expiry (pre-TTL format) or past it. The absolute
+  // lifetime is enforced server-side — the cookie's own Max-Age is advisory
+  // (a captured cookie value ignores it).
+  if (typeof envelope.exp !== 'number' || envelope.exp <= Date.now()) return null;
+  return { userId: envelope.userId, tenantId: envelope.tenantId, csrf: envelope.csrf };
 }
 
 export function setSession(
@@ -78,11 +97,13 @@ export function setSession(
   key: Buffer,
   secure = false,
 ): void {
-  reply.setCookie(SESSION_COOKIE, signValue(session, key), {
+  const envelope: SessionEnvelope = { ...session, exp: Date.now() + SESSION_TTL_MS };
+  reply.setCookie(SESSION_COOKIE, signValue(envelope, key), {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
     secure,
+    maxAge: Math.floor(SESSION_TTL_MS / 1000),
   });
 }
 
@@ -337,9 +358,23 @@ export function registerAuthRoutes(
         client_secret: oidc.clientSecret,
       }).toString(),
     });
+    const idpFailure = (): FastifyReply =>
+      reply
+        .code(502)
+        .type('text/html')
+        .send(
+          layout(
+            'Sign-in error',
+            `<div class="panel" style="max-width:34rem;margin:2rem auto;text-align:center">
+               <h1>Sign-in couldn't be completed</h1>
+               <p class="lead">The identity provider didn't respond as expected. Please try again.</p>
+               <div class="hero-actions" style="margin-top:1.5rem"><a class="btn btn-lg" href="/login">Try again</a></div>
+             </div>`,
+          ),
+        );
     if (!tokenResponse.ok) {
       onSignIn(false);
-      return reply.code(502).send('Sign-in failed at the identity provider.');
+      return idpFailure();
     }
     const tokens = (await tokenResponse.json()) as { access_token?: string };
     const userinfoResponse = await fetchFn(discovery.userinfo_endpoint as string, {
@@ -347,7 +382,7 @@ export function registerAuthRoutes(
     });
     if (!userinfoResponse.ok) {
       onSignIn(false);
-      return reply.code(502).send('Sign-in failed at the identity provider.');
+      return idpFailure();
     }
     const userinfo = (await userinfoResponse.json()) as { email?: string };
     const email = (userinfo.email ?? '').trim().toLowerCase();

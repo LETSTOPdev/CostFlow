@@ -106,6 +106,9 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
   app.setErrorHandler((error: Error & { statusCode?: number }, request, reply) => {
     const raw = typeof error.statusCode === 'number' ? error.statusCode : 500;
     const status = raw >= 400 && raw < 500 ? raw : 500;
+    // Log the error NAME only (a class, not a value). The message and stack can
+    // carry a DB detail, a decrypt failure, or other internals — never log them.
+    // The redacted path locates the failure without leaking data.
     log({
       level: 'error',
       msg: 'request-error',
@@ -113,8 +116,6 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
       path: redactPath(request.url.split('?')[0] ?? request.url),
       status,
       error: error.name,
-      errorMessage: error.message,
-      errorStack: error.stack,
     });
     return reply
       .code(status)

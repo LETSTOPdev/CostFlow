@@ -203,6 +203,58 @@ const JIRA_DESCRIPTOR: ConnectorDescriptor = {
  * Build the Jira connector around a gateway (production: HttpJiraGateway;
  * tests: a stub). Everything except the gateway is pure.
  */
+/**
+ * SSRF guard for the user-supplied Jira site URL: the server fetches this URL
+ * with credentials attached, so it must never point inside our own network.
+ * Rejects loopback/private/link-local/CGNAT IP literals, reserved internal
+ * hostnames, and URLs carrying embedded credentials. String-level only — DNS
+ * rebinding (a public name resolving to a private address) is out of scope
+ * here and belongs at the network layer.
+ */
+export function forbiddenJiraSite(site: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(site);
+  } catch {
+    return true;
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '') return true;
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const isIpv6 = host.includes(':');
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    host.endsWith('.internal') ||
+    host.endsWith('.home.arpa') ||
+    // A bare single-label host ("intranet") is internal — but skip this for
+    // IPv6 literals, which legitimately contain no dot.
+    (!isIpv6 && !host.includes('.'))
+  ) {
+    return true;
+  }
+  const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    );
+  }
+  if (isIpv6) {
+    // IPv6 literal: allow only clearly-global unicast (2000::/3); everything
+    // else (loopback ::1, ULA fc00::/7, link-local fe80::/10, v4-mapped) is
+    // refused rather than enumerated.
+    return !/^[23]/.test(host);
+  }
+  return false;
+}
+
 export function buildJiraConnector(gateway: ConnectorGateway): Connector {
   return {
     descriptor: JIRA_DESCRIPTOR,
@@ -220,6 +272,13 @@ export function buildJiraConnector(gateway: ConnectorGateway): Connector {
           ok: false,
           error:
             'All three fields are required, and the site must be an https:// URL, for example <code>https://your-org.atlassian.net</code>.',
+        };
+      }
+      if (forbiddenJiraSite(site)) {
+        return {
+          ok: false,
+          error:
+            'The site must be a public https:// URL, for example <code>https://your-org.atlassian.net</code>.',
         };
       }
       return { ok: true, params: { site, email }, secret: token };

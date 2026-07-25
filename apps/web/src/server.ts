@@ -1479,6 +1479,13 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     if (!checkCsrf(request, session, reply)) return;
     const workspace = await requireStep(session, reply, 'assumptions-set');
     if (!workspace) return;
+    // Double-submit guard: a second click (or a refresh re-POST) while a job
+    // is queued/running lands on the SAME job instead of starting a duplicate
+    // fetch + analysis against the customer's tracker.
+    const active = (await store.listJobsForWorkspace(session.tenantId, workspace.id)).find(
+      (j) => j.status === 'queued' || j.status === 'running',
+    );
+    if (active) return reply.redirect(`/jobs/${active.id}`);
     const job = await store.createJob(session.tenantId, workspace.id);
     const startedMs = Date.now();
     const execution = executeJob(

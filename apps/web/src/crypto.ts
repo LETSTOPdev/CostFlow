@@ -1,4 +1,11 @@
-import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from 'node:crypto';
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHmac,
+  randomBytes,
+  randomUUID,
+  timingSafeEqual,
+} from 'node:crypto';
 import type { PseudonymizationContext } from '@costflow/domain';
 
 /**
@@ -59,7 +66,12 @@ export function verifyValue<T>(token: string | undefined, key: Buffer): T | null
   const body = token.slice(0, dot);
   const mac = token.slice(dot + 1);
   const expected = createHmac('sha256', key).update(body).digest('base64url');
-  if (mac.length !== expected.length || mac !== expected) return null;
+  // Constant-time comparison: a plain string compare short-circuits on the
+  // first differing byte, which leaks MAC-prefix timing to an attacker
+  // forging session cookies.
+  const macBuf = Buffer.from(mac);
+  const expectedBuf = Buffer.from(expected);
+  if (macBuf.length !== expectedBuf.length || !timingSafeEqual(macBuf, expectedBuf)) return null;
   try {
     return JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as T;
   } catch {
