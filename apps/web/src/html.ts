@@ -591,9 +591,6 @@ export function stepsNav(current?: (typeof ONBOARDING_STEPS)[number]): string {
   return `<nav class="stepper" aria-label="Onboarding progress">${parts}</nav>`;
 }
 
-/** Back-compat default (no step highlighted). */
-export const STEPS_NAV = stepsNav();
-
 /**
  * Standalone print/export document (P5): no app chrome, print-optimized CSS,
  * drill-downs rendered expanded by the caller. The user prints to PDF from the

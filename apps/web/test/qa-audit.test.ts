@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { signValue } from '../src/crypto';
 import { forbiddenJiraSite } from '../src/connectors/jira';
+import { frictionInsight, humanizeMagnitude } from '../src/report-view';
 import { SESSION_TTL_MS } from '../src/auth';
 import { SESSION_KEY, TOKEN, cookieOf, makeApp, post, signIn } from './helpers';
 
@@ -103,6 +104,27 @@ describe('SSRF guard on the Jira site URL', () => {
     expect(res.body).toContain('public https:// URL');
     // The gateway was never contacted with the private address.
     expect(t.gateway.lastCredentials).toBeNull();
+  });
+});
+
+describe('report render escapes attacker-controllable tracker data', () => {
+  // A Jira/ClickUp status or stage name is chosen by anyone on the customer's
+  // board — an untrusted string that reaches the report HTML. These pin the
+  // esc() choke points so a future refactor can't silently reintroduce XSS.
+  const XSS = '<script>alert(1)</script>';
+
+  it('frictionInsight escapes a malicious stage name', () => {
+    for (const type of ['queue-wait', 'aging', 'overdue', 'other']) {
+      const html = frictionInsight(type, XSS, 14);
+      expect(html).not.toContain('<script>');
+      expect(html).toContain('&lt;script&gt;');
+    }
+  });
+
+  it('humanizeMagnitude escapes a malicious unit', () => {
+    const html = humanizeMagnitude(5, XSS);
+    expect(html).not.toContain('<script>');
+    expect(html).toContain('&lt;script&gt;');
   });
 });
 
