@@ -4,6 +4,19 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { newId } from '../crypto';
 import type {
+  AdminAuditEntry,
+  AdminAuditRow,
+  AdminCounts,
+  AdminInvitationRow,
+  AdminJobRow,
+  AdminListParams,
+  AdminPage,
+  AdminRunRow,
+  AdminSearchHit,
+  AdminTenantRow,
+  AdminTimelineEvent,
+  AdminUserRow,
+  AdminWorkspaceRow,
   DeletionSummary,
   FunnelStats,
   InvitationRecord,
@@ -648,6 +661,381 @@ export class PgStore implements Store {
         'select count(distinct tenant_id) as n from runs where viewed_at is not null',
       ),
     };
+  }
+
+  // ---------------- Admin operations console (cross-tenant) ----------------
+  //
+  // A deliberate, audited exception to the tenancy law, reachable only behind
+  // the COSTFLOW_ADMIN_EMAILS allowlist. `order by` cannot be parameterized, so
+  // the sort column is always chosen from a per-method WHITELIST of literal SQL
+  // (never interpolated from user input); direction is validated; limit/offset
+  // and every filter are bound parameters. Projections never select a secret
+  // (token/salt ciphertext) or raw run content (run_json/report_md/telemetry).
+
+  private adminFilters(
+    params: AdminListParams,
+    opts: { tenantCol?: string; statusCol?: string; searchCols?: readonly string[] },
+  ): { sql: string; params: unknown[] } {
+    const clauses: string[] = [];
+    const bound: unknown[] = [];
+    if (opts.tenantCol && params.tenantId) {
+      bound.push(params.tenantId);
+      clauses.push(`${opts.tenantCol} = $${bound.length}`);
+    }
+    if (opts.statusCol && params.status) {
+      bound.push(params.status);
+      clauses.push(`${opts.statusCol} = $${bound.length}`);
+    }
+    const q = (params.q ?? '').trim();
+    if (opts.searchCols && opts.searchCols.length > 0 && q !== '') {
+      bound.push(`%${q}%`);
+      const idx = bound.length;
+      clauses.push(`(${opts.searchCols.map((c) => `${c} ilike $${idx}`).join(' or ')})`);
+    }
+    return { sql: clauses.length ? `where ${clauses.join(' and ')}` : '', params: bound };
+  }
+
+  private async adminPage<T>(
+    table: string,
+    selectCols: string,
+    filters: { sql: string; params: unknown[] },
+    sortMap: Record<string, string>,
+    defSort: string,
+    params: AdminListParams,
+    map: (row: Record<string, unknown>) => T,
+  ): Promise<AdminPage<T>> {
+    const countRes = await this.pool.query<{ n: number }>(
+      `select count(*)::int as n from ${table} ${filters.sql}`,
+      filters.params,
+    );
+    const total = Number(countRes.rows[0]?.n ?? 0);
+    const col =
+      params.sort && sortMap[params.sort] ? sortMap[params.sort] : (sortMap[defSort] as string);
+    const dir = params.dir === 'asc' ? 'asc' : 'desc';
+    const n = filters.params.length;
+    const res = await this.pool.query(
+      `select ${selectCols} from ${table} ${filters.sql} order by ${col} ${dir} limit $${n + 1} offset $${n + 2}`,
+      [...filters.params, params.limit, params.offset],
+    );
+    return { rows: (res.rows as Record<string, unknown>[]).map(map), total };
+  }
+
+  async adminCounts(): Promise<AdminCounts> {
+    const r = await this.pool.query<Record<string, string>>(
+      `select
+         (select count(*) from tenants) as tenants,
+         (select count(*) from users) as users,
+         (select count(*) from workspaces) as workspaces,
+         (select count(*) from jobs) as jobs,
+         (select count(*) from runs) as runs,
+         (select count(*) from invitations) as invitations,
+         (select count(*) from invitations where status = 'pending') as pending_invitations,
+         (select count(*) from jobs where status = 'failed') as failed_jobs,
+         (select count(*) from jobs where status in ('running','queued')) as running_jobs`,
+    );
+    const row = r.rows[0] ?? {};
+    const n = (k: string): number => Number(row[k] ?? 0);
+    return {
+      tenants: n('tenants'),
+      users: n('users'),
+      workspaces: n('workspaces'),
+      jobs: n('jobs'),
+      runs: n('runs'),
+      invitations: n('invitations'),
+      pendingInvitations: n('pending_invitations'),
+      failedJobs: n('failed_jobs'),
+      runningJobs: n('running_jobs'),
+    };
+  }
+
+  async adminListTenants(params: AdminListParams): Promise<AdminPage<AdminTenantRow>> {
+    const clauses: string[] = [];
+    const bound: unknown[] = [];
+    if (params.tenantId) {
+      bound.push(params.tenantId);
+      clauses.push(`t.id = $${bound.length}`);
+    }
+    const q = (params.q ?? '').trim();
+    if (q !== '') {
+      bound.push(`%${q}%`);
+      clauses.push(`(t.name ilike $${bound.length} or t.id::text ilike $${bound.length})`);
+    }
+    const whereSql = clauses.length ? `where ${clauses.join(' and ')}` : '';
+    const sortMap: Record<string, string> = {
+      createdAt: 't.created_at',
+      name: 't.name',
+      users: 'users',
+      workspaces: 'workspaces',
+      runs: 'runs',
+      lastActivityAt: 'last_activity_at',
+    };
+    const col = params.sort && sortMap[params.sort] ? sortMap[params.sort] : sortMap['createdAt']!;
+    const dir = params.dir === 'asc' ? 'asc' : 'desc';
+    const countRes = await this.pool.query<{ n: number }>(
+      `select count(*)::int as n from tenants t ${whereSql}`,
+      bound,
+    );
+    const total = Number(countRes.rows[0]?.n ?? 0);
+    const p = bound.length;
+    const res = await this.pool.query(
+      `select t.id, t.name, t.created_at,
+         (select count(*) from users u where u.tenant_id = t.id) as users,
+         (select count(*) from workspaces w where w.tenant_id = t.id) as workspaces,
+         (select count(*) from runs r where r.tenant_id = t.id) as runs,
+         greatest(
+           t.created_at,
+           coalesce((select max(created_at) from workspaces w where w.tenant_id = t.id), t.created_at),
+           coalesce((select max(created_at) from runs r where r.tenant_id = t.id), t.created_at),
+           coalesce((select max(coalesce(finished_at, created_at)) from jobs j where j.tenant_id = t.id), t.created_at)
+         ) as last_activity_at
+       from tenants t ${whereSql}
+       order by ${col} ${dir} limit $${p + 1} offset $${p + 2}`,
+      [...bound, params.limit, params.offset],
+    );
+    const rows: AdminTenantRow[] = (res.rows as Record<string, unknown>[]).map((row) => ({
+      id: row['id'] as string,
+      name: (row['name'] as string | null) ?? null,
+      createdAt: toIso(row['created_at']) as string,
+      users: Number(row['users'] ?? 0),
+      workspaces: Number(row['workspaces'] ?? 0),
+      runs: Number(row['runs'] ?? 0),
+      lastActivityAt: toIso(row['last_activity_at']),
+    }));
+    return { rows, total };
+  }
+
+  async adminListUsers(params: AdminListParams): Promise<AdminPage<AdminUserRow>> {
+    return this.adminPage(
+      'users',
+      'id, tenant_id, email, role, created_at',
+      this.adminFilters(params, { tenantCol: 'tenant_id', searchCols: ['email', 'id::text'] }),
+      { createdAt: 'created_at', email: 'email', role: 'role' },
+      'createdAt',
+      params,
+      (row) => ({
+        id: row['id'] as string,
+        tenantId: row['tenant_id'] as string,
+        email: row['email'] as string,
+        role: row['role'] as OrgRole,
+        createdAt: toIso(row['created_at']) as string,
+      }),
+    );
+  }
+
+  async adminListWorkspaces(params: AdminListParams): Promise<AdminPage<AdminWorkspaceRow>> {
+    return this.adminPage(
+      'workspaces',
+      `id, tenant_id, provider, connection_params, site, email, project_key, project_name,
+       onboarding, created_at, (token_ciphertext <> '') as has_token`,
+      this.adminFilters(params, {
+        tenantCol: 'tenant_id',
+        statusCol: 'onboarding',
+        searchCols: ['provider', "coalesce(project_name,'')", 'id::text'],
+      }),
+      { createdAt: 'created_at', provider: 'provider', onboarding: 'onboarding' },
+      'createdAt',
+      params,
+      (row) => ({
+        id: row['id'] as string,
+        tenantId: row['tenant_id'] as string,
+        provider: row['provider'] as string,
+        connectionParams: (row['connection_params'] as Record<string, string> | null) ?? {
+          site: (row['site'] as string | null) ?? '',
+          email: (row['email'] as string | null) ?? '',
+        },
+        scopeId: (row['project_key'] as string | null) ?? null,
+        scopeName: (row['project_name'] as string | null) ?? null,
+        onboarding: row['onboarding'] as AdminWorkspaceRow['onboarding'],
+        hasToken: row['has_token'] === true,
+        createdAt: toIso(row['created_at']) as string,
+      }),
+    );
+  }
+
+  async adminListJobs(params: AdminListParams): Promise<AdminPage<AdminJobRow>> {
+    return this.adminPage(
+      'jobs',
+      'id, tenant_id, workspace_id, status, error_class, created_at, finished_at',
+      this.adminFilters(params, {
+        tenantCol: 'tenant_id',
+        statusCol: 'status',
+        searchCols: ['id::text', 'workspace_id::text'],
+      }),
+      { createdAt: 'created_at', status: 'status' },
+      'createdAt',
+      params,
+      (row) => ({
+        id: row['id'] as string,
+        tenantId: row['tenant_id'] as string,
+        workspaceId: row['workspace_id'] as string,
+        status: row['status'] as AdminJobRow['status'],
+        errorClass: (row['error_class'] as AdminJobRow['errorClass']) ?? null,
+        createdAt: toIso(row['created_at']) as string,
+        finishedAt: toIso(row['finished_at']),
+      }),
+    );
+  }
+
+  async adminListRuns(params: AdminListParams): Promise<AdminPage<AdminRunRow>> {
+    return this.adminPage(
+      'runs',
+      'id, tenant_id, workspace_id, created_at, viewed_at',
+      this.adminFilters(params, {
+        tenantCol: 'tenant_id',
+        searchCols: ['id', 'workspace_id::text'],
+      }),
+      { createdAt: 'created_at' },
+      'createdAt',
+      params,
+      (row) => ({
+        id: row['id'] as string,
+        tenantId: row['tenant_id'] as string,
+        workspaceId: row['workspace_id'] as string,
+        createdAt: toIso(row['created_at']) as string,
+        viewed: row['viewed_at'] !== null && row['viewed_at'] !== undefined,
+      }),
+    );
+  }
+
+  async adminListInvitations(params: AdminListParams): Promise<AdminPage<AdminInvitationRow>> {
+    return this.adminPage(
+      'invitations',
+      'id, tenant_id, email, role, status, invited_by, created_at, accepted_at',
+      this.adminFilters(params, {
+        tenantCol: 'tenant_id',
+        statusCol: 'status',
+        searchCols: ['email', 'id::text'],
+      }),
+      { createdAt: 'created_at', status: 'status', email: 'email' },
+      'createdAt',
+      params,
+      (row) => ({
+        id: row['id'] as string,
+        tenantId: row['tenant_id'] as string,
+        email: row['email'] as string,
+        role: row['role'] as OrgRole,
+        status: row['status'] as AdminInvitationRow['status'],
+        invitedBy: (row['invited_by'] as string | null) ?? null,
+        createdAt: toIso(row['created_at']) as string,
+        acceptedAt: toIso(row['accepted_at']),
+      }),
+    );
+  }
+
+  async adminTenantTimeline(tenantId: string, limit: number): Promise<AdminTimelineEvent[]> {
+    const res = await this.pool.query(
+      `select at, kind, summary from (
+         select created_at as at, 'tenant' as kind, 'Organization created' as summary
+           from tenants where id = $1
+         union all
+         select created_at, 'user', 'Member joined (' || role || ')' from users where tenant_id = $1
+         union all
+         select created_at, 'workspace',
+                'Connected ' || provider || coalesce(' — ' || project_name, '')
+           from workspaces where tenant_id = $1
+         union all
+         select coalesce(finished_at, created_at), 'job',
+                'Import ' || status || coalesce(' (' || error_class || ')', '')
+           from jobs where tenant_id = $1
+         union all
+         select created_at, 'run', 'Analysis run completed' from runs where tenant_id = $1
+         union all
+         select created_at, 'invitation', 'Invited ' || email || ' (' || status || ')'
+           from invitations where tenant_id = $1
+       ) e order by at desc limit $2`,
+      [tenantId, limit],
+    );
+    return (res.rows as Record<string, unknown>[]).map((row) => ({
+      at: toIso(row['at']) as string,
+      kind: row['kind'] as AdminTimelineEvent['kind'],
+      summary: row['summary'] as string,
+    }));
+  }
+
+  async adminSearch(q: string, limit: number): Promise<AdminSearchHit[]> {
+    const needle = q.trim();
+    if (needle === '') return [];
+    const like = `%${needle}%`;
+    const hits: AdminSearchHit[] = [];
+    const tenants = await this.pool.query(
+      `select id, name from tenants where name ilike $1 or id::text ilike $1 limit $2`,
+      [like, limit],
+    );
+    for (const row of tenants.rows as Record<string, unknown>[])
+      hits.push({
+        kind: 'tenant',
+        id: row['id'] as string,
+        tenantId: row['id'] as string,
+        label: (row['name'] as string | null) ?? '(unnamed org)',
+        sub: row['id'] as string,
+      });
+    const users = await this.pool.query(
+      `select id, tenant_id, email, role from users where email ilike $1 or id::text ilike $1 limit $2`,
+      [like, limit],
+    );
+    for (const row of users.rows as Record<string, unknown>[])
+      hits.push({
+        kind: 'user',
+        id: row['id'] as string,
+        tenantId: row['tenant_id'] as string,
+        label: row['email'] as string,
+        sub: `${row['role'] as string} · ${row['id'] as string}`,
+      });
+    const workspaces = await this.pool.query(
+      `select id, tenant_id, provider, project_name from workspaces
+       where coalesce(project_name,'') ilike $1 or id::text ilike $1 or coalesce(project_key,'') ilike $1
+       limit $2`,
+      [like, limit],
+    );
+    for (const row of workspaces.rows as Record<string, unknown>[])
+      hits.push({
+        kind: 'workspace',
+        id: row['id'] as string,
+        tenantId: row['tenant_id'] as string,
+        label: (row['project_name'] as string | null) ?? (row['provider'] as string),
+        sub: `${row['provider'] as string} · ${row['id'] as string}`,
+      });
+    return hits.slice(0, limit);
+  }
+
+  async adminLogAction(entry: AdminAuditEntry): Promise<void> {
+    await this.pool.query(
+      `insert into admin_audit
+         (id, at, admin_user_id, admin_email, action, target_kind, target_id, target_tenant_id, detail)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)`,
+      [
+        newId(),
+        new Date().toISOString(),
+        entry.adminUserId,
+        entry.adminEmail,
+        entry.action,
+        entry.targetKind,
+        entry.targetId,
+        entry.targetTenantId,
+        entry.detail === null ? null : JSON.stringify(entry.detail),
+      ],
+    );
+  }
+
+  async adminListAudit(params: AdminListParams): Promise<AdminPage<AdminAuditRow>> {
+    return this.adminPage(
+      'admin_audit',
+      'id, at, admin_email, action, target_kind, target_id, target_tenant_id, detail',
+      this.adminFilters(params, { searchCols: ['action', 'admin_email', 'target_id'] }),
+      { at: 'at', action: 'action' },
+      'at',
+      params,
+      (row) => ({
+        id: row['id'] as string,
+        at: toIso(row['at']) as string,
+        adminEmail: row['admin_email'] as string,
+        action: row['action'] as string,
+        targetKind: (row['target_kind'] as string | null) ?? null,
+        targetId: (row['target_id'] as string | null) ?? null,
+        targetTenantId: (row['target_tenant_id'] as string | null) ?? null,
+        detail: (row['detail'] as Record<string, unknown> | null) ?? null,
+      }),
+    );
   }
 
   async ping(): Promise<void> {

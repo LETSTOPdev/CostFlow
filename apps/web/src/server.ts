@@ -41,7 +41,16 @@ import type { ConnectorRegistry } from './connectors/registry';
 import { registerSecurity } from './security';
 import {
   onboardingRank,
+  ONBOARDING_ORDER,
   ORG_ROLES,
+  type AdminAuditRow,
+  type AdminInvitationRow,
+  type AdminJobRow,
+  type AdminListParams,
+  type AdminRunRow,
+  type AdminTenantRow,
+  type AdminUserRow,
+  type AdminWorkspaceRow,
   type OrgRole,
   type OnboardingState,
   type RunRecord,
@@ -49,6 +58,19 @@ import {
   type UserRecord,
   type WorkspaceRecord,
 } from './store/contract';
+import {
+  adminAuditDetail,
+  adminBadge,
+  adminCountCards,
+  adminFilterBar,
+  adminId,
+  adminKvPanel,
+  adminShell,
+  adminStatCards,
+  adminTable,
+  adminTimeline,
+  type AdminColumn,
+} from './admin-view';
 import { webEvent, type TelemetrySink } from './telemetry-web';
 
 /**
@@ -652,36 +674,683 @@ Sitemap: https://app.fbx1.com/sitemap.xml
   app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms()));
   app.get('/privacy', async (_request, reply) => reply.type('text/html').send(renderPrivacy()));
 
-  // Founder-only activation-funnel analytics. Gated by an email allowlist
-  // (COSTFLOW_ADMIN_EMAILS); a non-admin session gets 404 (no disclosure).
-  app.get('/admin', async (request, reply) => {
+  // ===== Internal operations console (COSTFLOW_ADMIN_EMAILS only) =====
+  // Cross-tenant, a deliberate + audited exception to the tenancy law, gated by
+  // the admin email allowlist; a non-admin session gets 404 (no disclosure).
+  // Server-rendered, zero client JS (CSP `script-src 'none'` preserved).
+  const ADMIN_PAGE_SIZE = 25;
+  const adminEnvLabel =
+    process.env['RAILWAY_ENVIRONMENT'] ?? (deps.production === true ? 'production' : 'development');
+
+  const requireAdmin = async (
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<{ session: Session; user: UserRecord } | null> => {
     const session = requireSession(request, reply);
-    if (!session) return;
+    if (!session) return null;
     const user = await currentUser(session);
     const admins = (deps.adminEmails ?? []).map((email) => email.toLowerCase());
     if (!user || !admins.includes(user.email.toLowerCase())) {
-      return notFound(reply);
+      notFound(reply);
+      return null;
     }
-    const stats = await store.funnelStats();
-    const pct = (n: number, d: number): string =>
-      d === 0 ? 'n/a' : `${Math.round((n / d) * 100)}%`;
-    const row = (label: string, n: number): string =>
-      `<tr><td>${label}</td><td>${n}</td><td>${pct(n, stats.organizations)}</td></tr>`;
-    return reply.type('text/html').send(
-      page(
-        session,
-        'Admin: activation funnel',
-        `<p class="eyebrow">Admin</p>
-         <h1 style="margin-top:.6rem">Activation funnel</h1>
-         <div class="table-wrap" style="max-width:34rem"><table><tr><th>Stage</th><th>Organizations</th><th>of signups</th></tr>
-           ${row('Signed up', stats.organizations)}
-           ${row('Connected a workspace', stats.connectedWorkspaces)}
-           ${row('Ran an analysis', stats.analysesRun)}
-           ${row('Viewed a report', stats.reportsViewed)}
-         </table></div>
-         <p class="note">Aggregate counts of distinct organizations reaching each step. No customer content, emails, or identities.</p>`,
+    return { session, user };
+  };
+
+  const adminListParams = (request: FastifyRequest): AdminListParams => {
+    const query = request.query as Record<string, string | undefined>;
+    const num = (v: string | undefined, def: number, min: number, max: number): number => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= min && n <= max ? Math.floor(n) : def;
+    };
+    const str = (v: string | undefined): string | undefined =>
+      typeof v === 'string' && v !== '' ? v : undefined;
+    const sort = str(query['sort']);
+    const dir = query['dir'] === 'asc' ? 'asc' : query['dir'] === 'desc' ? 'desc' : undefined;
+    const q = str(query['q']);
+    const tenantId = str(query['tenant']);
+    const status = str(query['status']);
+    return {
+      limit: num(query['limit'], ADMIN_PAGE_SIZE, 1, 100),
+      offset: num(query['offset'], 0, 0, 100_000_000),
+      ...(sort !== undefined ? { sort } : {}),
+      ...(dir !== undefined ? { dir } : {}),
+      ...(q !== undefined ? { q } : {}),
+      ...(tenantId !== undefined ? { tenantId } : {}),
+      ...(status !== undefined ? { status } : {}),
+    };
+  };
+
+  const adminQueryOf = (p: AdminListParams): Record<string, string | number | undefined> => ({
+    q: p.q,
+    status: p.status,
+    tenant: p.tenantId,
+    sort: p.sort,
+    dir: p.dir,
+    limit: p.limit === ADMIN_PAGE_SIZE ? undefined : p.limit,
+  });
+
+  const adminRespond = (
+    reply: FastifyReply,
+    session: Session,
+    active: string,
+    title: string,
+    body: string,
+    searchValue?: string,
+  ): FastifyReply =>
+    reply.type('text/html').send(
+      layout(
+        `${title} · Ops console`,
+        adminShell({
+          active,
+          csrf: session.csrf,
+          env: adminEnvLabel,
+          ...(searchValue !== undefined ? { searchValue } : {}),
+          body,
+        }),
+        session.csrf,
+        { bleed: true, noindex: true },
       ),
     );
+
+  const adDate = (iso: string | null): string =>
+    iso ? `<span class="adm-mono">${esc(iso.slice(0, 16).replace('T', ' '))}</span>` : '—';
+  const adTenantCell = (id: string): string =>
+    `<a href="/admin/tenants/${encodeURIComponent(id)}">${adminId(id)}</a>`;
+  const safeAdminBack = (raw: unknown, fallback: string): string =>
+    typeof raw === 'string' && raw.startsWith('/admin') && !raw.startsWith('//') ? raw : fallback;
+  const roleSelect = (tenantId: string, u: AdminUserRow, csrf: string, back: string): string =>
+    `<form class="adm-actions" method="post" action="/admin/actions/user-role">
+       <input type="hidden" name="csrf" value="${esc(csrf)}">
+       <input type="hidden" name="tenant" value="${esc(tenantId)}">
+       <input type="hidden" name="user" value="${esc(u.id)}">
+       <input type="hidden" name="back" value="${esc(back)}">
+       <select class="adm-sel" name="role">${ORG_ROLES.map(
+         (r) => `<option value="${r}"${r === u.role ? ' selected' : ''}>${r}</option>`,
+       ).join('')}</select>
+       <button class="adm-btn" type="submit">Set</button>
+     </form>`;
+  const revokeButton = (inv: AdminInvitationRow, csrf: string, back: string): string =>
+    inv.status === 'pending'
+      ? `<form class="adm-actions" method="post" action="/admin/actions/invitation-revoke">
+           <input type="hidden" name="csrf" value="${esc(csrf)}">
+           <input type="hidden" name="tenant" value="${esc(inv.tenantId)}">
+           <input type="hidden" name="invitation" value="${esc(inv.id)}">
+           <input type="hidden" name="back" value="${esc(back)}">
+           <button class="adm-btn danger" type="submit">Revoke</button>
+         </form>`
+      : '—';
+  const retryLink = (job: AdminJobRow, back: string): string =>
+    job.status === 'failed'
+      ? `<a class="adm-btn" href="/admin/actions/job-retry?tenant=${encodeURIComponent(
+          job.tenantId,
+        )}&workspace=${encodeURIComponent(job.workspaceId)}&job=${encodeURIComponent(
+          job.id,
+        )}&back=${encodeURIComponent(back)}">Retry</a>`
+      : '—';
+
+  // ---- Overview ----
+  app.get('/admin', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const counts = await store.adminCounts();
+    const funnel = await store.funnelStats();
+    const recent = await store.adminListAudit({ limit: 6, offset: 0 });
+    const auditCols: AdminColumn<AdminAuditRow>[] = [
+      { key: '', label: 'When', render: (r) => adDate(r.at) },
+      { key: '', label: 'Admin', render: (r) => esc(r.adminEmail) },
+      { key: '', label: 'Action', render: (r) => adminBadge(r.action) },
+      { key: '', label: 'Target', render: (r) => (r.targetId ? adminId(r.targetId) : '—') },
+    ];
+    const body = `
+      <h2>Platform</h2>
+      ${adminCountCards(counts)}
+      <h2>Activation funnel</h2>
+      ${adminStatCards([
+        { label: 'Signed up', value: funnel.organizations },
+        { label: 'Connected', value: funnel.connectedWorkspaces },
+        { label: 'Ran analysis', value: funnel.analysesRun },
+        { label: 'Viewed report', value: funnel.reportsViewed },
+      ])}
+      <h2>Recent admin activity</h2>
+      ${adminTable<AdminAuditRow>({
+        columns: auditCols,
+        rows: recent.rows,
+        baseUrl: '/admin/audit',
+        query: {},
+        total: recent.total,
+        limit: 6,
+        offset: 0,
+        empty: 'No admin actions recorded yet.',
+      })}
+      <p class="adm-note">Read-only by default. Cross-tenant data is visible only to the COSTFLOW_ADMIN_EMAILS allowlist; every action is CSRF-protected and written to the audit log. No decrypted tokens or raw financial run content are ever shown.</p>`;
+    return adminRespond(reply, gate.session, 'overview', 'Overview', body);
+  });
+
+  // ---- System / diagnostics ----
+  app.get('/admin/system', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const counts = await store.adminCounts();
+    const startedMs = Date.now();
+    let dbOk = false;
+    let dbMs = 0;
+    try {
+      await store.ping();
+      dbOk = true;
+      dbMs = Date.now() - startedMs;
+    } catch {
+      dbOk = false;
+    }
+    const mem = process.memoryUsage();
+    const up = Math.floor(process.uptime());
+    const dur = `${Math.floor(up / 86400)}d ${Math.floor((up % 86400) / 3600)}h ${Math.floor(
+      (up % 3600) / 60,
+    )}m`;
+    const env = (k: string): string | undefined => process.env[k];
+    const runtime: [string, string][] = [
+      ['Commit', `<span class="adm-mono">${esc(env('RAILWAY_GIT_COMMIT_SHA') ?? 'dev')}</span>`],
+      ['Environment', esc(adminEnvLabel)],
+      ['Replica', `<span class="adm-mono">${esc(env('RAILWAY_REPLICA_ID') ?? 'n/a')}</span>`],
+      ['Deployment', `<span class="adm-mono">${esc(env('RAILWAY_DEPLOYMENT_ID') ?? 'n/a')}</span>`],
+      ['Region', esc(env('RAILWAY_REPLICA_REGION') ?? env('RAILWAY_REGION') ?? 'n/a')],
+      ['Node', esc(process.version)],
+      ['Uptime', esc(dur)],
+      ['Memory (RSS)', `${Math.round(mem.rss / 1048576)} MB`],
+      ['Heap used', `${Math.round(mem.heapUsed / 1048576)} MB`],
+    ];
+    const database: [string, string][] = [
+      ['Status', dbOk ? adminBadge('reachable') : adminBadge('unreachable')],
+      ['Ping latency', dbOk ? `${dbMs} ms` : '—'],
+      [
+        'Adapter',
+        esc(deps.production === true ? 'postgres' : (env('COSTFLOW_STORE') ?? 'postgres')),
+      ],
+    ];
+    const flags: [string, string][] = [
+      ['Auth mode', adminBadge(auth.mode)],
+      ['Secure cookies', auth.secureCookies === true ? 'on' : 'off'],
+      ['Production posture', deps.production === true ? 'yes' : 'no'],
+      ['Trust proxy', deps.trustProxy === true ? 'yes' : 'no'],
+      ['Admin allowlist', `${(deps.adminEmails ?? []).length} email(s)`],
+      ['Max issues / import', esc(String(deps.maxIssues ?? 'unbounded'))],
+      ['Await jobs (sync)', deps.awaitJobs === true ? 'yes' : 'no'],
+    ];
+    const body = `
+      <h2>System &amp; diagnostics</h2>
+      <p class="adm-sub">Live runtime, database, and deployment status for this replica.</p>
+      <h2>Runtime &amp; deployment</h2>${adminKvPanel(runtime)}
+      <h2>Database</h2>${adminKvPanel(database)}
+      <h2>Configuration &amp; flags</h2>${adminKvPanel(flags)}
+      <p class="adm-note">Flags reflect the effective non-secret configuration of this process. Secrets (keys, tokens, connection strings) are never shown.</p>
+      <h2>Row counts</h2>${adminCountCards(counts)}`;
+    return adminRespond(reply, gate.session, 'system', 'System', body);
+  });
+
+  // ---- Organizations (tenants) ----
+  app.get('/admin/tenants', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminListTenants(p);
+    const cols: AdminColumn<AdminTenantRow>[] = [
+      { key: 'name', label: 'Organization', render: (r) => esc(r.name ?? '(unnamed)') },
+      { key: '', label: 'Id', render: (r) => adTenantCell(r.id) },
+      { key: 'users', label: 'Users', align: 'right', render: (r) => String(r.users) },
+      { key: 'workspaces', label: 'Conns', align: 'right', render: (r) => String(r.workspaces) },
+      { key: 'runs', label: 'Runs', align: 'right', render: (r) => String(r.runs) },
+      { key: 'createdAt', label: 'Created', render: (r) => adDate(r.createdAt) },
+      { key: 'lastActivityAt', label: 'Last activity', render: (r) => adDate(r.lastActivityAt) },
+      {
+        key: '',
+        label: '',
+        render: (r) =>
+          `<a class="adm-btn" href="/admin/tenants/${encodeURIComponent(r.id)}">Open →</a>`,
+      },
+    ];
+    const body = `
+      <h2>Organizations</h2>
+      ${adminFilterBar({ baseUrl: '/admin/tenants', ...(p.q ? { q: p.q } : {}), searchPlaceholder: 'Search by name or id…' })}
+      ${adminTable<AdminTenantRow>({ columns: cols, rows: pageData.rows, baseUrl: '/admin/tenants', query: adminQueryOf(p), ...(p.sort ? { sort: p.sort } : {}), ...(p.dir ? { dir: p.dir } : {}), total: pageData.total, limit: p.limit, offset: p.offset, empty: 'No organizations.' })}`;
+    return adminRespond(reply, gate.session, 'tenants', 'Organizations', body);
+  });
+
+  // ---- Organization drill-down ----
+  app.get('/admin/tenants/:id', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const tenantId = (request.params as { id: string }).id;
+    const tenant = await store.getTenant(tenantId);
+    if (!tenant) return notFound(reply);
+    const back = `/admin/tenants/${encodeURIComponent(tenantId)}`;
+    const csrf = gate.session.csrf;
+    const small: AdminListParams = { limit: 25, offset: 0, tenantId };
+    const [users, workspaces, jobs, runs, invites, timeline] = await Promise.all([
+      store.adminListUsers(small),
+      store.adminListWorkspaces(small),
+      store.adminListJobs(small),
+      store.adminListRuns(small),
+      store.adminListInvitations(small),
+      store.adminTenantTimeline(tenantId, 40),
+    ]);
+    const meta: [string, string][] = [
+      ['Name', esc(tenant.name ?? '(unnamed)')],
+      ['Id', `<span class="adm-mono">${esc(tenant.id)}</span>`],
+      ['Created', adDate(tenant.createdAt)],
+      ['Users', String(users.total)],
+      ['Connections', String(workspaces.total)],
+      ['Runs', String(runs.total)],
+    ];
+    const userCols: AdminColumn<AdminUserRow>[] = [
+      { key: '', label: 'Email', render: (r) => esc(r.email) },
+      { key: '', label: 'Role', render: (r) => adminBadge(r.role) },
+      { key: '', label: 'Joined', render: (r) => adDate(r.createdAt) },
+      { key: '', label: 'Change role', render: (r) => roleSelect(tenantId, r, csrf, back) },
+    ];
+    const wsCols: AdminColumn<AdminWorkspaceRow>[] = [
+      { key: '', label: 'Provider', render: (r) => adminBadge(r.provider) },
+      { key: '', label: 'Scope', render: (r) => esc(r.scopeName ?? r.scopeId ?? '—') },
+      { key: '', label: 'Connection', render: (r) => esc(r.connectionParams['site'] ?? '—') },
+      { key: '', label: 'Stage', render: (r) => adminBadge(r.onboarding) },
+      {
+        key: '',
+        label: 'Token',
+        render: (r) => (r.hasToken ? adminBadge('stored') : adminBadge('none')),
+      },
+    ];
+    const jobCols: AdminColumn<AdminJobRow>[] = [
+      { key: '', label: 'Id', render: (r) => adminId(r.id) },
+      { key: '', label: 'Status', render: (r) => adminBadge(r.status) },
+      { key: '', label: 'Error', render: (r) => (r.errorClass ? esc(r.errorClass) : '—') },
+      { key: '', label: 'Created', render: (r) => adDate(r.createdAt) },
+      { key: '', label: '', render: (r) => retryLink(r, back) },
+    ];
+    const invCols: AdminColumn<AdminInvitationRow>[] = [
+      { key: '', label: 'Email', render: (r) => esc(r.email) },
+      { key: '', label: 'Role', render: (r) => adminBadge(r.role) },
+      { key: '', label: 'Status', render: (r) => adminBadge(r.status) },
+      { key: '', label: 'Created', render: (r) => adDate(r.createdAt) },
+      { key: '', label: '', render: (r) => revokeButton(r, csrf, back) },
+    ];
+    const noPage = { baseUrl: back, query: {} as Record<string, string | number | undefined> };
+    const body = `
+      <h2>${esc(tenant.name ?? '(unnamed organization)')}</h2>
+      <p class="adm-sub"><a href="/admin/tenants">← All organizations</a></p>
+      ${adminKvPanel(meta)}
+      <h2>Members</h2>${adminTable<AdminUserRow>({ columns: userCols, rows: users.rows, ...noPage, total: users.total, limit: 25, offset: 0, empty: 'No members.' })}
+      <h2>Connections</h2>${adminTable<AdminWorkspaceRow>({ columns: wsCols, rows: workspaces.rows, ...noPage, total: workspaces.total, limit: 25, offset: 0, empty: 'No connections.' })}
+      <h2>Imports</h2>${adminTable<AdminJobRow>({ columns: jobCols, rows: jobs.rows, ...noPage, total: jobs.total, limit: 25, offset: 0, empty: 'No import jobs.' })}
+      <h2>Invitations</h2>${adminTable<AdminInvitationRow>({ columns: invCols, rows: invites.rows, ...noPage, total: invites.total, limit: 25, offset: 0, empty: 'No invitations.' })}
+      <h2>Activity timeline</h2>${adminTimeline(timeline)}`;
+    return adminRespond(reply, gate.session, 'tenants', `Org ${tenant.name ?? tenantId}`, body);
+  });
+
+  // ---- Users ----
+  app.get('/admin/users', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminListUsers(p);
+    const cols: AdminColumn<AdminUserRow>[] = [
+      { key: 'email', label: 'Email', render: (r) => esc(r.email) },
+      { key: 'role', label: 'Role', render: (r) => adminBadge(r.role) },
+      { key: '', label: 'Org', render: (r) => adTenantCell(r.tenantId) },
+      { key: 'createdAt', label: 'Joined', render: (r) => adDate(r.createdAt) },
+      {
+        key: '',
+        label: 'Change role',
+        render: (r) => roleSelect(r.tenantId, r, gate.session.csrf, '/admin/users'),
+      },
+    ];
+    const body = `
+      <h2>Users</h2>
+      ${adminFilterBar({ baseUrl: '/admin/users', ...(p.q ? { q: p.q } : {}), searchPlaceholder: 'Search by email or id…' })}
+      ${adminTable<AdminUserRow>({ columns: cols, rows: pageData.rows, baseUrl: '/admin/users', query: adminQueryOf(p), ...(p.sort ? { sort: p.sort } : {}), ...(p.dir ? { dir: p.dir } : {}), total: pageData.total, limit: p.limit, offset: p.offset, empty: 'No users.' })}`;
+    return adminRespond(reply, gate.session, 'users', 'Users', body);
+  });
+
+  // ---- Connections (workspaces) ----
+  app.get('/admin/workspaces', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminListWorkspaces(p);
+    const cols: AdminColumn<AdminWorkspaceRow>[] = [
+      { key: 'provider', label: 'Provider', render: (r) => adminBadge(r.provider) },
+      { key: '', label: 'Scope', render: (r) => esc(r.scopeName ?? r.scopeId ?? '—') },
+      { key: '', label: 'Connection', render: (r) => esc(r.connectionParams['site'] ?? '—') },
+      { key: 'onboarding', label: 'Stage', render: (r) => adminBadge(r.onboarding) },
+      {
+        key: '',
+        label: 'Token',
+        render: (r) => (r.hasToken ? adminBadge('stored') : adminBadge('none')),
+      },
+      { key: '', label: 'Org', render: (r) => adTenantCell(r.tenantId) },
+      { key: 'createdAt', label: 'Created', render: (r) => adDate(r.createdAt) },
+    ];
+    const stageOpts = ONBOARDING_ORDER.map((s) => ({ value: s, label: s }));
+    const body = `
+      <h2>Connections</h2>
+      ${adminFilterBar({
+        baseUrl: '/admin/workspaces',
+        ...(p.q ? { q: p.q } : {}),
+        searchPlaceholder: 'Search provider, scope, id…',
+        selects: [
+          {
+            name: 'status',
+            ...(p.status ? { value: p.status } : {}),
+            label: 'stages',
+            options: stageOpts,
+          },
+        ],
+      })}
+      ${adminTable<AdminWorkspaceRow>({ columns: cols, rows: pageData.rows, baseUrl: '/admin/workspaces', query: adminQueryOf(p), ...(p.sort ? { sort: p.sort } : {}), ...(p.dir ? { dir: p.dir } : {}), total: pageData.total, limit: p.limit, offset: p.offset, empty: 'No connections.' })}
+      <p class="adm-note">Tokens are AES-encrypted at rest and never displayed — only their presence is shown.</p>`;
+    return adminRespond(reply, gate.session, 'workspaces', 'Connections', body);
+  });
+
+  // ---- Imports (jobs) ----
+  app.get('/admin/jobs', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminListJobs(p);
+    const cols: AdminColumn<AdminJobRow>[] = [
+      { key: '', label: 'Id', render: (r) => adminId(r.id) },
+      { key: 'status', label: 'Status', render: (r) => adminBadge(r.status) },
+      { key: '', label: 'Error', render: (r) => (r.errorClass ? esc(r.errorClass) : '—') },
+      { key: '', label: 'Workspace', render: (r) => adminId(r.workspaceId) },
+      { key: '', label: 'Org', render: (r) => adTenantCell(r.tenantId) },
+      { key: 'createdAt', label: 'Created', render: (r) => adDate(r.createdAt) },
+      { key: '', label: 'Finished', render: (r) => adDate(r.finishedAt) },
+      { key: '', label: '', render: (r) => retryLink(r, '/admin/jobs') },
+    ];
+    const body = `
+      <h2>Imports</h2>
+      ${adminFilterBar({
+        baseUrl: '/admin/jobs',
+        ...(p.q ? { q: p.q } : {}),
+        searchPlaceholder: 'Search job or workspace id…',
+        selects: [
+          {
+            name: 'status',
+            ...(p.status ? { value: p.status } : {}),
+            label: 'statuses',
+            options: [
+              { value: 'queued', label: 'queued' },
+              { value: 'running', label: 'running' },
+              { value: 'succeeded', label: 'succeeded' },
+              { value: 'failed', label: 'failed' },
+            ],
+          },
+        ],
+      })}
+      ${adminTable<AdminJobRow>({ columns: cols, rows: pageData.rows, baseUrl: '/admin/jobs', query: adminQueryOf(p), ...(p.sort ? { sort: p.sort } : {}), ...(p.dir ? { dir: p.dir } : {}), total: pageData.total, limit: p.limit, offset: p.offset, empty: 'No import jobs.' })}`;
+    return adminRespond(reply, gate.session, 'jobs', 'Imports', body);
+  });
+
+  // ---- Runs ----
+  app.get('/admin/runs', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminListRuns(p);
+    const cols: AdminColumn<AdminRunRow>[] = [
+      { key: '', label: 'Run id', render: (r) => adminId(r.id, 12) },
+      { key: '', label: 'Workspace', render: (r) => adminId(r.workspaceId) },
+      { key: '', label: 'Org', render: (r) => adTenantCell(r.tenantId) },
+      { key: 'createdAt', label: 'Created', render: (r) => adDate(r.createdAt) },
+      {
+        key: '',
+        label: 'Viewed',
+        render: (r) => (r.viewed ? adminBadge('viewed') : adminBadge('unread')),
+      },
+    ];
+    const body = `
+      <h2>Runs &amp; reports</h2>
+      ${adminFilterBar({ baseUrl: '/admin/runs', ...(p.q ? { q: p.q } : {}), searchPlaceholder: 'Search run or workspace id…' })}
+      ${adminTable<AdminRunRow>({ columns: cols, rows: pageData.rows, baseUrl: '/admin/runs', query: adminQueryOf(p), ...(p.sort ? { sort: p.sort } : {}), ...(p.dir ? { dir: p.dir } : {}), total: pageData.total, limit: p.limit, offset: p.offset, empty: 'No runs.' })}
+      <p class="adm-note">Report contents (the financial analysis) are never shown here — only run metadata. Open a run inside its own tenant to view the report.</p>`;
+    return adminRespond(reply, gate.session, 'runs', 'Runs', body);
+  });
+
+  // ---- Invitations ----
+  app.get('/admin/invitations', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminListInvitations(p);
+    const cols: AdminColumn<AdminInvitationRow>[] = [
+      { key: 'email', label: 'Email', render: (r) => esc(r.email) },
+      { key: '', label: 'Role', render: (r) => adminBadge(r.role) },
+      { key: 'status', label: 'Status', render: (r) => adminBadge(r.status) },
+      { key: '', label: 'Org', render: (r) => adTenantCell(r.tenantId) },
+      { key: 'createdAt', label: 'Created', render: (r) => adDate(r.createdAt) },
+      {
+        key: '',
+        label: '',
+        render: (r) => revokeButton(r, gate.session.csrf, '/admin/invitations'),
+      },
+    ];
+    const body = `
+      <h2>Invitations</h2>
+      ${adminFilterBar({
+        baseUrl: '/admin/invitations',
+        ...(p.q ? { q: p.q } : {}),
+        searchPlaceholder: 'Search by email or id…',
+        selects: [
+          {
+            name: 'status',
+            ...(p.status ? { value: p.status } : {}),
+            label: 'statuses',
+            options: [
+              { value: 'pending', label: 'pending' },
+              { value: 'accepted', label: 'accepted' },
+              { value: 'revoked', label: 'revoked' },
+            ],
+          },
+        ],
+      })}
+      ${adminTable<AdminInvitationRow>({ columns: cols, rows: pageData.rows, baseUrl: '/admin/invitations', query: adminQueryOf(p), ...(p.sort ? { sort: p.sort } : {}), ...(p.dir ? { dir: p.dir } : {}), total: pageData.total, limit: p.limit, offset: p.offset, empty: 'No invitations.' })}`;
+    return adminRespond(reply, gate.session, 'invitations', 'Invitations', body);
+  });
+
+  // ---- Audit log ----
+  app.get('/admin/audit', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminListAudit(p);
+    const cols: AdminColumn<AdminAuditRow>[] = [
+      { key: 'at', label: 'When', render: (r) => adDate(r.at) },
+      { key: '', label: 'Admin', render: (r) => esc(r.adminEmail) },
+      { key: 'action', label: 'Action', render: (r) => adminBadge(r.action) },
+      { key: '', label: 'Target', render: (r) => (r.targetKind ? esc(r.targetKind) : '—') },
+      {
+        key: '',
+        label: 'Target id',
+        render: (r) =>
+          r.targetTenantId
+            ? adTenantCell(r.targetTenantId)
+            : r.targetId
+              ? adminId(r.targetId)
+              : '—',
+      },
+      { key: '', label: 'Detail', render: (r) => adminAuditDetail(r) },
+    ];
+    const body = `
+      <h2>Audit log</h2>
+      <p class="adm-sub">Every console action, newest first. Immutable and retained across tenant deletion.</p>
+      ${adminFilterBar({ baseUrl: '/admin/audit', ...(p.q ? { q: p.q } : {}), searchPlaceholder: 'Search action, admin, target…' })}
+      ${adminTable<AdminAuditRow>({ columns: cols, rows: pageData.rows, baseUrl: '/admin/audit', query: adminQueryOf(p), ...(p.sort ? { sort: p.sort } : {}), ...(p.dir ? { dir: p.dir } : {}), total: pageData.total, limit: p.limit, offset: p.offset, empty: 'No admin actions recorded yet.' })}`;
+    return adminRespond(reply, gate.session, 'audit', 'Audit log', body);
+  });
+
+  // ---- Global search ----
+  app.get('/admin/search', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const raw = (request.query as { q?: string }).q ?? '';
+    const q = raw.trim();
+    const hits = q === '' ? [] : await store.adminSearch(q, 50);
+    const groups: { kind: string; label: string }[] = [
+      { kind: 'tenant', label: 'Organizations' },
+      { kind: 'user', label: 'Users' },
+      { kind: 'workspace', label: 'Connections' },
+    ];
+    const linkFor = (kind: string, id: string): string =>
+      kind === 'tenant'
+        ? `/admin/tenants/${encodeURIComponent(id)}`
+        : kind === 'user'
+          ? `/admin/users?q=${encodeURIComponent(id)}`
+          : `/admin/workspaces?q=${encodeURIComponent(id)}`;
+    const sections = groups
+      .map((g) => {
+        const rows = hits.filter((h) => h.kind === g.kind);
+        if (rows.length === 0) return '';
+        const items = rows
+          .map(
+            (h) =>
+              `<tr><td><a href="${linkFor(h.kind, h.id)}">${esc(h.label)}</a></td><td class="adm-mono">${esc(
+                h.sub,
+              )}</td></tr>`,
+          )
+          .join('');
+        return `<h2>${esc(g.label)} (${rows.length})</h2><div class="adm-panel"><div class="adm-tablewrap"><table class="adm-t"><tbody>${items}</tbody></table></div></div>`;
+      })
+      .join('');
+    const body =
+      q === ''
+        ? `<h2>Search</h2><p class="adm-sub">Enter a query above to search organizations, users, and connections by name, email, scope, or id.</p>`
+        : `<h2>Results for “${esc(q)}”</h2>${hits.length === 0 ? '<div class="adm-panel"><div class="adm-empty">No matches.</div></div>' : sections}`;
+    return adminRespond(reply, gate.session, 'overview', 'Search', body, q);
+  });
+
+  // ---- Actions (CSRF-protected, audited) ----
+  app.post('/admin/actions/user-role', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    if (!checkCsrf(request, gate.session, reply)) return;
+    const body = request.body as { tenant?: string; user?: string; role?: string; back?: string };
+    const role = (ORG_ROLES as readonly string[]).includes(body.role ?? '')
+      ? (body.role as OrgRole)
+      : null;
+    if (!body.tenant || !body.user || !role) return notFound(reply);
+    const before = await store.getUser(body.tenant, body.user);
+    const updated = await store.updateUserRole(body.tenant, body.user, role);
+    if (updated) {
+      await store.adminLogAction({
+        adminUserId: gate.user.id,
+        adminEmail: gate.user.email,
+        action: 'user-role',
+        targetKind: 'user',
+        targetId: body.user,
+        targetTenantId: body.tenant,
+        detail: { from: before?.role ?? null, to: role },
+      });
+    }
+    return reply.redirect(safeAdminBack(body.back, '/admin/users'));
+  });
+
+  app.post('/admin/actions/invitation-revoke', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    if (!checkCsrf(request, gate.session, reply)) return;
+    const body = request.body as { tenant?: string; invitation?: string; back?: string };
+    if (!body.tenant || !body.invitation) return notFound(reply);
+    const updated = await store.updateInvitationStatus(
+      body.tenant,
+      body.invitation,
+      'revoked',
+      null,
+    );
+    if (updated) {
+      await store.adminLogAction({
+        adminUserId: gate.user.id,
+        adminEmail: gate.user.email,
+        action: 'invitation-revoke',
+        targetKind: 'invitation',
+        targetId: body.invitation,
+        targetTenantId: body.tenant,
+        detail: { email: updated.email },
+      });
+    }
+    return reply.redirect(safeAdminBack(body.back, '/admin/invitations'));
+  });
+
+  // Retry is side-effecting (re-imports from the customer's connector), so it
+  // goes through an explicit confirmation page first.
+  app.get('/admin/actions/job-retry', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const query = request.query as {
+      tenant?: string;
+      workspace?: string;
+      job?: string;
+      back?: string;
+    };
+    if (!query.tenant || !query.workspace) return notFound(reply);
+    const back = safeAdminBack(query.back, '/admin/jobs');
+    const body = `
+      <div class="adm-confirm">
+        <h2>Re-run this import?</h2>
+        <p>This starts a <span class="warn">new import</span> against the customer's connector for workspace <span class="adm-mono">${esc(
+          query.workspace,
+        )}</span> in organization ${adTenantCell(query.tenant)}. It contacts their Jira/ClickUp and consumes their API quota.</p>
+        <form method="post" action="/admin/actions/job-retry">
+          <input type="hidden" name="csrf" value="${esc(gate.session.csrf)}">
+          <input type="hidden" name="tenant" value="${esc(query.tenant)}">
+          <input type="hidden" name="workspace" value="${esc(query.workspace)}">
+          <input type="hidden" name="job" value="${esc(query.job ?? '')}">
+          <input type="hidden" name="back" value="${esc(back)}">
+          <div class="adm-actions" style="margin-top:1rem">
+            <button class="adm-btn danger" type="submit">Yes, re-run import</button>
+            <a class="adm-btn" href="${esc(back)}">Cancel</a>
+          </div>
+        </form>
+      </div>`;
+    return adminRespond(reply, gate.session, 'jobs', 'Confirm re-run', body);
+  });
+
+  app.post('/admin/actions/job-retry', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    if (!checkCsrf(request, gate.session, reply)) return;
+    const body = request.body as {
+      tenant?: string;
+      workspace?: string;
+      job?: string;
+      back?: string;
+    };
+    if (!body.tenant || !body.workspace) return notFound(reply);
+    const workspace = await store.getWorkspace(body.tenant, body.workspace);
+    if (!workspace) return notFound(reply);
+    const active = (await store.listJobsForWorkspace(body.tenant, body.workspace)).find(
+      (j) => j.status === 'queued' || j.status === 'running',
+    );
+    if (!active) {
+      const job = await store.createJob(body.tenant, body.workspace);
+      void executeJob(
+        {
+          store,
+          connectors,
+          credentialKey: auth.credentialKey,
+          ...(deps.jobNowFn ? { nowFn: deps.jobNowFn } : {}),
+        },
+        body.tenant,
+        job.id,
+      );
+      await store.adminLogAction({
+        adminUserId: gate.user.id,
+        adminEmail: gate.user.email,
+        action: 'job-retry',
+        targetKind: 'workspace',
+        targetId: body.workspace,
+        targetTenantId: body.tenant,
+        detail: { fromJob: body.job ?? null, newJob: job.id },
+      });
+    }
+    return reply.redirect(safeAdminBack(body.back, '/admin/jobs'));
   });
 
   app.get('/dashboard', async (request, reply) => {

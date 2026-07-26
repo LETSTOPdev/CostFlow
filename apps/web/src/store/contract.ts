@@ -168,6 +168,140 @@ export interface FunnelStats {
   readonly reportsViewed: number;
 }
 
+/**
+ * Admin operations console (COSTFLOW_ADMIN_EMAILS only). Everything below is
+ * CROSS-TENANT by design — a deliberate, audited exception to the tenancy law,
+ * unreachable without the admin allowlist. Every projection is trimmed to
+ * exclude secrets (token/salt ciphertext) and raw financial run content
+ * (run_json / report_md / telemetry); operational metadata only.
+ */
+export interface AdminListParams {
+  readonly limit: number;
+  readonly offset: number;
+  /** Whitelisted sort column (per table); ignored if not recognized. */
+  readonly sort?: string;
+  readonly dir?: 'asc' | 'desc';
+  /** Free-text search over that table's whitelisted text columns. */
+  readonly q?: string;
+  /** Restrict to one organization (drill-down). */
+  readonly tenantId?: string;
+  /** Per-table status filter (jobs, invitations). */
+  readonly status?: string;
+}
+
+export interface AdminPage<T> {
+  readonly rows: readonly T[];
+  readonly total: number;
+}
+
+export interface AdminCounts {
+  readonly tenants: number;
+  readonly users: number;
+  readonly workspaces: number;
+  readonly jobs: number;
+  readonly runs: number;
+  readonly invitations: number;
+  readonly pendingInvitations: number;
+  readonly failedJobs: number;
+  readonly runningJobs: number;
+}
+
+export interface AdminTenantRow {
+  readonly id: string;
+  readonly name: string | null;
+  readonly createdAt: string;
+  readonly users: number;
+  readonly workspaces: number;
+  readonly runs: number;
+  readonly lastActivityAt: string | null;
+}
+
+export interface AdminUserRow {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly email: string;
+  readonly role: OrgRole;
+  readonly createdAt: string;
+}
+
+export interface AdminWorkspaceRow {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly provider: string;
+  readonly connectionParams: Readonly<Record<string, string>>;
+  readonly scopeId: string | null;
+  readonly scopeName: string | null;
+  readonly onboarding: OnboardingState;
+  /** Presence of a stored token — NEVER the token itself. */
+  readonly hasToken: boolean;
+  readonly createdAt: string;
+}
+
+export interface AdminJobRow {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly status: JobStatus;
+  readonly errorClass: JobErrorClass | null;
+  readonly createdAt: string;
+  readonly finishedAt: string | null;
+}
+
+export interface AdminRunRow {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly workspaceId: string;
+  readonly createdAt: string;
+  readonly viewed: boolean;
+}
+
+export interface AdminInvitationRow {
+  readonly id: string;
+  readonly tenantId: string;
+  readonly email: string;
+  readonly role: OrgRole;
+  readonly status: InvitationRecord['status'];
+  readonly invitedBy: string | null;
+  readonly createdAt: string;
+  readonly acceptedAt: string | null;
+}
+
+export interface AdminTimelineEvent {
+  readonly at: string;
+  readonly kind: 'tenant' | 'user' | 'workspace' | 'job' | 'run' | 'invitation';
+  readonly summary: string;
+}
+
+export interface AdminSearchHit {
+  readonly kind: 'tenant' | 'user' | 'workspace' | 'job' | 'run';
+  readonly id: string;
+  readonly tenantId: string;
+  readonly label: string;
+  readonly sub: string;
+}
+
+export interface AdminAuditRow {
+  readonly id: string;
+  readonly at: string;
+  readonly adminEmail: string;
+  readonly action: string;
+  readonly targetKind: string | null;
+  readonly targetId: string | null;
+  readonly targetTenantId: string | null;
+  readonly detail: Readonly<Record<string, unknown>> | null;
+}
+
+/** A console action to record. `at`/`id` are assigned by the store. */
+export interface AdminAuditEntry {
+  readonly adminUserId: string | null;
+  readonly adminEmail: string;
+  readonly action: string;
+  readonly targetKind: string | null;
+  readonly targetId: string | null;
+  readonly targetTenantId: string | null;
+  readonly detail: Readonly<Record<string, unknown>> | null;
+}
+
 export interface Store {
   createTenantWithUser(
     email: string,
@@ -260,6 +394,21 @@ export interface Store {
 
   /** Aggregate activation-funnel counts (v1). Distinct orgs per stage; no identities. */
   funnelStats(): Promise<FunnelStats>;
+
+  // --- Admin operations console (COSTFLOW_ADMIN_EMAILS only; cross-tenant). ---
+  adminCounts(): Promise<AdminCounts>;
+  adminListTenants(params: AdminListParams): Promise<AdminPage<AdminTenantRow>>;
+  adminListUsers(params: AdminListParams): Promise<AdminPage<AdminUserRow>>;
+  adminListWorkspaces(params: AdminListParams): Promise<AdminPage<AdminWorkspaceRow>>;
+  adminListJobs(params: AdminListParams): Promise<AdminPage<AdminJobRow>>;
+  adminListRuns(params: AdminListParams): Promise<AdminPage<AdminRunRow>>;
+  adminListInvitations(params: AdminListParams): Promise<AdminPage<AdminInvitationRow>>;
+  /** Merged, newest-first activity timeline for one organization. */
+  adminTenantTimeline(tenantId: string, limit: number): Promise<AdminTimelineEvent[]>;
+  /** Cross-tenant search over org names, user emails, workspace scopes, and ids. */
+  adminSearch(q: string, limit: number): Promise<AdminSearchHit[]>;
+  adminLogAction(entry: AdminAuditEntry): Promise<void>;
+  adminListAudit(params: AdminListParams): Promise<AdminPage<AdminAuditRow>>;
 
   /** Readiness probe (P4.2 §4): resolves iff the backing store is reachable. */
   ping(): Promise<void>;

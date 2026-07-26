@@ -1,5 +1,18 @@
 import { newId } from '../crypto';
 import type {
+  AdminAuditEntry,
+  AdminAuditRow,
+  AdminCounts,
+  AdminInvitationRow,
+  AdminJobRow,
+  AdminListParams,
+  AdminPage,
+  AdminRunRow,
+  AdminSearchHit,
+  AdminTenantRow,
+  AdminTimelineEvent,
+  AdminUserRow,
+  AdminWorkspaceRow,
   DeletionSummary,
   FunnelStats,
   InvitationRecord,
@@ -12,6 +25,26 @@ import type {
   WorkspacePatch,
   WorkspaceRecord,
 } from './contract';
+
+/** Sort + paginate an already-filtered array by a whitelisted key extractor. */
+function pageOf<T>(
+  all: readonly T[],
+  params: AdminListParams,
+  keys: Record<string, (row: T) => string | number | boolean>,
+  defaultSort: string,
+): AdminPage<T> {
+  const sortKey = params.sort && keys[params.sort] ? params.sort : defaultSort;
+  const getKey = keys[sortKey] ?? keys[defaultSort]!;
+  const dir = params.dir === 'asc' ? 1 : -1; // default newest/desc
+  const sorted = [...all].sort((a, b) => {
+    const ka = getKey(a);
+    const kb = getKey(b);
+    if (ka < kb) return -dir;
+    if (ka > kb) return dir;
+    return 0;
+  });
+  return { rows: sorted.slice(params.offset, params.offset + params.limit), total: all.length };
+}
 
 interface WorkspaceMember {
   readonly tenantId: string;
@@ -34,6 +67,7 @@ export class MemoryStore implements Store {
   private runViews = new Map<string, string>();
   private invitations = new Map<string, InvitationRecord>();
   private workspaceMembers = new Map<string, WorkspaceMember>();
+  private adminAudit: AdminAuditRow[] = [];
 
   private now(): string {
     return new Date(Date.now()).toISOString();
@@ -384,6 +418,291 @@ export class MemoryStore implements Store {
           .map((r) => r.tenantId),
       ),
     };
+  }
+
+  // ---------------- Admin operations console (cross-tenant) ----------------
+
+  private tenantIdsOf(tenantId?: string): (row: { tenantId: string }) => boolean {
+    return (row) => tenantId === undefined || row.tenantId === tenantId;
+  }
+
+  async adminCounts(): Promise<AdminCounts> {
+    const jobs = [...this.jobs.values()];
+    const invitations = [...this.invitations.values()];
+    return {
+      tenants: this.tenants.size,
+      users: this.users.size,
+      workspaces: this.workspaces.size,
+      jobs: this.jobs.size,
+      runs: this.runs.size,
+      invitations: this.invitations.size,
+      pendingInvitations: invitations.filter((i) => i.status === 'pending').length,
+      failedJobs: jobs.filter((j) => j.status === 'failed').length,
+      runningJobs: jobs.filter((j) => j.status === 'running' || j.status === 'queued').length,
+    };
+  }
+
+  async adminListTenants(params: AdminListParams): Promise<AdminPage<AdminTenantRow>> {
+    const q = (params.q ?? '').trim().toLowerCase();
+    const rows: AdminTenantRow[] = [...this.tenants.values()]
+      .filter((t) => t.id === (params.tenantId ?? t.id))
+      .map((t) => {
+        const wss = [...this.workspaces.values()].filter((w) => w.tenantId === t.id);
+        const runs = [...this.runs.values()].filter((r) => r.tenantId === t.id);
+        const jobs = [...this.jobs.values()].filter((j) => j.tenantId === t.id);
+        const times = [
+          t.createdAt,
+          ...wss.map((w) => w.createdAt),
+          ...runs.map((r) => r.createdAt),
+          ...jobs.map((j) => j.finishedAt ?? j.createdAt),
+        ].filter((v): v is string => v !== null);
+        return {
+          id: t.id,
+          name: t.name,
+          createdAt: t.createdAt,
+          users: [...this.users.values()].filter((u) => u.tenantId === t.id).length,
+          workspaces: wss.length,
+          runs: runs.length,
+          lastActivityAt: times.length ? times.sort().slice(-1)[0]! : null,
+        };
+      })
+      .filter((r) => q === '' || (r.name ?? '').toLowerCase().includes(q) || r.id.includes(q));
+    return pageOf(
+      rows,
+      params,
+      {
+        createdAt: (r) => r.createdAt,
+        name: (r) => (r.name ?? '').toLowerCase(),
+        users: (r) => r.users,
+        workspaces: (r) => r.workspaces,
+        runs: (r) => r.runs,
+        lastActivityAt: (r) => r.lastActivityAt ?? '',
+      },
+      'createdAt',
+    );
+  }
+
+  async adminListUsers(params: AdminListParams): Promise<AdminPage<AdminUserRow>> {
+    const q = (params.q ?? '').trim().toLowerCase();
+    const rows: AdminUserRow[] = [...this.users.values()]
+      .filter(this.tenantIdsOf(params.tenantId))
+      .filter((u) => q === '' || u.email.toLowerCase().includes(q) || u.id.includes(q))
+      .map((u) => ({
+        id: u.id,
+        tenantId: u.tenantId,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt,
+      }));
+    return pageOf(
+      rows,
+      params,
+      {
+        createdAt: (r) => r.createdAt,
+        email: (r) => r.email.toLowerCase(),
+        role: (r) => r.role,
+      },
+      'createdAt',
+    );
+  }
+
+  async adminListWorkspaces(params: AdminListParams): Promise<AdminPage<AdminWorkspaceRow>> {
+    const q = (params.q ?? '').trim().toLowerCase();
+    const rows: AdminWorkspaceRow[] = [...this.workspaces.values()]
+      .filter(this.tenantIdsOf(params.tenantId))
+      .filter((w) => params.status === undefined || w.onboarding === params.status)
+      .filter(
+        (w) =>
+          q === '' ||
+          (w.scopeName ?? '').toLowerCase().includes(q) ||
+          w.provider.toLowerCase().includes(q) ||
+          w.id.includes(q),
+      )
+      .map((w) => ({
+        id: w.id,
+        tenantId: w.tenantId,
+        provider: w.provider,
+        connectionParams: w.connectionParams,
+        scopeId: w.scopeId,
+        scopeName: w.scopeName,
+        onboarding: w.onboarding,
+        hasToken: w.tokenCiphertext !== '',
+        createdAt: w.createdAt,
+      }));
+    return pageOf(
+      rows,
+      params,
+      {
+        createdAt: (r) => r.createdAt,
+        provider: (r) => r.provider,
+        onboarding: (r) => r.onboarding,
+      },
+      'createdAt',
+    );
+  }
+
+  async adminListJobs(params: AdminListParams): Promise<AdminPage<AdminJobRow>> {
+    const q = (params.q ?? '').trim().toLowerCase();
+    const rows: AdminJobRow[] = [...this.jobs.values()]
+      .filter(this.tenantIdsOf(params.tenantId))
+      .filter((j) => params.status === undefined || j.status === params.status)
+      .filter((j) => q === '' || j.id.includes(q) || j.workspaceId.includes(q))
+      .map((j) => ({
+        id: j.id,
+        tenantId: j.tenantId,
+        workspaceId: j.workspaceId,
+        status: j.status,
+        errorClass: j.errorClass,
+        createdAt: j.createdAt,
+        finishedAt: j.finishedAt,
+      }));
+    return pageOf(
+      rows,
+      params,
+      { createdAt: (r) => r.createdAt, status: (r) => r.status },
+      'createdAt',
+    );
+  }
+
+  async adminListRuns(params: AdminListParams): Promise<AdminPage<AdminRunRow>> {
+    const q = (params.q ?? '').trim().toLowerCase();
+    const rows: AdminRunRow[] = [...this.runs.values()]
+      .filter(this.tenantIdsOf(params.tenantId))
+      .filter((r) => q === '' || r.id.toLowerCase().includes(q) || r.workspaceId.includes(q))
+      .map((r) => ({
+        id: r.id,
+        tenantId: r.tenantId,
+        workspaceId: r.workspaceId,
+        createdAt: r.createdAt,
+        viewed: this.runViews.has(`${r.tenantId}:${r.id}`),
+      }));
+    return pageOf(rows, params, { createdAt: (r) => r.createdAt }, 'createdAt');
+  }
+
+  async adminListInvitations(params: AdminListParams): Promise<AdminPage<AdminInvitationRow>> {
+    const q = (params.q ?? '').trim().toLowerCase();
+    const rows: AdminInvitationRow[] = [...this.invitations.values()]
+      .filter(this.tenantIdsOf(params.tenantId))
+      .filter((i) => params.status === undefined || i.status === params.status)
+      .filter((i) => q === '' || i.email.toLowerCase().includes(q) || i.id.includes(q))
+      .map((i) => ({
+        id: i.id,
+        tenantId: i.tenantId,
+        email: i.email,
+        role: i.role,
+        status: i.status,
+        invitedBy: i.invitedBy,
+        createdAt: i.createdAt,
+        acceptedAt: i.acceptedAt,
+      }));
+    return pageOf(
+      rows,
+      params,
+      {
+        createdAt: (r) => r.createdAt,
+        status: (r) => r.status,
+        email: (r) => r.email.toLowerCase(),
+      },
+      'createdAt',
+    );
+  }
+
+  async adminTenantTimeline(tenantId: string, limit: number): Promise<AdminTimelineEvent[]> {
+    const events: AdminTimelineEvent[] = [];
+    const tenant = this.tenants.get(tenantId);
+    if (tenant)
+      events.push({ at: tenant.createdAt, kind: 'tenant', summary: 'Organization created' });
+    for (const u of this.users.values())
+      if (u.tenantId === tenantId)
+        events.push({ at: u.createdAt, kind: 'user', summary: `Member joined (${u.role})` });
+    for (const w of this.workspaces.values())
+      if (w.tenantId === tenantId)
+        events.push({
+          at: w.createdAt,
+          kind: 'workspace',
+          summary: `Connected ${w.provider}${w.scopeName ? ` — ${w.scopeName}` : ''}`,
+        });
+    for (const j of this.jobs.values())
+      if (j.tenantId === tenantId)
+        events.push({
+          at: j.finishedAt ?? j.createdAt,
+          kind: 'job',
+          summary: `Import ${j.status}${j.errorClass ? ` (${j.errorClass})` : ''}`,
+        });
+    for (const r of this.runs.values())
+      if (r.tenantId === tenantId)
+        events.push({ at: r.createdAt, kind: 'run', summary: 'Analysis run completed' });
+    for (const i of this.invitations.values())
+      if (i.tenantId === tenantId)
+        events.push({
+          at: i.createdAt,
+          kind: 'invitation',
+          summary: `Invited ${i.email} (${i.status})`,
+        });
+    return events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, limit);
+  }
+
+  async adminSearch(q: string, limit: number): Promise<AdminSearchHit[]> {
+    const needle = q.trim().toLowerCase();
+    if (needle === '') return [];
+    const hits: AdminSearchHit[] = [];
+    for (const t of this.tenants.values())
+      if ((t.name ?? '').toLowerCase().includes(needle) || t.id.toLowerCase().includes(needle))
+        hits.push({
+          kind: 'tenant',
+          id: t.id,
+          tenantId: t.id,
+          label: t.name ?? '(unnamed org)',
+          sub: t.id,
+        });
+    for (const u of this.users.values())
+      if (u.email.toLowerCase().includes(needle) || u.id.toLowerCase().includes(needle))
+        hits.push({
+          kind: 'user',
+          id: u.id,
+          tenantId: u.tenantId,
+          label: u.email,
+          sub: `${u.role} · ${u.id}`,
+        });
+    for (const w of this.workspaces.values())
+      if (
+        (w.scopeName ?? '').toLowerCase().includes(needle) ||
+        w.id.toLowerCase().includes(needle) ||
+        (w.scopeId ?? '').toLowerCase().includes(needle)
+      )
+        hits.push({
+          kind: 'workspace',
+          id: w.id,
+          tenantId: w.tenantId,
+          label: w.scopeName ?? w.provider,
+          sub: `${w.provider} · ${w.id}`,
+        });
+    return hits.slice(0, limit);
+  }
+
+  async adminLogAction(entry: AdminAuditEntry): Promise<void> {
+    this.adminAudit.push({
+      id: newId(),
+      at: this.now(),
+      adminEmail: entry.adminEmail,
+      action: entry.action,
+      targetKind: entry.targetKind,
+      targetId: entry.targetId,
+      targetTenantId: entry.targetTenantId,
+      detail: entry.detail,
+    });
+  }
+
+  async adminListAudit(params: AdminListParams): Promise<AdminPage<AdminAuditRow>> {
+    const q = (params.q ?? '').trim().toLowerCase();
+    const rows = this.adminAudit.filter(
+      (a) =>
+        q === '' ||
+        a.action.toLowerCase().includes(q) ||
+        a.adminEmail.toLowerCase().includes(q) ||
+        (a.targetId ?? '').toLowerCase().includes(q),
+    );
+    return pageOf(rows, params, { at: (r) => r.at, action: (r) => r.action }, 'at');
   }
 
   async ping(): Promise<void> {

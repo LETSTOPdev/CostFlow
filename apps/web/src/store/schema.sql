@@ -115,3 +115,22 @@ create table if not exists workspace_members (
 );
 create index if not exists workspace_members_tenant on workspace_members (tenant_id);
 create index if not exists workspace_members_user on workspace_members (tenant_id, user_id);
+
+-- Admin operations console audit trail. Deliberately carries NO foreign keys:
+-- an audit row must survive erasure of the tenant/user it references (that
+-- durability is the whole point of an audit log). Never stores secrets or raw
+-- customer content — action name, target ids, and a small non-secret detail
+-- (e.g. old/new role) only. `admin_email` is the operator (an allowlisted
+-- admin), not customer PII.
+create table if not exists admin_audit (
+  id uuid primary key,
+  at timestamptz not null,
+  admin_user_id uuid,
+  admin_email text not null,
+  action text not null,
+  target_kind text,
+  target_id text,
+  target_tenant_id uuid,
+  detail jsonb
+);
+create index if not exists admin_audit_at on admin_audit (at desc);
