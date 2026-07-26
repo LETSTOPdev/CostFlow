@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { signValue } from '../src/crypto';
 import { forbiddenJiraSite } from '../src/connectors/jira';
 import { frictionInsight, humanizeMagnitude } from '../src/report-view';
 import { POOL_CONFIG } from '../src/store/pg';
+import { gracefulShutdown } from '../src/main';
+import { MemoryStore } from '../src/store/memory';
+import { PgStore } from '../src/store/pg';
 import { SESSION_TTL_MS } from '../src/auth';
 import { SESSION_KEY, TOKEN, cookieOf, makeApp, post, signIn } from './helpers';
 
@@ -105,6 +108,50 @@ describe('SSRF guard on the Jira site URL', () => {
     expect(res.body).toContain('public https:// URL');
     // The gateway was never contacted with the private address.
     expect(t.gateway.lastCredentials).toBeNull();
+  });
+});
+
+describe('graceful shutdown drains connections on SIGTERM (prod 503 incident)', () => {
+  // The prod incident: on redeploy Railway SIGTERMs the process; without a
+  // handler, keep-alive connections are severed and non-idempotent POSTs
+  // (sign-out) "did nothing" or 503'd. These pin the drain-then-exit behavior.
+  it('closes the server (draining in-flight + keep-alive) then the store, then exits 0', async () => {
+    const order: string[] = [];
+    const app = { close: vi.fn(async () => void order.push('app.close')) };
+    const store = new PgStore('postgres://unused');
+    // Avoid touching a real DB: stub the pool close the store delegates to.
+    vi.spyOn(store, 'close').mockImplementation(async () => void order.push('store.close'));
+    const exit = vi.fn(() => void order.push('exit'));
+
+    await gracefulShutdown(app, store, exit as unknown as (code: number) => void, () => {});
+
+    expect(order).toEqual(['app.close', 'store.close', 'exit']);
+    expect(exit).toHaveBeenCalledWith(0);
+  });
+
+  it('still exits when the store has no close() (MemoryStore) and when close() throws', async () => {
+    // MemoryStore exposes no close(): shutdown must still drain the app and exit.
+    const app1 = { close: vi.fn(async () => undefined) };
+    const exit1 = vi.fn();
+    await gracefulShutdown(
+      app1,
+      new MemoryStore(),
+      exit1 as unknown as (c: number) => void,
+      () => {},
+    );
+    expect(app1.close).toHaveBeenCalledOnce();
+    expect(exit1).toHaveBeenCalledWith(0);
+
+    // A drain error must never block the exit (the platform would SIGKILL us).
+    const app2 = { close: vi.fn(async () => Promise.reject(new Error('boom'))) };
+    const exit2 = vi.fn();
+    await gracefulShutdown(
+      app2,
+      new MemoryStore(),
+      exit2 as unknown as (c: number) => void,
+      () => {},
+    );
+    expect(exit2).toHaveBeenCalledWith(0);
   });
 });
 
