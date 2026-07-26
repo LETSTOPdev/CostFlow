@@ -111,6 +111,35 @@ describe('SSRF guard on the Jira site URL', () => {
   });
 });
 
+describe('logout is robust to how the client encodes the POST (prod "does nothing")', () => {
+  // The intermittent "sign out does nothing" was a connection-severing race
+  // (fixed via graceful shutdown + multi-replica). While proving it, a related
+  // server-side edge surfaced: a POST with an unparseable content-type could
+  // 415 with an empty body. Pin that the logout endpoint always redirects
+  // (never 415/500/hang) regardless of how a client encodes the request, so a
+  // click can never silently no-op at the server layer.
+  const cases: { name: string; headers: Record<string, string>; payload: string }[] = [
+    { name: 'no content-type, no body', headers: {}, payload: '' },
+    {
+      name: 'urlencoded + csrf',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: 'csrf=x',
+    },
+    {
+      name: 'urlencoded, empty body',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      payload: '',
+    },
+    { name: 'application/json', headers: { 'content-type': 'application/json' }, payload: '{}' },
+  ];
+  it.each(cases)('POST /logout ($name) redirects, never 415/500', async ({ headers, payload }) => {
+    const t = makeApp(); // dev mode: no session -> redirect to /logged-out
+    const res = await t.app.inject({ method: 'POST', url: '/logout', headers, payload });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe('/logged-out');
+  });
+});
+
 describe('graceful shutdown drains connections on SIGTERM (prod 503 incident)', () => {
   // The prod incident: on redeploy Railway SIGTERMs the process; without a
   // handler, keep-alive connections are severed and non-idempotent POSTs
