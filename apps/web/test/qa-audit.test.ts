@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { signValue } from '../src/crypto';
 import { forbiddenJiraSite } from '../src/connectors/jira';
 import { frictionInsight, humanizeMagnitude } from '../src/report-view';
+import { POOL_CONFIG } from '../src/store/pg';
 import { SESSION_TTL_MS } from '../src/auth';
 import { SESSION_KEY, TOKEN, cookieOf, makeApp, post, signIn } from './helpers';
 
@@ -104,6 +105,25 @@ describe('SSRF guard on the Jira site URL', () => {
     expect(res.body).toContain('public https:// URL');
     // The gateway was never contacted with the private address.
     expect(t.gateway.lastCredentials).toBeNull();
+  });
+});
+
+describe('Postgres pool is hardened against connection hangs (prod 503 incident)', () => {
+  // The prod incident: authenticated routes "did nothing" or returned an edge
+  // 503 while public routes stayed up. Cause was the default pool —
+  // connectionTimeoutMillis:0 (wait forever) with no TCP keepalive — letting a
+  // dead connection across the Railway network hop hang a query indefinitely.
+  // These pin the fix so a refactor can't silently restore the infinite wait.
+  it('bounds every wait (no infinite connection or query timeout)', () => {
+    expect(POOL_CONFIG.connectionTimeoutMillis).toBeGreaterThan(0);
+    expect(POOL_CONFIG.connectionTimeoutMillis).toBeLessThanOrEqual(30_000);
+    expect(POOL_CONFIG.statement_timeout).toBeGreaterThan(0);
+    expect(POOL_CONFIG.query_timeout).toBeGreaterThan(0);
+    expect(POOL_CONFIG.idleTimeoutMillis).toBeGreaterThan(0);
+  });
+
+  it('enables TCP keepalive so dead connections are detected, not hung on', () => {
+    expect(POOL_CONFIG.keepAlive).toBe(true);
   });
 });
 

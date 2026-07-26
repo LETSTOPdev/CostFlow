@@ -38,11 +38,45 @@ export function toIso(value: unknown): string | null {
  * whenever COSTFLOW_TEST_DATABASE_URL is set (this machine has no Postgres —
  * live validation pending, same honesty posture as provider HTTP paths).
  */
+/**
+ * Production pool hardening (P4.2 incident: authenticated routes intermittently
+ * "did nothing" or returned an edge 503, while public routes stayed up).
+ *
+ * Root cause: `new pg.Pool({ connectionString })` uses `connectionTimeoutMillis:
+ * 0` (wait forever) with no TCP keepalive. The web service and Postgres are
+ * SEPARATE Railway services joined over the internal network; an idle pooled
+ * connection can be silently dropped by that hop. Without keepalive the dead
+ * socket is never detected, and with an infinite connection timeout the next
+ * query HANGS instead of failing — the request never completes, so the browser
+ * spins and Railway's edge eventually returns a 503 the app never logged. Only
+ * authenticated routes hit the DB, so only they broke; the dependency-free
+ * `/healthz` kept the replica marked healthy, so Railway kept routing to it.
+ *
+ * The fix makes every wait bounded and recycles dead connections, converting an
+ * indefinite hang into either a fast retry on a fresh connection or a clean,
+ * logged error the global boundary renders as a 500. It changes no behavior on
+ * a healthy connection.
+ */
+export const POOL_CONFIG: pg.PoolConfig = {
+  max: 10,
+  // Fail fast if no connection is available instead of hanging forever.
+  connectionTimeoutMillis: 10_000,
+  // Recycle idle connections so a silently-dropped socket cannot linger.
+  idleTimeoutMillis: 30_000,
+  // TCP keepalive detects a dead connection across the Railway network hop.
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10_000,
+  // Cap runaway queries server-side (statement_timeout) and client-side
+  // (query_timeout) so one stuck query cannot pin a request open indefinitely.
+  statement_timeout: 15_000,
+  query_timeout: 15_000,
+};
+
 export class PgStore implements Store {
   private pool: pg.Pool;
 
   constructor(databaseUrl: string) {
-    this.pool = new pg.Pool({ connectionString: databaseUrl });
+    this.pool = new pg.Pool({ connectionString: databaseUrl, ...POOL_CONFIG });
   }
 
   async migrate(): Promise<void> {
