@@ -29,4 +29,13 @@ EXPOSE 3000
 # chaining `migrate && start` once hung after migrate and starved the
 # healthcheck (no server bound), failing every deploy. Keeping them separate
 # lets the server bind promptly and the healthcheck pass.
-CMD ["pnpm", "--filter", "@costflow/web", "start"]
+#
+# Run node DIRECTLY as PID 1 (not `pnpm start`) so Railway's SIGTERM on redeploy
+# reaches the server process itself. A `pnpm`/`tsx` wrapper in the signal path
+# meant SIGTERM was delivered to the wrapper and the server was torn down before
+# its graceful drain (app.close → GOAWAY) finished — which severed keep-alive
+# connections and made post-deploy sign-out POSTs fail. As PID 1 the server owns
+# the signal, drains cleanly, and exits 0. `--import tsx` runs the TypeScript
+# in-process (no child fork). Assets/schema are resolved via import.meta.url, so
+# the working directory (/app) is irrelevant.
+CMD ["node", "--import", "tsx", "apps/web/src/main.ts"]
