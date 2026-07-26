@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./src/main.ts",
   "scripts": {
-    "start": "tsx src/main.ts",
+    "start": "node --import tsx src/main.ts",
     "migrate": "tsx src/migrate.ts"
   },
   "dependencies": {

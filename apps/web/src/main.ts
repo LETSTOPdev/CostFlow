@@ -98,6 +98,13 @@ async function main(): Promise<void> {
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => {
       console.error(`Received ${signal}; draining connections before exit.`);
+      // Safety net: if the drain stalls (a wedged in-flight request), force
+      // exit before Railway's grace period ends in a SIGKILL. `unref` so a
+      // clean drain isn't held open by this timer.
+      setTimeout(() => {
+        console.error('Drain timed out; forcing exit.');
+        process.exit(1);
+      }, 10_000).unref();
       void gracefulShutdown(app, store, (code) => process.exit(code));
     });
   }
