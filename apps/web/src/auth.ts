@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { encryptSecret, newId, newSalt, signValue, verifyValue } from './crypto';
+import { decryptSecret, encryptSecret, newId, newSalt, signValue, verifyValue } from './crypto';
 import { esc, layout } from './html';
 import type { OrgRole, Store } from './store/contract';
 
@@ -60,23 +60,29 @@ export interface AuthConfig {
  * OIDC-compliant `/oidc/logout` (preferred over the legacy `/v2/logout`) to
  * end the SSO session, then return to the public post-logout page.
  *
- * We pass `client_id` + a registered `post_logout_redirect_uri` rather than
- * `id_token_hint`: the architecture does not retain the id_token (keeping it
- * out of the session cookie is the safer choice), and Auth0 accepts client_id
- * when the redirect URI is in the client's Allowed Logout URLs. No `federated`
- * param — we end only the Auth0 tenant session, never the upstream Google/
- * social account (that is deliberately more disruptive and out of scope).
+ * When available we pass `id_token_hint` (the id_token retained from the
+ * callback in a dedicated encrypted cookie): it identifies the exact session
+ * so Auth0 terminates it deterministically and skips the logout-confirmation
+ * prompt (defect D-19). `client_id` + a registered `post_logout_redirect_uri`
+ * are always sent too, so logout still works if the hint is absent or expired
+ * (Auth0 accepts client_id when the redirect URI is in Allowed Logout URLs).
+ * No `federated` param — we end only the Auth0 tenant session, never the
+ * upstream Google/social account (deliberately more disruptive, out of scope).
  */
-export function oidcLogoutUrl(oidc: {
-  issuer: string;
-  clientId: string;
-  postLogoutRedirectUri: string;
-}): string {
+export function oidcLogoutUrl(
+  oidc: {
+    issuer: string;
+    clientId: string;
+    postLogoutRedirectUri: string;
+  },
+  idToken?: string,
+): string {
   const endpoint = `${oidc.issuer.replace(/\/$/, '')}/oidc/logout`;
   const params = new URLSearchParams({
     post_logout_redirect_uri: oidc.postLogoutRedirectUri,
     client_id: oidc.clientId,
   });
+  if (idToken) params.set('id_token_hint', idToken);
   return `${endpoint}?${params.toString()}`;
 }
 
@@ -109,6 +115,51 @@ export function setSession(
 
 export function clearSession(reply: FastifyReply, secure = false): void {
   reply.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, sameSite: 'lax', secure });
+}
+
+/**
+ * A separate cookie holding the OIDC id_token, used ONLY as `id_token_hint` on
+ * RP-initiated logout so Auth0 terminates the exact tenant SSO session (defect
+ * D-19). Kept out of the session cookie deliberately: it carries the email
+ * claim, so it is AES-encrypted (credentialKey) rather than merely signed, and
+ * Path-scoped to `/logout` so it rides only the single request that consumes
+ * it — never every authenticated request.
+ */
+export const OIDC_IDTOKEN_COOKIE = 'cf_oidc_idtoken';
+
+export function setIdTokenHint(
+  reply: FastifyReply,
+  idToken: string,
+  key: Buffer,
+  secure = false,
+): void {
+  reply.setCookie(OIDC_IDTOKEN_COOKIE, encryptSecret(idToken, key), {
+    path: '/logout',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    maxAge: Math.floor(SESSION_TTL_MS / 1000),
+  });
+}
+
+/** Decrypt the retained id_token, or null if absent/tampered/key-rotated. */
+export function readIdTokenHint(request: FastifyRequest, key: Buffer): string | null {
+  const raw = request.cookies[OIDC_IDTOKEN_COOKIE];
+  if (!raw) return null;
+  try {
+    return decryptSecret(raw, key);
+  } catch {
+    return null;
+  }
+}
+
+export function clearIdTokenHint(reply: FastifyReply, secure = false): void {
+  reply.clearCookie(OIDC_IDTOKEN_COOKIE, {
+    path: '/logout',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+  });
 }
 
 /** Finds or creates the user + tenant (first sign-in provisions the tenant + encrypted salt). */
@@ -376,7 +427,7 @@ export function registerAuthRoutes(
       onSignIn(false);
       return idpFailure();
     }
-    const tokens = (await tokenResponse.json()) as { access_token?: string };
+    const tokens = (await tokenResponse.json()) as { access_token?: string; id_token?: string };
     const userinfoResponse = await fetchFn(discovery.userinfo_endpoint as string, {
       headers: { Authorization: `Bearer ${tokens.access_token ?? ''}` },
     });
@@ -391,6 +442,12 @@ export function registerAuthRoutes(
       return reply.code(502).send('Identity provider returned no email.');
     }
     await completeSignIn(request, reply, email);
+    // Retain the id_token for RP-initiated logout (id_token_hint), so a later
+    // sign-out terminates this exact Auth0 SSO session (defect D-19). Stored in
+    // its own Path=/logout encrypted cookie, never in the session cookie.
+    if (typeof tokens.id_token === 'string' && tokens.id_token.length > 0) {
+      setIdTokenHint(reply, tokens.id_token, config.credentialKey, config.secureCookies === true);
+    }
     return reply.redirect('/');
   });
 }

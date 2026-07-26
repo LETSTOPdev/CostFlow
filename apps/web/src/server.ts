@@ -10,9 +10,11 @@ import { STAGE_KINDS } from '@costflow/domain';
 import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assumptions';
 import { findIndividualAttribution } from './attribution';
 import {
+  clearIdTokenHint,
   clearSession,
   INVITE_COOKIE,
   oidcLogoutUrl,
+  readIdTokenHint,
   registerAuthRoutes,
   sessionFrom,
   type AuthConfig,
@@ -168,6 +170,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // both sign-out and organization erasure so the two paths cannot drift.
   const clearAuthCookies = (reply: FastifyReply): void => {
     clearSession(reply, auth.secureCookies === true);
+    clearIdTokenHint(reply, auth.secureCookies === true);
     reply.clearCookie('cf_oidc_state', {
       path: '/',
       httpOnly: true,
@@ -193,17 +196,22 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     if (session && bodyCsrf !== session.csrf) {
       return reply.code(403).type('text/html').send(layout('Session expired', csrfErrorBody));
     }
+    // Read the retained id_token (for id_token_hint) from the inbound request
+    // BEFORE clearing cookies on the reply — the two are independent, but this
+    // keeps the ordering obvious.
+    const idTokenHint = readIdTokenHint(request, auth.credentialKey);
     // Invalidate the local CostFlow session FIRST — always, before any
     // external redirect — so the app cookie is gone regardless of what the
     // IdP does next.
     clearAuthCookies(reply);
     // In OIDC mode, RP-initiated logout: send the browser to Auth0's
     // /oidc/logout to terminate the tenant SSO session, then return to the
-    // public /logged-out page. Without this, a protected route silently
-    // re-authenticates via the live SSO session (P4.2 Gate 2). In dev mode
-    // (no IdP) we land locally.
+    // public /logged-out page. Passing id_token_hint makes Auth0 end THIS exact
+    // session deterministically (defect D-19); without it a protected route can
+    // silently re-authenticate via the live SSO session. In dev mode (no IdP)
+    // we land locally.
     if (auth.mode === 'oidc' && auth.oidc) {
-      return reply.redirect(oidcLogoutUrl(auth.oidc));
+      return reply.redirect(oidcLogoutUrl(auth.oidc, idTokenHint ?? undefined));
     }
     return reply.redirect('/logged-out');
   });

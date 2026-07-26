@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { signValue } from '../src/crypto';
+import { encryptSecret, signValue } from '../src/crypto';
 import { forbiddenJiraSite } from '../src/connectors/jira';
 import { frictionInsight, humanizeMagnitude } from '../src/report-view';
 import { POOL_CONFIG } from '../src/store/pg';
@@ -7,7 +7,7 @@ import { gracefulShutdown } from '../src/main';
 import { MemoryStore } from '../src/store/memory';
 import { PgStore } from '../src/store/pg';
 import { securityHeaders } from '../src/security';
-import { SESSION_TTL_MS } from '../src/auth';
+import { SESSION_TTL_MS, oidcLogoutUrl } from '../src/auth';
 import { CREDENTIAL_KEY, SESSION_KEY, TOKEN, cookieOf, makeApp, post, signIn } from './helpers';
 
 /** Minimal OIDC config for tests: only the issuer origin matters for CSP. */
@@ -197,6 +197,66 @@ describe('CSP form-action allows the OIDC logout redirect (prod "Sign out does n
     expect(fa).toContain("'self'");
     expect(fa).toContain('https://tenant.us.auth0.com');
     expect(fa).not.toContain('/oidc/logout'); // origin only, never a full path
+  });
+});
+
+describe('D-19: OIDC logout terminates the SSO session via id_token_hint', () => {
+  // Defect D-19: app-side logout cleared the local session but Auth0's tenant
+  // SSO session could survive, silently re-authenticating a later navigation.
+  // Fix: retain the id_token from the callback in a dedicated encrypted cookie
+  // and pass it as id_token_hint on RP-initiated logout so Auth0 ends THIS
+  // exact session. These pin the URL contract and the cookie consume/clear.
+  const IDT = 'header.payload.signature'; // stand-in JWT (dots are URL-safe)
+
+  it('oidcLogoutUrl omits id_token_hint when no token is retained', () => {
+    const url = new URL(oidcLogoutUrl(OIDC_AUTH.oidc));
+    expect(url.pathname).toBe('/oidc/logout');
+    expect(url.searchParams.get('client_id')).toBe('client-abc');
+    expect(url.searchParams.get('post_logout_redirect_uri')).toBe(
+      'https://app.example.com/logged-out',
+    );
+    expect(url.searchParams.has('id_token_hint')).toBe(false);
+  });
+
+  it('oidcLogoutUrl includes id_token_hint when a token is retained', () => {
+    const url = new URL(oidcLogoutUrl(OIDC_AUTH.oidc, IDT));
+    expect(url.searchParams.get('id_token_hint')).toBe(IDT);
+    // client_id stays too, so logout still works if the hint is ever rejected.
+    expect(url.searchParams.get('client_id')).toBe('client-abc');
+  });
+
+  it('POST /logout consumes the id_token cookie into id_token_hint and clears it', async () => {
+    const t = makeApp({ auth: OIDC_AUTH });
+    const cookie = `cf_oidc_idtoken=${encryptSecret(IDT, CREDENTIAL_KEY)}`;
+    const res = await t.app.inject({ method: 'POST', url: '/logout', headers: { cookie } });
+    expect(res.statusCode).toBe(302);
+    const loc = new URL(String(res.headers.location));
+    expect(loc.origin).toBe('https://tenant.us.auth0.com');
+    expect(loc.searchParams.get('id_token_hint')).toBe(IDT);
+    // The retained token is single-use: logout must clear the cookie (Path=/logout).
+    const setCookie = ([] as string[]).concat(res.headers['set-cookie'] ?? []);
+    const cleared = setCookie.find((c) => c.startsWith('cf_oidc_idtoken='));
+    expect(cleared).toBeDefined();
+    expect(cleared).toMatch(/Path=\/logout/);
+    expect(cleared).toMatch(/Expires=Thu, 01 Jan 1970|Max-Age=0/);
+  });
+
+  it('POST /logout without a retained token still logs out (no id_token_hint)', async () => {
+    const t = makeApp({ auth: OIDC_AUTH });
+    const res = await t.app.inject({ method: 'POST', url: '/logout' });
+    expect(res.statusCode).toBe(302);
+    expect(new URL(String(res.headers.location)).searchParams.has('id_token_hint')).toBe(false);
+  });
+
+  it('a tampered id_token cookie is ignored, not forwarded to Auth0', async () => {
+    const t = makeApp({ auth: OIDC_AUTH });
+    const res = await t.app.inject({
+      method: 'POST',
+      url: '/logout',
+      headers: { cookie: 'cf_oidc_idtoken=not-a-valid-ciphertext' },
+    });
+    expect(res.statusCode).toBe(302);
+    expect(new URL(String(res.headers.location)).searchParams.has('id_token_hint')).toBe(false);
   });
 });
 

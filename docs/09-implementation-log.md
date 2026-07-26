@@ -1595,6 +1595,24 @@ first-report journey succeeded on the live deployment:
 
 ### Deferred defect D-19 — logout SSO termination (known, non-blocking) {#d-19}
 
+> **RESOLVED 2026-07-26 (commits `b4e6b3a`, this change).** Two independent
+> causes, both fixed:
+> 1. **The browser never reached `/oidc/logout`.** CSP `form-action 'self'`
+>    silently blocked the Sign-out form's cross-origin 302 to Auth0, so the
+>    RP-initiated logout never ran — the exact "silent re-auth" symptom below.
+>    Fixed by allowlisting the IdP origin in `form-action` (OIDC mode only);
+>    reproduced and verified in-browser via a `securitypolicyviolation` event
+>    before/after.
+> 2. **No `id_token_hint`.** Logout now retains the callback's `id_token` in a
+>    dedicated encrypted, `Path=/logout` cookie (`cf_oidc_idtoken`, never in the
+>    session cookie) and passes it as `id_token_hint`, so Auth0 terminates THIS
+>    exact tenant session deterministically and skips the confirmation prompt.
+>    `client_id` is still sent, so logout degrades gracefully if the hint is
+>    absent/expired. No `federated` param — upstream social session is left
+>    intact, still out of scope. Regression tests in
+>    `apps/web/test/qa-audit.test.ts` pin the URL contract and the cookie
+>    consume/clear. The original deferral record is kept below for history.
+
 Classified 2026-07-22 as a **known non-blocking defect**; investigation is
 **stopped** here by directive and is not to be resumed without explicit
 instruction.

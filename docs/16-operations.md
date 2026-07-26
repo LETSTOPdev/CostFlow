@@ -198,7 +198,7 @@ the raw token.
 | Postgres contract suite, zero skips | ✅ PASSED on real Railway Postgres — see §11 (1 file, 10 tests, 0 skipped, 386ms) |
 | Live OIDC flow succeeds | ✅ sign-in / callback / session / sign-back-in PASSED on the deployment |
 | Invited-testers-only restriction | ✅ PASSED (non-invited emails rejected) |
-| Logout SSO termination | ⚠️ DEFERRED — known non-blocking defect **D-19** (§11 Gate 2); Gate 2 left OPEN |
+| Logout SSO termination | ✅ RESOLVED 2026-07-26 — **D-19** fixed (CSP form-action allowlists the IdP; logout passes `id_token_hint`). See doc 09 §D-19 |
 | Deployed E2E Jira journey | ✅ PASSED on https://app.fbx1.com — see §11 Gate 3 |
 | Logs & telemetry privacy audit | ✅ PASSED (no credentials/titles/actor values/emails/customer vocabulary/assumption values) |
 | CLI / engine / goldens byte-identical | ✅ verified (git diff empty; full suite green) |
