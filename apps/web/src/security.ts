@@ -13,6 +13,12 @@ import type { Store } from './store/contract';
 export interface SecurityContext {
   readonly production: boolean;
   readonly store: Store;
+  /**
+   * Extra origins to allow in the CSP `form-action` directive, beyond 'self'.
+   * In OIDC mode this carries the IdP origin so the Sign-out form's redirect to
+   * the RP-initiated-logout endpoint is not blocked. Empty in dev mode.
+   */
+  readonly formActionOrigins?: readonly string[];
   /** Structured log sink; defaults to stdout JSON. Injected for tests. */
   readonly logSink?: (line: Record<string, unknown>) => void;
 }
@@ -30,12 +36,23 @@ export function redactPath(path: string): string {
   return path.replace(/^\/invite\/[^/]+/, '/invite/:token').replace(UUID_RE, ':id');
 }
 
-export function securityHeaders(production: boolean): Record<string, string> {
+export function securityHeaders(
+  production: boolean,
+  formActionOrigins: readonly string[] = [],
+): Record<string, string> {
+  // The Sign-out button is a no-JS `<form method="post" action="/logout">`. In
+  // OIDC mode the server answers with a 302 to the IdP's RP-initiated-logout
+  // endpoint (a cross-origin URL), which then bounces back to /logged-out.
+  // Browsers evaluate EVERY hop of a form-initiated navigation against
+  // form-action, so the IdP origin must be allowlisted here or the redirect is
+  // silently blocked ("Sign out does nothing"). 'self' still covers /logout and
+  // the /logged-out landing; extra origins (the IdP) are added only in OIDC mode.
+  const formAction = ["'self'", ...formActionOrigins].join(' ');
   const headers: Record<string, string> = {
     'Content-Security-Policy': [
       "default-src 'none'",
       "base-uri 'none'",
-      "form-action 'self'",
+      `form-action ${formAction}`,
       "frame-ancestors 'none'",
       "img-src 'self' data:",
       "manifest-src 'self'",
@@ -58,7 +75,7 @@ export function securityHeaders(production: boolean): Record<string, string> {
 
 export function registerSecurity(app: FastifyInstance, context: SecurityContext): void {
   const log = context.logSink ?? ((line) => console.log(JSON.stringify(line)));
-  const headers = securityHeaders(context.production);
+  const headers = securityHeaders(context.production, context.formActionOrigins ?? []);
 
   // Canonical host is app.fbx1.com. If apex/www traffic reaches this app (once
   // fbx1.com DNS points here), 301 to the canonical host, preserving path +

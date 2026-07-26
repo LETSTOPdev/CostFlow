@@ -136,9 +136,17 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   void app.register(fastifyCookie);
   void app.register(fastifyFormbody);
 
+  // In OIDC mode the Sign-out form's POST 302s to the IdP's logout endpoint (a
+  // cross-origin URL). Allowlist that origin in CSP form-action or the browser
+  // silently blocks the redirect ("Sign out does nothing" — prod-only, since
+  // dev mode redirects to same-origin /logged-out).
+  const formActionOrigins =
+    auth.mode === 'oidc' && auth.oidc ? [new URL(auth.oidc.issuer).origin] : [];
+
   registerSecurity(app, {
     production: deps.production === true,
     store,
+    formActionOrigins,
     ...(deps.logSink ? { logSink: deps.logSink } : {}),
   });
 

@@ -6,8 +6,24 @@ import { POOL_CONFIG } from '../src/store/pg';
 import { gracefulShutdown } from '../src/main';
 import { MemoryStore } from '../src/store/memory';
 import { PgStore } from '../src/store/pg';
+import { securityHeaders } from '../src/security';
 import { SESSION_TTL_MS } from '../src/auth';
-import { SESSION_KEY, TOKEN, cookieOf, makeApp, post, signIn } from './helpers';
+import { CREDENTIAL_KEY, SESSION_KEY, TOKEN, cookieOf, makeApp, post, signIn } from './helpers';
+
+/** Minimal OIDC config for tests: only the issuer origin matters for CSP. */
+const OIDC_AUTH = {
+  mode: 'oidc',
+  sessionKey: SESSION_KEY,
+  credentialKey: CREDENTIAL_KEY,
+  secureCookies: true,
+  oidc: {
+    issuer: 'https://tenant.us.auth0.com/',
+    clientId: 'client-abc',
+    clientSecret: 'secret-xyz',
+    redirectUri: 'https://app.example.com/oidc/callback',
+    postLogoutRedirectUri: 'https://app.example.com/logged-out',
+  },
+} as const;
 
 /**
  * Regression tests from the pre-release QA audit. Each group pins a fix:
@@ -137,6 +153,50 @@ describe('logout is robust to how the client encodes the POST (prod "does nothin
     const res = await t.app.inject({ method: 'POST', url: '/logout', headers, payload });
     expect(res.statusCode).toBe(302);
     expect(res.headers.location).toBe('/logged-out');
+  });
+});
+
+describe('CSP form-action allows the OIDC logout redirect (prod "Sign out does nothing")', () => {
+  // The real prod-only "Sign out does nothing": the no-JS Sign-out form POSTs to
+  // /logout, which in OIDC mode 302s to the IdP's cross-origin logout endpoint.
+  // Browsers check EVERY hop of a form-initiated navigation against form-action,
+  // so with a bare `form-action 'self'` the cross-origin redirect is silently
+  // blocked and the page never moves. Dev mode redirects to same-origin
+  // /logged-out, which is why it only reproduced in production.
+  // Raw securityHeaders() uses 'Content-Security-Policy'; Fastify lowercases
+  // response header names, so accept either casing.
+  const cspOf = (h: Record<string, unknown>) =>
+    String(h['Content-Security-Policy'] ?? h['content-security-policy'] ?? '');
+  const formActionOf = (csp: string) =>
+    csp
+      .split(';')
+      .map((d) => d.trim())
+      .find((d) => d.startsWith('form-action')) ?? '';
+
+  it('securityHeaders keeps just self when no extra origins are given', () => {
+    expect(formActionOf(cspOf(securityHeaders(true)))).toBe("form-action 'self'");
+  });
+
+  it('securityHeaders adds extra origins (the IdP) after self', () => {
+    const fa = formActionOf(cspOf(securityHeaders(true, ['https://tenant.us.auth0.com'])));
+    expect(fa).toBe("form-action 'self' https://tenant.us.auth0.com");
+  });
+
+  it('a dev-mode server emits form-action self only (redirect is same-origin)', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/login' });
+    expect(formActionOf(cspOf(res.headers as Record<string, string>))).toBe("form-action 'self'");
+  });
+
+  it('an OIDC-mode server allowlists the IdP origin so the logout redirect is not blocked', async () => {
+    const t = makeApp({ auth: OIDC_AUTH });
+    const res = await t.app.inject({ method: 'GET', url: '/login' });
+    const fa = formActionOf(cspOf(res.headers as Record<string, string>));
+    // The IdP origin (no trailing slash, path stripped) must be present so the
+    // form POST -> https://tenant.us.auth0.com/oidc/logout hop is allowed.
+    expect(fa).toContain("'self'");
+    expect(fa).toContain('https://tenant.us.auth0.com');
+    expect(fa).not.toContain('/oidc/logout'); // origin only, never a full path
   });
 });
 
