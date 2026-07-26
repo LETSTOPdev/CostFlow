@@ -69,10 +69,10 @@ const productMockup = `
           </div>
           <svg class="lp-spark" viewBox="0 0 200 44" preserveAspectRatio="none" aria-hidden="true">
             <defs><linearGradient id="lpSpark" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#8b5cf6" stop-opacity=".55"/>
-              <stop offset="1" stop-color="#8b5cf6" stop-opacity="0"/>
+              <stop offset="0" stop-color="#6366f1" stop-opacity=".55"/>
+              <stop offset="1" stop-color="#6366f1" stop-opacity="0"/>
             </linearGradient></defs>
-            <path d="M0 34 L28 30 L56 32 L84 20 L112 24 L140 12 L168 15 L200 6" fill="none" stroke="#a78bfa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M0 34 L28 30 L56 32 L84 20 L112 24 L140 12 L168 15 L200 6" fill="none" stroke="#818cf8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             <path d="M0 34 L28 30 L56 32 L84 20 L112 24 L140 12 L168 15 L200 6 L200 44 L0 44 Z" fill="url(#lpSpark)"/>
           </svg>
         </div>
@@ -91,9 +91,23 @@ const productMockup = `
  * Sections
  * ------------------------------------------------------------------ */
 
+/**
+ * Decorative perspective tile grid behind the hero. Each tile presses in on
+ * hover — pure CSS (:hover + inset shadow), no client JS, matching the
+ * site's strict CSP (script-src 'none' on every route, no exceptions).
+ */
+const PGRID_SIZE = 22;
+const perspectiveGrid = (): string => {
+  const tiles = '<i></i>'.repeat(PGRID_SIZE * PGRID_SIZE);
+  return `<div class="lp-pgrid" aria-hidden="true">
+    <div class="lp-pgrid-plane" style="grid-template-columns:repeat(${PGRID_SIZE},1fr);grid-template-rows:repeat(${PGRID_SIZE},1fr)">${tiles}</div>
+    <div class="lp-pgrid-fade"></div>
+  </div>`;
+};
+
 const hero = `
 <section class="lp-hero">
-  <div class="lp-aurora" aria-hidden="true"></div>
+  ${perspectiveGrid()}
   <div class="container lp-hero-inner">
     <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Try the live demo for free during beta. No signup required. →</a>
     <h1 class="lp-h1">See what delays in Jira or ClickUp<br><span class="lp-grad">are costing you in dollars.</span></h1>
@@ -318,35 +332,37 @@ const footer = `
  * ------------------------------------------------------------------ */
 
 const LANDING_STYLE = `
-.lp{--vio:#8b5cf6;--ind:#6366f1;--fuchsia:#a855f7}
+.lp{--vio:#4f46e5}
 @keyframes lp-rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
-@keyframes lp-rise-mock{from{opacity:0;transform:translateY(46px) scale(.98)}to{opacity:1;transform:none}}
-@keyframes lp-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-11px)}}
-@keyframes lp-glow{0%,100%{opacity:.55;transform:scale(1)}50%{opacity:.9;transform:scale(1.06)}}
-@keyframes lp-shine{to{background-position:220% center}}
-@keyframes lp-badgepulse{0%,100%{box-shadow:0 0 0 0 rgba(139,92,246,.5)}50%{box-shadow:0 0 0 6px rgba(139,92,246,0)}}
+@keyframes lp-rise-mock{from{opacity:0;transform:translateY(30px) scale(.98)}to{opacity:1;transform:none}}
 
 .lp *{box-sizing:border-box}
-.lp-grad{background:linear-gradient(100deg,#6366f1,#8b5cf6,#a855f7,#8b5cf6,#6366f1);background-size:220% auto;
-  -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;animation:lp-shine 7s linear infinite}
+.lp-grad{color:var(--primary)}
 
 /* Hero */
-.lp-hero{position:relative;overflow:hidden;padding:clamp(2.5rem,1.5rem+5vw,5rem) 0 clamp(3rem,2rem+4vw,5rem);isolation:isolate}
-.lp-aurora{position:absolute;left:50%;top:-24%;width:min(1100px,120%);height:760px;transform:translateX(-50%);z-index:-2;pointer-events:none;
-  background:radial-gradient(38% 42% at 30% 30%,rgba(99,102,241,.42),transparent 62%),
-    radial-gradient(36% 40% at 72% 26%,rgba(168,85,247,.40),transparent 60%),
-    radial-gradient(46% 40% at 50% 8%,rgba(59,130,246,.30),transparent 60%);
-  filter:blur(58px);animation:lp-glow 9s ease-in-out infinite}
-.lp-hero-inner{position:relative;text-align:center;max-width:52rem;margin-inline:auto}
+.lp-hero{position:relative;overflow:hidden;padding:clamp(2.5rem,1.5rem + 5vw,5rem) 0 clamp(3rem,2rem + 4vw,5rem);isolation:isolate}
+.lp-pgrid{position:absolute;inset:0;z-index:-3;overflow:hidden}
+.lp-pgrid-plane{position:absolute;left:50%;top:34%;width:66rem;aspect-ratio:1;display:grid;
+  transform:translate(-50%,-50%) rotateX(58deg) rotateZ(0deg) scale(1.35);transform-style:preserve-3d}
+.lp-pgrid-plane i{border:1px solid var(--line);background:transparent;transition:background-color .5s ease,box-shadow .5s ease}
+.lp-pgrid-plane i:hover{background:color-mix(in srgb,var(--primary) 14%,transparent);
+  box-shadow:inset 0 1px 4px color-mix(in srgb,var(--ink) 22%,transparent);transition:background-color 0s,box-shadow 0s}
+.lp-pgrid-fade{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at 50% 30%,transparent 18%,var(--bg) 72%)}
+/* Hero copy sits visually on top of the tile grid but shouldn't block the
+   hover from reaching the tiles beneath it — only the actual links/buttons
+   need to stay clickable, so pointer events pass through everything else. */
+.lp-hero-inner{position:relative;text-align:center;max-width:52rem;margin-inline:auto;pointer-events:none}
+.lp-hero-inner a{pointer-events:auto}
 .lp-badge{display:inline-flex;align-items:center;gap:.55rem;font-size:.82rem;font-weight:560;color:var(--ink);
   padding:.42rem .9rem .42rem .7rem;border-radius:999px;text-decoration:none;
-  background:color-mix(in srgb,var(--surface) 62%,transparent);border:1px solid var(--line);
-  -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);box-shadow:var(--sh-1);animation:lp-rise .6s var(--ease) both}
+  background:var(--surface);border:1px solid var(--line);
+  box-shadow:var(--sh-1);animation:lp-rise .6s var(--ease) both;transition:border-color .15s var(--ease)}
 .lp-badge:hover{color:var(--ink);border-color:color-mix(in srgb,var(--primary) 40%,var(--line))}
-.lp-badge-dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--vio);animation:lp-badgepulse 2.4s ease-in-out infinite}
-.lp-h1{font-size:clamp(2.4rem,1.2rem+4.6vw,4.4rem);line-height:1.04;letter-spacing:-.04em;font-weight:680;
+.lp-badge-dot{width:.5rem;height:.5rem;border-radius:50%;background:var(--vio)}
+.lp-h1{font-size:clamp(2.4rem,1.2rem + 4.6vw,4.4rem);line-height:1.04;letter-spacing:-.04em;font-weight:680;
   margin:1.5rem auto .3rem;max-width:16ch;animation:lp-rise .7s var(--ease) .05s both}
-.lp-sub{font-size:clamp(1.05rem,1rem+.5vw,1.3rem);line-height:1.55;color:var(--muted);max-width:40rem;
+.lp-sub{font-size:clamp(1.05rem,1rem + .5vw,1.3rem);line-height:1.55;color:var(--muted);max-width:40rem;
   margin:1.1rem auto 0;animation:lp-rise .7s var(--ease) .12s both}
 .lp-cta{display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap;margin-top:1.8rem;animation:lp-rise .7s var(--ease) .18s both}
 .lp-trust{display:flex;gap:.5rem 1.5rem;justify-content:center;flex-wrap:wrap;margin-top:1.5rem;color:var(--muted);
@@ -355,15 +371,13 @@ const LANDING_STYLE = `
 .lp-hero-inner{padding-bottom:.5rem}
 
 /* Product mockup */
-.lp-stage{position:relative;max-width:64rem;margin-inline:auto;margin-top:clamp(3.5rem,2rem+4vw,6rem);
-  padding-inline:clamp(1.15rem,4vw,2rem);animation:lp-rise-mock .9s var(--ease) .28s both}
+.lp-stage{position:relative;max-width:64rem;margin-inline:auto;margin-top:clamp(3.5rem,2rem + 4vw,6rem);
+  padding-inline:clamp(1.15rem,4vw,2rem);animation:lp-rise-mock .7s var(--ease) .15s both}
 .lp-glow{position:absolute;left:50%;top:8%;width:78%;height:78%;transform:translateX(-50%);z-index:-1;pointer-events:none;
-  background:radial-gradient(closest-side,rgba(139,92,246,.5),rgba(99,102,241,.28),transparent 72%);filter:blur(56px);
-  animation:lp-glow 8s ease-in-out infinite}
-.lp-window{position:relative;border-radius:18px;overflow:hidden;background:#0c0d16;
+  background:radial-gradient(closest-side,rgba(79,70,229,.16),transparent 72%);filter:blur(56px)}
+.lp-window{position:relative;border-radius:14px;overflow:hidden;background:#0c0d16;
   border:1px solid rgba(255,255,255,.10);
-  box-shadow:0 2px 0 0 rgba(255,255,255,.05) inset,0 50px 100px -30px rgba(24,18,64,.55),0 24px 50px -24px rgba(24,18,64,.5);
-  animation:lp-float 7s ease-in-out infinite}
+  box-shadow:0 2px 0 0 rgba(255,255,255,.05) inset,0 30px 60px -24px rgba(17,24,39,.28),0 14px 30px -16px rgba(17,24,39,.18)}
 .lp-top{display:flex;align-items:center;gap:.5rem;height:42px;padding:0 1rem;background:#0a0b12;border-bottom:1px solid rgba(255,255,255,.06)}
 .lp-tl{width:11px;height:11px;border-radius:50%;background:#3a3b48}
 .lp-tl:nth-child(1){background:#ff5f57}.lp-tl:nth-child(2){background:#febc2e}.lp-tl:nth-child(3){background:#28c840}
@@ -379,15 +393,15 @@ const LANDING_STYLE = `
 .lp-side-foot{margin-top:auto;display:flex;align-items:center;gap:.55rem;font-size:.8rem;color:#6f7288;
   padding-top:.9rem;border-top:1px solid rgba(255,255,255,.06)}
 .lp-avatar{width:1.5rem;height:1.5rem;border-radius:7px;display:grid;place-items:center;font-size:.75rem;font-weight:700;color:#fff;
-  background:linear-gradient(135deg,#6366f1,#a855f7)}
+  background:linear-gradient(135deg,#4f46e5,#6366f1)}
 .lp-main{flex:1;min-width:0;padding:1.4rem 1.5rem 1.6rem}
 .lp-report-eyebrow{display:inline-block;font-size:.66rem;font-weight:680;letter-spacing:.09em;text-transform:uppercase;
   color:#b9a7ff;background:rgba(139,92,246,.14);border:1px solid rgba(139,92,246,.28);padding:.24rem .6rem;border-radius:999px}
 .lp-report-hero{position:relative;margin-top:.9rem;padding:1.2rem 1.3rem;border-radius:14px;
   background:linear-gradient(135deg,rgba(99,102,241,.14),rgba(168,85,247,.10));border:1px solid rgba(139,92,246,.22);overflow:hidden}
 .lp-rh-label{font-size:.68rem;font-weight:640;letter-spacing:.08em;text-transform:uppercase;color:#a9adc6}
-.lp-rh-big{font-size:clamp(1.9rem,1rem+3vw,2.7rem);font-weight:720;letter-spacing:-.03em;line-height:1.05;margin-top:.15rem;
-  background:linear-gradient(120deg,#c4b5fd,#a855f7);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.lp-rh-big{font-size:clamp(1.9rem,1rem + 3vw,2.7rem);font-weight:720;letter-spacing:-.03em;line-height:1.05;margin-top:.15rem;
+  background:linear-gradient(120deg,#c7d2fe,#818cf8);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
 .lp-rh-range{font-size:.8rem;color:#9498b2;margin-top:.15rem}
 .lp-chips{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:.7rem}
 .lp-chips span{font-size:.68rem;color:#a2a6bf;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);
@@ -402,19 +416,19 @@ const LANDING_STYLE = `
 .lp-fr-foot{display:flex;align-items:center;gap:.7rem;margin-top:.45rem}
 .lp-fr-amt{font-size:.82rem;font-weight:680;color:#fff;font-variant-numeric:tabular-nums;min-width:3.4rem}
 .lp-bar{flex:1;height:6px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
-.lp-bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#6366f1,#a855f7)}
+.lp-bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#4f46e5,#818cf8)}
 .lp-pill{font-size:.66rem;font-weight:680;padding:.14rem .5rem;border-radius:999px;border:1px solid;white-space:nowrap;letter-spacing:.02em}
 .lp-pill-A{color:#5fe3b0;background:rgba(16,185,129,.14);border-color:rgba(16,185,129,.34)}
-.lp-pill-B{color:#f4c36b;background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.34)}
-.lp-pill-C{color:#f79a9d;background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.34)}
+.lp-pill-B{color:#fbbf6b;background:rgba(245,158,11,.14);border-color:rgba(245,158,11,.34)}
+.lp-pill-C{color:#f8888c;background:rgba(239,68,68,.14);border-color:rgba(239,68,68,.34)}
 
 /* Sections */
-.lp-section{padding:clamp(3rem,2rem+4vw,6rem) 0}
+.lp-section{padding:clamp(3rem,2rem + 4vw,6rem) 0}
 .lp-section-alt{background:var(--bg-2);border-block:1px solid var(--line)}
-.lp-shead{text-align:center;max-width:42rem;margin-inline:auto;margin-bottom:clamp(2.2rem,1.5rem+2vw,3.2rem)}
+.lp-shead{text-align:center;max-width:42rem;margin-inline:auto;margin-bottom:clamp(2.2rem,1.5rem + 2vw,3.2rem)}
 .lp-kicker{display:inline-block;font-size:.76rem;font-weight:680;letter-spacing:.1em;text-transform:uppercase;color:var(--primary);margin:0 0 .7rem}
-.lp-h2{font-size:clamp(1.7rem,1.2rem+2vw,2.7rem);line-height:1.1;letter-spacing:-.03em;font-weight:660;margin:0}
-.lp-lead{font-size:clamp(1.02rem,1rem+.4vw,1.2rem);color:var(--muted);margin:.8rem auto 0;line-height:1.55}
+.lp-h2{font-size:clamp(1.7rem,1.2rem + 2vw,2.7rem);line-height:1.1;letter-spacing:-.03em;font-weight:660;margin:0}
+.lp-lead{font-size:clamp(1.02rem,1rem + .4vw,1.2rem);color:var(--muted);margin:.8rem auto 0;line-height:1.55}
 
 /* How-it-works steps: fixed 3 columns so the third never orphans */
 .lp-steps{display:grid;gap:1.4rem;grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -441,13 +455,13 @@ const LANDING_STYLE = `
 .lp-vr-bar i{display:block;height:100%;border-radius:999px;background:var(--grad)}
 
 /* Split storytelling */
-.lp-split{display:grid;gap:clamp(2rem,1rem+3vw,4rem);grid-template-columns:1fr 1fr;align-items:center}
+.lp-split{display:grid;gap:clamp(2rem,1rem + 3vw,4rem);grid-template-columns:1fr 1fr;align-items:center}
 .lp-split-copy .lp-h2{text-align:left}
 .lp-split-viz{position:relative}
 .lp-trace-card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:1.4rem;box-shadow:var(--sh-3);
   transition:transform .3s var(--ease)}
 .lp-split-viz::before{content:'';position:absolute;inset:6% 10%;z-index:-1;border-radius:24px;
-  background:radial-gradient(closest-side,rgba(139,92,246,.28),transparent 75%);filter:blur(40px)}
+  background:radial-gradient(closest-side,rgba(79,70,229,.10),transparent 75%);filter:blur(40px)}
 .lp-tc-head{display:flex;align-items:center;gap:.5rem;font-size:.95rem;font-weight:600;color:var(--ink)}
 .lp-tc-amt{font-size:1.4rem;font-weight:700;letter-spacing:-.02em;margin:.6rem 0 .1rem;color:var(--ink)}
 .lp-tc-amt span{font-size:.85rem;font-weight:500;color:var(--muted)}
@@ -474,21 +488,21 @@ const LANDING_STYLE = `
 .lp-faq{max-width:44rem;margin:0 auto}
 
 /* CTA band */
-.lp-cta-band{position:relative;overflow:hidden;border-radius:28px;padding:clamp(2.6rem,2rem+3vw,4.5rem) 1.5rem;text-align:center;
-  background:linear-gradient(140deg,#171528,#0d0b1a 60%);border:1px solid rgba(139,92,246,.25);box-shadow:var(--sh-3)}
-.lp-cta-glow{position:absolute;left:50%;top:-40%;width:70%;height:130%;transform:translateX(-50%);pointer-events:none;
-  background:radial-gradient(closest-side,rgba(139,92,246,.55),rgba(99,102,241,.25),transparent 72%);filter:blur(50px);animation:lp-glow 8s ease-in-out infinite}
+.lp-cta-band{position:relative;overflow:hidden;border-radius:18px;padding:clamp(2.6rem,2rem + 3vw,4.5rem) 1.5rem;text-align:center;
+  background:var(--grad);box-shadow:var(--sh-3)}
+.lp-cta-glow{position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(60% 90% at 12% 0%,rgba(255,255,255,.14),transparent 60%),radial-gradient(50% 80% at 92% 100%,rgba(255,255,255,.10),transparent 60%)}
 .lp-cta-inner{position:relative;z-index:1}
-.lp-cta-h{font-size:clamp(1.7rem,1.2rem+2.4vw,2.9rem);line-height:1.08;letter-spacing:-.03em;font-weight:680;color:#fff;margin:.6rem 0 0}
+.lp-cta-h{font-size:clamp(1.7rem,1.2rem + 2.4vw,2.9rem);line-height:1.08;letter-spacing:-.03em;font-weight:680;color:#fff;margin:.6rem 0 0}
 .lp-cta-actions{display:flex;gap:1rem;align-items:center;justify-content:center;flex-wrap:wrap;margin-top:1.8rem}
-a.lp-cta-btn,.lp-cta-btn{background:#fff;color:#4c43d6}
-a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:#4c43d6;filter:brightness(1.02)}
-.lp-cta-link{color:#c4b5fd;font-weight:600;font-size:.95rem}
+a.lp-cta-btn,.lp-cta-btn{background:#fff;color:var(--primary)}
+a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:var(--primary-2)}
+.lp-cta-link{color:rgba(255,255,255,.8);font-weight:600;font-size:.95rem}
 .lp-cta-link:hover{color:#fff}
-.lp-cta-fine{color:#9498b2;font-size:.85rem;margin:1.1rem 0 0}
+.lp-cta-fine{color:rgba(255,255,255,.72);font-size:.85rem;margin:1.1rem 0 0}
 
 /* Mid-page CTA (post-proof) */
-.lp-midcta{text-align:center;padding:clamp(1.5rem,1rem+2vw,3rem) 0 0}
+.lp-midcta{text-align:center;padding:clamp(1.5rem,1rem + 2vw,3rem) 0 0}
 .lp-midcta-fine{color:var(--muted);font-size:.88rem;margin:.9rem 0 0}
 
 /* Footer */

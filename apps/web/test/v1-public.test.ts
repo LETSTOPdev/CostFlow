@@ -70,12 +70,12 @@ describe('v1 public pages', () => {
     expect(String(res.headers['cache-control'])).toContain('max-age');
   });
 
-  it('shows the theme-aware brand lockup in the header on public and app pages', async () => {
+  it('shows the brand lockup in the header on public and app pages', async () => {
     const t = makeApp();
     const landing = await t.app.inject({ method: 'GET', url: '/' });
-    // Full logo per color scheme, icon on compact viewports (official assets).
+    // Light-theme-only product: always the ink-on-light wordmark, icon on
+    // compact viewports (official assets).
     expect(landing.body).toContain('src="/brand/logo-light.png"');
-    expect(landing.body).toContain('srcset="/brand/logo-dark.png"');
     expect(landing.body).toContain('srcset="/brand/icon-192.png"');
   });
 

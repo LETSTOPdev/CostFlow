@@ -1,14 +1,13 @@
 /** Server-rendered HTML shell + premium design system (doc 09 P4.1 — no SPA build). */
 
 /**
- * Theme-aware brand lockup for headers/footers: the full horizontal CostFlow
- * logo (icon + wordmark) with the wordmark variant matched to the color scheme
- * — white wordmark on dark, ink wordmark on light. On narrow viewports the
- * first `<source>` wins and compact navigation gets the standalone icon, which
- * is theme-neutral (no white pixels), so it needs no scheme variants. Source
- * order matters: the browser fetches exactly one of the three images.
+ * Brand lockup for headers/footers: the full horizontal CostFlow logo (icon +
+ * wordmark). The product is light-theme only (no prefers-color-scheme dark
+ * variant), so this always renders the ink-on-light wordmark. On narrow
+ * viewports the first `<source>` wins and compact navigation gets the
+ * standalone icon instead.
  */
-export const BRAND_LOCKUP = `<picture><source srcset="/brand/icon-192.png" media="(max-width: 560px)"><source srcset="/brand/logo-dark.png" media="(prefers-color-scheme: dark)"><img src="/brand/logo-light.png" alt="CostFlow"></picture>`;
+export const BRAND_LOCKUP = `<picture><source srcset="/brand/icon-192.png" media="(max-width: 560px)"><img src="/brand/logo-light.png" alt="CostFlow"></picture>`;
 
 export function esc(value: string): string {
   // Defense in depth: a mistyped non-string (e.g. a Date leaking from the DB
@@ -37,37 +36,29 @@ const STYLES = `
 :root{
   --font:'Inter','SF Pro Text','SF Pro Display',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
   --mono:'SF Mono','JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-  --ink:#0d0e14; --ink-2:#33353f; --muted:#5c5f6e; --faint:#8a8d9b;
-  --line:#e9e9f0; --line-2:#f2f2f6;
-  --bg:#ffffff; --bg-2:#fafafc; --surface:#ffffff; --surface-2:#f7f7fb;
-  --primary:#5b54e6; --primary-2:#4a42d4; --violet:#8b5cf6;
-  --grad:linear-gradient(135deg,#6366f1 0%,#8b5cf6 52%,#a855f7 100%);
-  --grad-soft:linear-gradient(135deg,#eef0ff 0%,#f5eefe 100%);
-  --pos:#0ea371; --pos-ink:#0a7a52; --pos-bg:#e7f7f0; --pos-line:#bfe8d5;
-  --warn:#c2820a; --warn-ink:#9a6800; --warn-bg:#fdf6e3; --warn-line:#f0dca6;
-  --neg:#e5484d; --neg-ink:#c0393e; --neg-bg:#fdecec; --neg-line:#f4c4c6;
-  --radius:16px; --radius-sm:11px; --radius-lg:22px;
-  --sh-1:0 1px 2px rgba(13,14,20,.05),0 1px 3px rgba(13,14,20,.05);
-  --sh-2:0 4px 14px -3px rgba(13,14,20,.09),0 2px 6px -2px rgba(13,14,20,.05);
-  --sh-3:0 20px 44px -14px rgba(30,24,74,.22),0 8px 18px -10px rgba(30,24,74,.14);
-  --ring:0 0 0 4px rgba(99,102,241,.18);
+  --ink:#111827; --ink-2:#1f2937; --muted:#6b7280; --faint:#9ca3af;
+  --line:#e5e7eb; --line-2:#f0f1f3;
+  --bg:#fafafa; --bg-2:#f3f4f6; --surface:#ffffff; --surface-2:#f9fafb;
+  --primary:#4f46e5; --primary-2:#4338ca; --violet:#6366f1;
+  --grad:linear-gradient(135deg,#4f46e5 0%,#6366f1 55%,#818cf8 100%);
+  --grad-hover:linear-gradient(135deg,#4338ca 0%,#4f46e5 55%,#6366f1 100%);
+  --grad-soft:linear-gradient(135deg,#eef2ff 0%,#e0e7ff 100%);
+  --sh-btn:0 1px 2px rgba(79,70,229,.14),0 10px 22px -8px rgba(99,102,241,.38);
+  --sh-btn-hover:0 2px 4px rgba(67,56,202,.18),0 16px 30px -10px rgba(79,70,229,.42);
+  --pos:#10b981; --pos-ink:#059669; --pos-bg:#ecfdf5; --pos-line:#a7f3d0;
+  --warn:#f59e0b; --warn-ink:#b45309; --warn-bg:#fffbeb; --warn-line:#fde68a;
+  --neg:#ef4444; --neg-ink:#b91c1c; --neg-bg:#fef2f2; --neg-line:#fecaca;
+  --radius:12px; --radius-sm:8px; --radius-lg:16px;
+  --sh-1:0 1px 2px rgba(17,24,39,.04),0 1px 3px rgba(17,24,39,.04);
+  --sh-2:0 4px 12px -3px rgba(17,24,39,.07),0 2px 6px -2px rgba(17,24,39,.05);
+  --sh-3:0 16px 36px -14px rgba(17,24,39,.14),0 8px 18px -10px rgba(17,24,39,.08);
+  --ring:0 0 0 4px rgba(79,70,229,.16);
   --ease:cubic-bezier(.4,0,.2,1);
   --container:69rem;
 }
-@media (prefers-color-scheme:dark){
-  :root{
-    --ink:#f4f5fb; --ink-2:#c9cbd7; --muted:#9a9db2; --faint:#71748c;
-    --line:#242634; --line-2:#1b1d29;
-    --bg:#0a0b11; --bg-2:#0f111a; --surface:#12141d; --surface-2:#171923;
-    --primary:#8b87f5; --primary-2:#a29dff; --violet:#a78bfa;
-    --grad-soft:linear-gradient(135deg,rgba(99,102,241,.20),rgba(168,85,247,.16));
-    --pos-ink:#4fd6a3; --pos-bg:rgba(14,163,113,.14); --pos-line:rgba(14,163,113,.34);
-    --warn-ink:#e6bd63; --warn-bg:rgba(194,130,10,.16); --warn-line:rgba(194,130,10,.36);
-    --neg-ink:#f0888c; --neg-bg:rgba(229,72,77,.14); --neg-line:rgba(229,72,77,.36);
-    --sh-1:0 1px 2px rgba(0,0,0,.45); --sh-2:0 6px 18px -5px rgba(0,0,0,.6);
-    --sh-3:0 26px 52px -14px rgba(0,0,0,.72); --ring:0 0 0 4px rgba(139,135,245,.26);
-  }
-}
+/* Light theme only — the brand system defines a single light palette; no
+   auto dark-mode switch (prefers-color-scheme) so the product never
+   surprises a visitor whose OS is set to dark. */
 *,*::before,*::after{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
 body{margin:0;font-family:var(--font);color:var(--ink-2);background:var(--bg);
@@ -113,13 +104,13 @@ main.bleed{display:block}
 
 /* Buttons */
 .btn,form:not(.signout) button{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
-  padding:.72rem 1.3rem;border-radius:12px;border:1px solid transparent;
+  padding:.72rem 1.3rem;border-radius:10px;border:1px solid transparent;
   background:var(--grad);color:#fff;font-family:var(--font);font-weight:600;font-size:.96rem;letter-spacing:-.01em;
   cursor:pointer;text-decoration:none;white-space:nowrap;
-  box-shadow:var(--sh-2),inset 0 1px 0 rgba(255,255,255,.2);
-  transition:transform .16s var(--ease),box-shadow .16s var(--ease),filter .16s var(--ease)}
-.btn:hover,form:not(.signout) button:hover{transform:translateY(-1px);box-shadow:var(--sh-3),inset 0 1px 0 rgba(255,255,255,.2);filter:saturate(1.06) brightness(1.02);color:#fff}
-.btn:active,form:not(.signout) button:active{transform:translateY(0);box-shadow:var(--sh-1)}
+  box-shadow:var(--sh-btn);
+  transition:transform .16s var(--ease),box-shadow .16s var(--ease),background .16s var(--ease)}
+.btn:hover,form:not(.signout) button:hover{transform:translateY(-1px);box-shadow:var(--sh-btn-hover);background:var(--grad-hover);color:#fff}
+.btn:active,form:not(.signout) button:active{transform:translateY(0);box-shadow:var(--sh-btn)}
 .btn:focus-visible,button:focus-visible{outline:none;box-shadow:var(--ring)}
 a.btn{color:#fff}
 .btn-lg{padding:.9rem 1.7rem;font-size:1.03rem;border-radius:14px}
@@ -417,15 +408,14 @@ export function layout(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <title>${esc(fullTitle)}</title>
 <meta name="description" content="See what workflow friction is costing your team. Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.">
 <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="/brand/logo.svg?v=2">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
 <link rel="manifest" href="/site.webmanifest?v=2">
-<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
-<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0a0b11">
+<meta name="theme-color" content="#fafafa">
 <meta property="og:site_name" content="CostFlow">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://app.fbx1.com/">
@@ -466,14 +456,13 @@ export function loadingPage(): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="refresh" content="2">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <title>Analyzing your workflow | CostFlow</title>
 <style>
-  :root{--ink:#0d0e14;--muted:#5c5f6e;--line:#e9e9f0;--bg:#ffffff;--surface:#ffffff;--primary:#5b54e6;
-    --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);
-    --sh:0 20px 44px -14px rgba(30,24,74,.22),0 8px 18px -10px rgba(30,24,74,.14);
+  :root{--ink:#111827;--muted:#6b7280;--line:#e5e7eb;--bg:#fafafa;--surface:#ffffff;--primary:#4f46e5;
+    --grad:linear-gradient(135deg,#4f46e5,#6366f1);
+    --sh:0 16px 36px -14px rgba(17,24,39,.14),0 8px 18px -10px rgba(17,24,39,.08);
     --font:'Inter','SF Pro Text',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
-  @media (prefers-color-scheme:dark){:root{--ink:#f4f5fb;--muted:#9a9db2;--line:#242634;--bg:#0a0b11;--surface:#12141d;--primary:#8b87f5;--sh:0 26px 52px -14px rgba(0,0,0,.72)}}
   *{box-sizing:border-box} html,body{height:100%}
   body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);
     display:flex;align-items:center;justify-content:center;padding:1.5rem;-webkit-font-smoothing:antialiased}
@@ -533,14 +522,13 @@ export function demoAnalyzingPage(seed: number): string {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="light">
 <meta http-equiv="refresh" content="${wait}; url=/try/report?seed=${seed}">
 <title>Analyzing a live company | CostFlow</title>
 <style>
-  :root{--ink:#0d0e14;--muted:#5c5f6e;--faint:#8a8d9b;--line:#e9e9f0;--bg:#ffffff;--surface:#ffffff;--primary:#5b54e6;--pos:#0ea371;
-    --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);--sh:0 24px 50px -14px rgba(30,24,74,.22);
+  :root{--ink:#111827;--muted:#6b7280;--faint:#9ca3af;--line:#e5e7eb;--bg:#fafafa;--surface:#ffffff;--primary:#4f46e5;--pos:#10b981;
+    --grad:linear-gradient(135deg,#4f46e5,#6366f1);--sh:0 16px 36px -14px rgba(17,24,39,.14);
     --font:'Inter','SF Pro Text',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
-  @media (prefers-color-scheme:dark){:root{--ink:#f4f5fb;--muted:#9a9db2;--faint:#71748c;--line:#242634;--bg:#0a0b11;--surface:#12141d;--primary:#8b87f5;--sh:0 26px 52px -14px rgba(0,0,0,.72)}}
   *{box-sizing:border-box} html,body{height:100%}
   body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);display:flex;align-items:center;justify-content:center;padding:1.5rem;-webkit-font-smoothing:antialiased}
   .box{width:100%;max-width:30rem;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:2.4rem 2.2rem;box-shadow:var(--sh)}
@@ -591,6 +579,9 @@ export function stepsNav(current?: (typeof ONBOARDING_STEPS)[number]): string {
   return `<nav class="stepper" aria-label="Onboarding progress">${parts}</nav>`;
 }
 
+/** Back-compat default (no step highlighted). */
+export const STEPS_NAV = stepsNav();
+
 /**
  * Standalone print/export document (P5): no app chrome, print-optimized CSS,
  * drill-downs rendered expanded by the caller. The user prints to PDF from the
@@ -605,10 +596,10 @@ export function printLayout(title: string, body: string): string {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(title)} | CostFlow</title>
 <style>
-  :root{--ink:#0d0e14;--ink-2:#33353f;--muted:#5c5f6e;--line:#e4e4ea;--line-2:#f0f0f4;
-    --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);
-    --pos-ink:#0a7a52;--pos-bg:#e7f7f0;--pos-line:#bfe8d5;--warn-ink:#9a6800;--warn-bg:#fdf6e3;--warn-line:#f0dca6;
-    --neg-ink:#c0393e;--neg-bg:#fdecec;--neg-line:#f4c4c6;--neg:#e5484d;--pos:#0ea371;
+  :root{--ink:#111827;--ink-2:#1f2937;--muted:#6b7280;--line:#e5e7eb;--line-2:#f0f1f3;
+    --grad:linear-gradient(135deg,#4f46e5 0%,#6366f1 55%,#818cf8 100%);
+    --pos-ink:#059669;--pos-bg:#ecfdf5;--pos-line:#a7f3d0;--warn-ink:#b45309;--warn-bg:#fffbeb;--warn-line:#fde68a;
+    --neg-ink:#b91c1c;--neg-bg:#fef2f2;--neg-line:#fecaca;--neg:#ef4444;--pos:#10b981;
     --mono:'SF Mono',ui-monospace,Menlo,Consolas,monospace}
   *,*::before,*::after{box-sizing:border-box}
   body{font-family:'Inter','SF Pro Text',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
