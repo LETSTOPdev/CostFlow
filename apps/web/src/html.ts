@@ -9,6 +9,9 @@
  */
 export const BRAND_LOCKUP = `<picture><source srcset="/brand/icon-192.png" media="(max-width: 560px)"><img src="/brand/logo-light.png" alt="CostFlow"></picture>`;
 
+/** The only real contact channel (footer, contact/security/support copy). */
+export const SUPPORT_EMAIL = 'support@fbx1.com';
+
 export function esc(value: string): string {
   // Defense in depth: a mistyped non-string (e.g. a Date leaking from the DB
   // driver) must never crash the render layer with `replaceAll is not a
@@ -84,23 +87,65 @@ hr{border:none;border-top:1px solid var(--line);margin:2rem 0}
 main.page{padding:2.75rem 0 4.5rem}
 main.bleed{display:block}
 
-/* Header */
-.site-header{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--bg) 78%,transparent);
+/* Header — "notch" shell: a raised center pod (64px) bridged to slim side
+   bars (40px) by concave corner cuts, like a dynamic-island nav. Pure CSS
+   (clip-path + one checkbox for the mobile menu) — no client JS, per the
+   site's strict CSP (script-src 'none'). */
+.nb{position:sticky;top:0;z-index:50;display:flex;height:64px}
+.nb-bar{flex:1;min-width:0;height:40px;background:color-mix(in srgb,var(--bg) 82%,transparent);
   -webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px);
   border-bottom:1px solid var(--line)}
-.site-header .container{display:flex;align-items:center;justify-content:space-between;gap:1rem;min-height:66px}
-.brand{display:inline-flex;align-items:center}
-.brand picture{display:block}
-.brand img{display:block;height:32px;width:auto}
-@media (max-width:560px){.brand img{height:28px}}
-.nav{display:flex;align-items:center;gap:1.35rem;font-size:.93rem;font-weight:500}
-.nav a{color:var(--muted)} .nav a:hover{color:var(--ink)}
-.nav a.btn{color:#fff}
-.nav-extra{display:contents}
-.nav .sep{color:var(--line);user-select:none}
+.nb-notch{display:flex;height:64px;flex:none}
+.nb-corner{width:26px;height:64px;flex:none;position:relative}
+.nb-corner svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.nb-corner path{fill:color-mix(in srgb,var(--bg) 82%,transparent)}
+.nb-corner-l path{filter:drop-shadow(0 1px 0 var(--line))}
+.nb-corner-r path{filter:drop-shadow(0 -1px 0 var(--line))}
+.nb-center{flex:1;min-width:0;height:64px;background:color-mix(in srgb,var(--bg) 82%,transparent);
+  -webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px);
+  border-top:1px solid var(--line);box-shadow:var(--sh-1)}
+.nb-toggle{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.nb-row{position:relative;height:100%;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.75rem;
+  padding-inline:clamp(1rem,3vw,1.75rem)}
+.nb-col{display:flex;align-items:center;gap:.9rem;min-width:0}
+.nb-col-r{justify-content:flex-end}
+.nb-left,.nb-right{display:flex;align-items:center;gap:1.35rem;font-size:.91rem;font-weight:500;min-width:0}
+.nb-left a,.nb-right a{color:var(--muted);white-space:nowrap} .nb-left a:hover,.nb-right a:hover{color:var(--ink)}
+.nb-auth{display:flex;align-items:center;gap:1rem;margin-left:1.1rem;padding-left:1.1rem;border-left:1px solid var(--line)}
+.nb-auth a:not(.btn){color:var(--muted);font-weight:500;white-space:nowrap} .nb-auth a:not(.btn):hover{color:var(--ink)}
+.nb-logo{display:inline-flex;align-items:center;justify-content:center;flex:none}
+.nb-logo picture{display:block} .nb-logo img{display:block;height:28px;width:auto}
 .signout{display:inline;margin:0}
 .signout button{margin:0;background:none;border:none;box-shadow:none;color:var(--muted);cursor:pointer;padding:0;font:inherit;font-weight:500;transition:color .15s var(--ease)}
 .signout button:hover{color:var(--ink);transform:none;filter:none}
+/* Mobile burger (checkbox hack — no JS) */
+.nb-burger{display:none;flex:none;width:2.1rem;height:2.1rem;align-items:center;justify-content:center;border-radius:8px;
+  cursor:pointer;color:var(--ink-2);font-size:1.15rem;line-height:1}
+.nb-burger:hover{background:var(--surface-2)}
+.nb-ic-x{display:none}
+.nb-toggle:checked ~ .nb-row .nb-burger .nb-ic-menu{display:none}
+.nb-toggle:checked ~ .nb-row .nb-burger .nb-ic-x{display:block}
+.nb-scrim{position:fixed;inset:64px 0 0 0;z-index:39;background:rgba(17,24,39,.28);opacity:0;pointer-events:none;
+  transition:opacity .2s var(--ease)}
+.nb-mobile{position:fixed;top:64px;left:0;right:0;z-index:40;display:flex;flex-direction:column;gap:.15rem;
+  padding:.9rem clamp(1.15rem,4vw,2rem) 1.4rem;background:var(--surface);border-bottom:1px solid var(--line);box-shadow:var(--sh-3);
+  transform:translateY(-8px);opacity:0;pointer-events:none;transition:transform .2s var(--ease),opacity .2s var(--ease)}
+.nb-mobile a{display:block;padding:.7rem .2rem;color:var(--ink-2);font-weight:550;border-bottom:1px solid var(--line-2)}
+.nb-mobile a:last-of-type{border-bottom:none}
+.nb-mobile .nb-mobile-cta{display:flex;gap:.7rem;margin-top:.9rem}
+.nb-toggle:checked ~ .nb-scrim{opacity:1;pointer-events:auto}
+.nb-toggle:checked ~ .nb-mobile{transform:translateY(0);opacity:1;pointer-events:auto}
+@media (max-width:860px){
+  .nb-left,.nb-right{display:none}
+  .nb-burger{display:inline-flex}
+  .nb-auth{margin-left:0;padding-left:0;border-left:none}
+}
+@media (min-width:861px){.nb-mobile,.nb-scrim{display:none}}
+@media (max-width:480px){
+  .nb-bar{display:none}.nb-notch{flex:1}.nb-corner{display:none}.nb-center{border-radius:0}
+  .nb-auth a:not(.btn){display:none}
+  .nb-auth .btn{padding:.55rem 1rem;font-size:.88rem}
+}
 
 /* Buttons */
 .btn,form:not(.signout) button{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
@@ -360,43 +405,151 @@ a.report-card:hover{transform:translateY(-2px);box-shadow:var(--sh-2);border-col
 .cta-band .lead{color:rgba(255,255,255,.86)}
 .cta-band .btn{background:#fff;color:var(--primary-2);box-shadow:var(--sh-2)}
 .cta-band .btn:hover{color:var(--primary-2);background:#fff}
-.site-footer{border-top:1px solid var(--line);margin-top:1rem;padding:2.8rem 0;color:var(--muted);font-size:.9rem;background:var(--bg-2)}
+.site-footer{border-top:1px solid var(--line);margin-top:1rem;padding:3.2rem 0 2.2rem;color:var(--muted);font-size:.9rem;background:var(--bg-2)}
 .site-footer a{color:var(--muted)} .site-footer a:hover{color:var(--ink)}
+.sf-grid{display:grid;gap:2rem;grid-template-columns:repeat(4,minmax(0,1fr))}
+.sf-col h4{margin:0 0 .9rem;font-size:.76rem;font-weight:660;letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+.sf-col nav{display:flex;flex-direction:column;gap:.6rem}
+.sf-col a{font-size:.89rem}
+.sf-bottom{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem 1.5rem;
+  margin-top:2.6rem;padding-top:1.6rem;border-top:1px solid var(--line)}
+.sf-brand{display:inline-flex;align-items:center;gap:.7rem;flex-wrap:wrap;font-size:.86rem;color:var(--faint)}
+.sf-brand picture{display:block} .sf-brand img{display:block;height:22px;width:auto}
 .faq-list{max-width:44rem;margin:0 auto}
 
+@media (max-width:760px){ .sf-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:1.8rem 1.2rem} }
 @media (max-width:640px){
   body{font-size:16px}
-  .nav{gap:.9rem;font-size:.88rem}
   .hero-actions .btn{width:100%}
-  .site-header .container{min-height:58px}
 }
-@media (max-width:560px){ .nav-extra{display:none} }
 `;
+
+const MARKETING_LEFT = `<a href="/demo">Sample report</a><a href="/pricing">Pricing</a><a href="/security">Security</a><a href="/docs">Docs</a>`;
+const MARKETING_RIGHT = `<a href="/about">About</a><a href="/blog">Blog</a>`;
+const MARKETING_MOBILE = `<a href="/demo">Sample report</a><a href="/pricing">Pricing</a><a href="/security">Security</a><a href="/docs">Docs</a><a href="/about">About</a><a href="/blog">Blog</a>`;
+
+/**
+ * The notch header shell (see the `.nb-*` styles above): a raised center pod
+ * bridged to slim side bars by concave corner cuts. Same markup for every
+ * page; only the nav content swaps between a marketing visitor and a signed-in
+ * user (via `csrf`, which also gates the CSRF-protected sign-out form).
+ */
+function renderHeader(csrf?: string): string {
+  const loggedOut = csrf === undefined;
+  const authDesktop = loggedOut
+    ? `<a href="/login">Sign in</a><a class="btn btn-sm" href="/signup">Get started</a>`
+    : `<a href="/">Home</a><a href="/runs">Runs</a><form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
+        csrf as string,
+      )}"><button type="submit">Sign out</button></form>`;
+  const mobileLinks = loggedOut
+    ? `${MARKETING_MOBILE}<div class="nb-mobile-cta"><a class="btn-ghost btn btn-sm" href="/login">Sign in</a><a class="btn btn-sm" href="/signup">Get started</a></div>`
+    : `<a href="/">Home</a><a href="/runs">Runs</a>`;
+  return `<a class="skip" href="#main">Skip to content</a>
+<header class="nb">
+  <div class="nb-bar nb-bar-l"></div>
+  <div class="nb-notch">
+    <div class="nb-corner nb-corner-l"><svg viewBox="0 0 26 64" preserveAspectRatio="none"><path d="M0 0H26V64C13 64 13 40 0 40Z"/></svg></div>
+    <div class="nb-center">
+      <input type="checkbox" id="nb-toggle" class="nb-toggle" aria-hidden="true">
+      <div class="nb-row">
+        <div class="nb-col nb-col-l">
+          <label for="nb-toggle" class="nb-burger" aria-label="Toggle menu"><span class="nb-ic-menu">&#9776;</span><span class="nb-ic-x">&#10005;</span></label>
+          ${loggedOut ? `<nav class="nb-left">${MARKETING_LEFT}</nav>` : ''}
+        </div>
+        <a class="nb-logo" href="/">${BRAND_LOCKUP}</a>
+        <div class="nb-col nb-col-r">
+          ${loggedOut ? `<nav class="nb-right">${MARKETING_RIGHT}</nav>` : ''}
+          <div class="nb-auth">${authDesktop}</div>
+        </div>
+      </div>
+      <label for="nb-toggle" class="nb-scrim" aria-hidden="true"></label>
+      <nav class="nb-mobile">${mobileLinks}</nav>
+    </div>
+    <div class="nb-corner nb-corner-r"><svg viewBox="0 0 26 64" preserveAspectRatio="none"><path d="M0 64H26V0C13 0 13 24 0 24Z"/></svg></div>
+  </div>
+  <div class="nb-bar nb-bar-r"></div>
+</header>`;
+}
+
+const FOOTER_COLUMNS: readonly (readonly [string, readonly (readonly [string, string])[]])[] = [
+  [
+    'Product',
+    [
+      ['Pricing', '/pricing'],
+      ['Security', '/security'],
+      ['Sample report', '/demo'],
+      ['Try it live', '/try'],
+    ],
+  ],
+  [
+    'Company',
+    [
+      ['About', '/about'],
+      ['Blog', '/blog'],
+      ['Careers', '/careers'],
+      ['Contact', '/contact'],
+    ],
+  ],
+  [
+    'Resources',
+    [
+      ['Documentation', '/docs'],
+      ['Changelog', '/changelog'],
+      ['FAQ', '/faq'],
+    ],
+  ],
+  [
+    'Legal',
+    [
+      ['Terms', '/terms'],
+      ['Privacy', '/privacy'],
+      ['Cookies', '/cookies'],
+      ['Subprocessors', '/dpa'],
+      ['Accessibility', '/accessibility'],
+    ],
+  ],
+];
+
+/** Four-column marketing footer (Product/Company/Resources/Legal), shown on every logged-out page. */
+function renderFooter(): string {
+  const cols = FOOTER_COLUMNS.map(
+    ([heading, links]) =>
+      `<div class="sf-col"><h4>${heading}</h4><nav>${links
+        .map(([label, href]) => `<a href="${href}">${label}</a>`)
+        .join('')}</nav></div>`,
+  ).join('');
+  return `<footer class="site-footer"><div class="container">
+    <div class="sf-grid">${cols}</div>
+    <div class="sf-bottom">
+      <span class="sf-brand">${BRAND_LOCKUP}<span>CostFlow is an FBX1 product.</span></span>
+      <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>
+    </div>
+  </div></footer>`;
+}
 
 /**
  * Page shell. When `csrf` is provided (authenticated pages), the shared
  * header carries a CSRF-protected sign-out form so logout is reachable from
- * every authenticated page. Public pages get a marketing header. `opts.bleed`
- * lets a full-bleed marketing page (the landing) manage its own containers.
+ * every authenticated page, and the marketing footer is omitted. Logged-out
+ * (public/marketing) pages get the full nav plus the four-column footer.
+ * `opts.bleed` lets a full-bleed marketing page (the landing) manage its own
+ * containers.
  */
 export function layout(
   title: string,
   body: string,
   csrf?: string,
-  opts: { bleed?: boolean; canonical?: string; noindex?: boolean; jsonLd?: string } = {},
+  opts: { bleed?: boolean; canonical?: string; noindex?: boolean; jsonLd?: string; description?: string } = {},
 ): string {
   // Canonical host is app.fbx1.com (see docs/BIBLE §fbx1). SEO tags are opt-in
   // per page so authenticated/dynamic pages stay out of the index.
+  const description =
+    opts.description ??
+    'See what workflow friction is costing your team. Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.';
   const seoHead =
     (opts.canonical ? `<link rel="canonical" href="${esc(opts.canonical)}">` : '') +
     (opts.noindex ? '<meta name="robots" content="noindex,follow">' : '') +
     (opts.jsonLd ? `<script type="application/ld+json">${opts.jsonLd}</script>` : '');
-  const nav =
-    csrf === undefined
-      ? `<span class="nav-extra"><a href="/demo">Sample report</a><a href="/login">Sign in</a></span><a class="btn btn-sm" href="/signup">Get started</a>`
-      : `<a href="/">Home</a><a href="/runs">Runs</a><form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
-          csrf,
-        )}"><button type="submit">Sign out</button></form>`;
   const main = opts.bleed
     ? `<main id="main" class="bleed">${body}</main>`
     : `<main id="main" class="page"><div class="container">${body}</div></main>`;
@@ -410,7 +563,7 @@ export function layout(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>${esc(fullTitle)}</title>
-<meta name="description" content="See what workflow friction is costing your team. Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.">
+<meta name="description" content="${esc(description)}">
 <link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
 <link rel="icon" type="image/svg+xml" href="/brand/logo.svg?v=2">
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=2">
@@ -434,12 +587,9 @@ ${seoHead}
 <style>${STYLES}</style>
 </head>
 <body>
-<a class="skip" href="#main">Skip to content</a>
-<header class="site-header"><div class="container">
-  <a class="brand" href="/">${BRAND_LOCKUP}</a>
-  <nav class="nav">${nav}</nav>
-</div></header>
+${renderHeader(csrf)}
 ${main}
+${csrf === undefined ? renderFooter() : ''}
 </body>
 </html>`;
 }

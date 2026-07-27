@@ -1,4 +1,4 @@
-import { BRAND_LOCKUP, layout } from './html';
+import { SUPPORT_EMAIL, layout } from './html';
 
 /**
  * Public, unauthenticated pages for the free beta (v1): the marketing landing,
@@ -6,10 +6,11 @@ import { BRAND_LOCKUP, layout } from './html';
  * styles only, no scripts, no external assets). The landing is product-led: a
  * large app-window mockup built from the real CostFlow report UI, ambient glow,
  * layered glass cards, and CSS-only motion. Landing-specific styling is scoped
- * to a `<style>` block in the body so the app pages stay lean.
+ * to a `<style>` block in the body so the app pages stay lean. The shared
+ * notch header and four-column footer come from `layout()`.
  */
 
-export const SUPPORT_EMAIL = 'support@fbx1.com';
+export { SUPPORT_EMAIL };
 
 /* ------------------------------------------------------------------ *
  * The product mockup — a faux CostFlow app window rendered from the
@@ -226,7 +227,7 @@ const trust = `
 const FAQ_ITEMS: readonly [string, string][] = [
   [
     'Is it really free? What is the catch?',
-    'No catch. CostFlow is free while in beta. No credit card, no trial clock. Paid plans come later, and nothing you do now will cost you.',
+    `No catch. The Limited plan is free, permanently, not just for a trial window. No credit card to start. Upgrade to <a href="/pricing">Pro or Enterprise</a> only when the caps actually get in your way.`,
   ],
   [
     'Will you change anything in my Jira or ClickUp?',
@@ -314,18 +315,6 @@ const ctaBand = `
     </div>
   </div>
 </div></section>`;
-
-const footer = `
-<footer class="lp-footer"><div class="container">
-  <div class="lp-foot-top">
-    <span class="lp-foot-brand">${BRAND_LOCKUP}</span>
-    <nav class="lp-foot-links">
-      <a href="/demo">Sample report</a><a href="/terms">Terms</a><a href="/privacy">Privacy</a>
-      <a href="mailto:${SUPPORT_EMAIL}">${SUPPORT_EMAIL}</a>
-    </nav>
-  </div>
-  <p class="lp-foot-fine">CostFlow is an FBX1 product.</p>
-</div></footer>`;
 
 /* ------------------------------------------------------------------ *
  * Landing-scoped stylesheet
@@ -505,16 +494,6 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:var(--primary-2)}
 .lp-midcta{text-align:center;padding:clamp(1.5rem,1rem + 2vw,3rem) 0 0}
 .lp-midcta-fine{color:var(--muted);font-size:.88rem;margin:.9rem 0 0}
 
-/* Footer */
-.lp-footer{border-top:1px solid var(--line);padding:2.6rem 0;background:var(--bg-2)}
-.lp-foot-top{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap}
-.lp-foot-brand{display:inline-flex;align-items:center}
-.lp-foot-brand img{display:block;height:26px;width:auto}
-.lp-foot-links{display:flex;gap:1.3rem;flex-wrap:wrap}
-.lp-foot-links a{color:var(--muted);font-size:.92rem}
-.lp-foot-links a:hover{color:var(--ink)}
-.lp-foot-fine{color:var(--faint);font-size:.86rem;margin:1.2rem 0 0}
-
 @media (max-width:860px){
   .lp-steps{grid-template-columns:1fr;max-width:26rem;margin-inline:auto}
   .lp-split{grid-template-columns:1fr}
@@ -537,7 +516,7 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:var(--primary-2)}
 
 /** Marketing landing shown to logged-out visitors at `/`. */
 export function renderLanding(): string {
-  const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero}${how}${traceable}${midCta}${trust}${faq()}${ctaBand}${footer}</div>`;
+  const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero}${how}${traceable}${midCta}${trust}${faq()}${ctaBand}</div>`;
   return layout('CostFlow: see what workflow friction costs your team', body, undefined, {
     bleed: true,
     canonical: 'https://app.fbx1.com/',

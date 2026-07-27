@@ -33,6 +33,21 @@ import {
 } from './html';
 import { randomDemoSeed, renderDemoCompany } from './demo-live';
 import { renderLanding, renderPrivacy, renderTerms } from './landing';
+import {
+  renderAbout,
+  renderAccessibility,
+  renderBlog,
+  renderCareers,
+  renderChangelog,
+  renderContact,
+  renderCookies,
+  renderDocs,
+  renderFaq,
+  renderPricing,
+  renderSecurity,
+  renderSitemap,
+  renderSubprocessors,
+} from './marketing';
 import { renderDashboard } from './dashboard-view';
 import { parseRun, renderReportBody, runSummary } from './report-view';
 import { executeJob } from './jobs';
@@ -653,8 +668,21 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       ['/', '1.0'],
       ['/try', '0.9'],
       ['/demo', '0.8'],
+      ['/pricing', '0.8'],
+      ['/security', '0.6'],
+      ['/about', '0.5'],
+      ['/contact', '0.5'],
+      ['/docs', '0.5'],
+      ['/faq', '0.5'],
+      ['/changelog', '0.4'],
+      ['/blog', '0.4'],
+      ['/careers', '0.3'],
       ['/privacy', '0.3'],
       ['/terms', '0.3'],
+      ['/cookies', '0.2'],
+      ['/dpa', '0.2'],
+      ['/accessibility', '0.2'],
+      ['/sitemap', '0.2'],
     ];
     const body =
       `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
@@ -673,6 +701,21 @@ Sitemap: https://app.fbx1.com/sitemap.xml
 
   app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms()));
   app.get('/privacy', async (_request, reply) => reply.type('text/html').send(renderPrivacy()));
+
+  // ===== Marketing / trust / company pages (no auth, no client JS) =====
+  app.get('/pricing', async (_request, reply) => reply.type('text/html').send(renderPricing()));
+  app.get('/security', async (_request, reply) => reply.type('text/html').send(renderSecurity()));
+  app.get('/about', async (_request, reply) => reply.type('text/html').send(renderAbout()));
+  app.get('/contact', async (_request, reply) => reply.type('text/html').send(renderContact()));
+  app.get('/changelog', async (_request, reply) => reply.type('text/html').send(renderChangelog()));
+  app.get('/blog', async (_request, reply) => reply.type('text/html').send(renderBlog()));
+  app.get('/careers', async (_request, reply) => reply.type('text/html').send(renderCareers()));
+  app.get('/docs', async (_request, reply) => reply.type('text/html').send(renderDocs()));
+  app.get('/cookies', async (_request, reply) => reply.type('text/html').send(renderCookies()));
+  app.get('/dpa', async (_request, reply) => reply.type('text/html').send(renderSubprocessors()));
+  app.get('/accessibility', async (_request, reply) => reply.type('text/html').send(renderAccessibility()));
+  app.get('/sitemap', async (_request, reply) => reply.type('text/html').send(renderSitemap()));
+  app.get('/faq', async (_request, reply) => reply.type('text/html').send(renderFaq()));
 
   // ===== Internal operations console (COSTFLOW_ADMIN_EMAILS only) =====
   // Cross-tenant, a deliberate + audited exception to the tenancy law, gated by
