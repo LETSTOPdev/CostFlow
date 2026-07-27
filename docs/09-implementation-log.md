@@ -2123,3 +2123,157 @@ instant per status): total wait is conserved, but a revisited status's earlier
 stints attribute to the chain's preceding statuses. Documented in the
 transform and the ADR; never overstates total cost. ClickUp status casing
 follows the API (lowercase); the mapping UI shows API truth.
+
+## 2026-07-28 — P4.5: customer database, activity spine, and identity
+
+### What shipped
+
+The operations console (`/admin`, shipped 2026-07-26) could answer questions
+about ROWS — how many organizations, which imports failed — but not about
+CUSTOMERS. It could not say who connected ClickUp, when someone last used the
+product, which organizations abandoned onboarding, or which are going quiet,
+because the data to answer them did not exist. Three gaps caused that, and this
+phase closed all three.
+
+1. **No actor.** `workspaces`, `jobs`, and `runs` carry a `tenant_id` and no
+   user, so every action was attributable to an organization at best.
+2. **No durable activity.** `telemetry-web.ts` already emitted 17 lifecycle
+   events at 21 call sites, but only to a local JSONL file: per-replica, and
+   erased by every deploy. The instrumentation existed; the durability did not.
+3. **No identity or session record.** Sessions are stateless signed cookies, so
+   nothing recorded a sign-in, a last-active time, or the IdP's claims.
+
+**Activity spine.** A new append-only `events` table (tenant-scoped, actor
+`user_id`, optional `workspace_id`, type, instant, jsonb fields) fed by a
+store-backed sink alongside the existing file sink. The telemetry vocabulary is
+MAPPED rather than duplicated (`TELEMETRY_TO_EVENT`), so the two cannot drift.
+Writes are fire-and-forget and failure-contained: recording activity can never
+fail a customer request. `sanitizeFields` enforces the privacy rule
+mechanically — booleans, finite numbers, null, and short strings only; objects
+and arrays are dropped, since nested structures are how free text reaches a log.
+`jobs.ts` gained `import.finished` and `workspace.ready`, which run detached
+from any session and are therefore attributed to the organization with a null
+actor rather than to a guessed user.
+
+**Historical backfill.** The migration derives events from timestamps that
+already exist (tenant/user/workspace creation, finished jobs, runs, first views,
+invitations), with ids derived as `md5(source_key)::uuid` so the primary key
+itself makes re-running idempotent. Nothing is inferred: the middle onboarding
+milestones have no stored history, so no event is invented for them.
+
+**Identity.** `users` gained `email_verified`, `auth_provider`, `display_name`,
+`first_seen_at`, `last_seen_at`, `sign_in_count` — on the table rather than in a
+side table, since it is 1:1 with the IdP subject and a join would cost the admin
+listings exactly the performance they need. Only claims the IdP actually sends
+are stored; an omitted claim stays null rather than being defaulted, so
+"unknown" and "false" never merge. `auth_provider` keeps the connection prefix
+of `sub` ('google-oauth2'), never the subject identifier. The OIDC scope gained
+`profile` so the `name` claim is actually returned. `last_seen_at` is refreshed
+on authenticated requests, throttled to at most one write per user per 15
+minutes and fired detached from the response.
+
+**Billing.** A `subscriptions` table shaped for Lemon Squeezy (customer,
+subscription, and variant ids; trial/renewal/period/cancellation instants) so
+integrating billing later is a write path rather than a migration. Today every
+organization is plan `beta`, status `free_beta`, provider `none`, every date
+null. No invented trials, no invented payment history.
+
+**Monitoring Workspaces.** A workspace already WAS a persistent operational view
+— integration, scope, salary assumptions, members, full run history — it simply
+had no name. `workspaces.name` plus a naming form in `/settings` is what turns
+"the Jira connection" into "Engineering".
+
+**Console.** `/admin` became an executive dashboard (growth, engagement,
+integrations, CSS bar charts, live feed); new `/admin/customers` (+ per-customer
+detail with identity, usage, billing, timeline, and an itemized health score),
+`/admin/funnel`, `/admin/activity`, `/admin/monitoring`. Still zero client
+JavaScript, still read-only by default, still allowlist-gated. The superseded
+`adminTenantTimeline` was removed rather than left dead.
+
+**Health score.** `health.ts` is pure and deterministic: five weighted factors
+summing to 100, rendered as the factor table the operator reads, so any number
+can be traced to the rule that produced it. Churn risk requires PRIOR
+engagement — a signup that never started is a stalled onboarding, not a churn
+risk, and conflating them sends you chasing the wrong customers.
+
+### Proofs
+
+`admin-crm.test.ts` (43 cases): score determinism, the factor sum equalling the
+score and the maxima summing to 100, every lifecycle transition, the
+abandoned-onboarding predicate, funnel conversion/drop-off arithmetic, timing
+reported only when both endpoints are timestamped, negative durations excluded,
+`sanitizeFields` rejecting nested structures and long strings, sign-in counted
+exactly once, erasure reaching the spine, allowlist gating on every new surface
+(404 for non-admins, 302 for anonymous, inert with no allowlist), no secret or
+raw run content in any projection, filters, pagination, and no `<script>` on any
+surface. Full gate green: 484 passed, 1 skipped.
+
+The SQL was executed, not merely written. This machine has no Postgres and no
+Docker, so the migration and every new `PgStore` query were run against PGlite
+(PostgreSQL 18 compiled to WASM) reproducing the real deploy path: apply the
+schema as it exists on `main`, insert legacy rows in the old shapes, then apply
+the new schema on top and re-apply it to prove idempotency. All 40 checks
+passed, including backfill counts per event type, one free-beta subscription per
+organization with no invented dates, every admin query against a real engine,
+and erasure leaving no events, subscriptions, or users behind.
+
+### Honest limits, named
+
+- **Product usage is organization-level.** Identity and sign-in activity are per
+  person; analyses, integrations, and reports are the organization's, because
+  runs and workspaces carry no actor for anything predating the spine. The
+  console labels which is which and never presents org usage as one person's.
+- **The funnel measures each step independently** rather than assuming a step
+  implies the ones above it, so a step can read higher than the one before it
+  when a step is unknown rather than unreached. Forcing the steps to descend
+  would turn an unknown into a hard zero for every step below it.
+- **Middle-step funnel timing is unavailable for older organizations.** Their
+  membership is read from current workspace state and the duration reads as
+  unavailable rather than being estimated. It fills in on its own from here.
+- **The customer table scans a bounded 2,000 rows.** The health score is a
+  function of measured signals, not a stored column, so filtering or sorting by
+  it cannot be pushed into SQL without duplicating the rules there and letting
+  the two definitions drift. When the cap is reached the console says the view
+  is partial. Materializing the score behind a periodic job is the upgrade path.
+- **Country is deliberately absent.** It would require IP geolocation, which the
+  privacy posture does not permit.
+- **Run comparison and trend tracking are not built.** Monitoring Workspaces
+  accumulate history and the console reports on it, but reopening and comparing
+  runs over time in the customer-facing product remains a separate feature.
+
+### Designed so the deferred half stays additive
+
+Two properties were asked for explicitly and are now pinned by tests rather than
+by intent, because both are the kind of thing that silently stops being true.
+
+**A Monitoring Workspace's history is a first-class query.** Deferring run
+comparison and trend series is only safe if adding them later needs no schema
+work. It does not, for one reason: `run.json` is a self-contained artifact
+(NFR-2) embedding its own batch, assumption set, and every pinned engine
+version, so two runs taken months and one salary change apart are directly
+comparable from stored rows alone. The configuration a number was computed under
+travels with the number, so nothing comparison needs is being lost while it is
+deferred. What was missing was the access path: `runs` had no index on
+`workspace_id`, and the existing run-over-run trend section found the previous
+run by loading every run the organization had ever produced with its run.json,
+report.md, and telemetry attached, to end up parsing one of them. Added
+`runs_workspace_at (tenant_id, workspace_id, created_at desc)` and
+`listWorkspaceRunHeaders`, an ordered artifact-free history; the report view now
+reads the index and fetches exactly one artifact. That is the same primitive a
+trend series is computed over, so the deferred feature is now read-side work
+over an indexed query.
+
+**The events table stays generic.** It is the canonical source for analytics,
+funnels, timelines, and whatever operational intelligence follows, so a new
+event type must cost one call site and never a migration. Enforced structurally:
+`type` is plain text with no CHECK and no enum (an enum is a migration to extend
+and effectively permanent to shrink), `fields` is open jsonb so per-type payloads
+never become columns, and no index or table is specific to any event type.
+`EventType` was opened from a closed union to `KnownEventType | string`, which is
+also a correctness fix rather than only a design one: with two replicas running
+during a rolling deploy, the older one WILL read rows whose type it has never
+heard of, and a closed union made that a lie the compiler believed. Every
+consumer treats an unrecognized type as data — stored, counted, filtered, and
+rendered verbatim through the escaper. The store contract asserts it for both
+adapters, and a console test feeds `quota.<script>alert(1)</script>` through the
+feed to prove the fallback description still escapes.

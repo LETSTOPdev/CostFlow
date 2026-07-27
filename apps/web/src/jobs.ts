@@ -6,6 +6,7 @@ import { deriveRunTelemetry, serializeTelemetry } from '@costflow/telemetry';
 import { buildPseudonymizationContext, decryptSecret } from './crypto';
 import { GatewayError } from './connectors/types';
 import type { ConnectorRegistry } from './connectors/registry';
+import type { EventRecorder } from './events';
 import type { JobErrorClass, Store } from './store/contract';
 
 /**
@@ -27,6 +28,12 @@ export interface JobDeps {
   readonly credentialKey: Buffer;
   /** Injected for deterministic tests; production uses the wall clock. */
   readonly nowFn?: () => string;
+  /**
+   * Durable activity recorder (P4.5). Optional so existing callers and tests
+   * construct JobDeps unchanged; jobs run detached from any request, so an
+   * import outcome is only visible to the console if it is recorded here.
+   */
+  readonly record?: EventRecorder;
 }
 
 function classify(error: unknown): { errorClass: JobErrorClass; message: string } {
@@ -43,12 +50,16 @@ function classify(error: unknown): { errorClass: JobErrorClass; message: string 
 }
 
 export async function executeJob(deps: JobDeps, tenantId: string, jobId: string): Promise<void> {
-  const { store, connectors, credentialKey } = deps;
+  const { store, connectors, credentialKey, record } = deps;
   const nowIso = (deps.nowFn ?? (() => new Date(Date.now()).toISOString()))();
   const job = await store.getJob(tenantId, jobId);
   if (!job) return;
   const workspace = await store.getWorkspace(tenantId, job.workspaceId);
   const tenant = await store.getTenant(tenantId);
+  // A job runs detached from the request that started it, so there is no
+  // session here: the event is attributed to the organization and the
+  // workspace, with no actor. Claiming a user did it would be a guess.
+  const context = { tenantId, userId: null, workspaceId: job.workspaceId };
   if (!workspace || !tenant || !workspace.scopeId || !workspace.assumptions) {
     await store.updateJob(tenantId, jobId, {
       status: 'failed',
@@ -134,8 +145,13 @@ export async function executeJob(deps: JobDeps, tenantId: string, jobId: string)
       runId,
       finishedAt: nowIso,
     });
+    record?.('import.finished', context, { status: 'succeeded', provider: workspace.provider });
     if (workspace.onboarding !== 'ready') {
       await store.updateWorkspace(tenantId, workspace.id, { onboarding: 'ready' });
+      // The moment a Monitoring Workspace becomes fully configured. Recorded
+      // because it is a funnel step, and the funnel can only report how long
+      // that step took if the transition itself carries a timestamp.
+      record?.('workspace.ready', context, { provider: workspace.provider });
     }
   } catch (error) {
     const { errorClass, message } = classify(error);
@@ -145,5 +161,6 @@ export async function executeJob(deps: JobDeps, tenantId: string, jobId: string)
       errorMessage: message,
       finishedAt: nowIso,
     });
+    record?.('import.finished', context, { status: 'failed', errorClass });
   }
 }

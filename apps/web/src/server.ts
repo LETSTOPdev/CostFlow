@@ -55,10 +55,14 @@ import { GatewayError, type ConnectFieldSpec, type Connector } from './connector
 import type { ConnectorRegistry } from './connectors/registry';
 import { registerSecurity } from './security';
 import {
+  EVENT_TYPES,
   onboardingRank,
   ONBOARDING_ORDER,
   ORG_ROLES,
   type AdminAuditRow,
+  type AdminCustomerParams,
+  type AdminCustomerRow,
+  type AdminMonitoringWorkspaceRow,
   type AdminInvitationRow,
   type AdminJobRow,
   type AdminListParams,
@@ -74,19 +78,35 @@ import {
   type WorkspaceRecord,
 } from './store/contract';
 import {
+  adminActivityList,
   adminAuditDetail,
   adminBadge,
+  adminBarChart,
   adminCountCards,
   adminFilterBar,
+  adminFunnelTable,
+  adminHealthBadge,
+  adminHealthBreakdown,
   adminId,
   adminKvPanel,
+  adminMetrics,
+  adminQuery,
+  adminScore,
   adminShell,
-  adminStatCards,
   adminTable,
-  adminTimeline,
+  adminTruncationNotice,
   type AdminColumn,
 } from './admin-view';
-import { webEvent, type TelemetrySink } from './telemetry-web';
+import {
+  CUSTOMER_FILTERS,
+  CUSTOMER_STATUS_LABELS,
+  HEALTH_BAND_LABELS,
+  scoreCustomer,
+} from './health';
+import { conversionPct, dropOffPct, formatDuration } from './funnel';
+import { CUSTOMER_SCAN_CAP } from './store/pg';
+import { type TelemetrySink } from './telemetry-web';
+import { shouldTouchLastSeen, storeEventRecorder, tracker, type EventContext } from './events';
 
 /**
  * The web application shell (doc 09 P4.1): server-rendered onboarding wizard
@@ -194,13 +214,27 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const logLine =
     deps.logSink ?? ((line: Record<string, unknown>) => console.log(JSON.stringify(line)));
 
+  // Durable activity spine (P4.5). Every interaction below reaches BOTH the
+  // local telemetry file (unchanged) and the events table, which is what makes
+  // the operations console able to say who did what, and when.
+  const recordEvent = storeEventRecorder(store, (error) =>
+    logLine({ level: 'warn', msg: 'event-not-recorded', error }),
+  );
+  const track = tracker(telemetry, recordEvent);
+  /** Attribution for an event: the acting user, their org, and the subject. */
+  const at = (session: Session, workspaceId?: string | null): EventContext => ({
+    tenantId: session.tenantId,
+    userId: session.userId,
+    ...(workspaceId ? { workspaceId } : {}),
+  });
+
   registerAuthRoutes(
     app,
     auth,
     store,
-    (ok) => telemetry(webEvent('tm-web-signin', { ok })),
+    (ok, session) => track('tm-web-signin', session ? at(session) : null, { ok }),
     logLine,
-    (role) => telemetry(webEvent('tm-web-invite-accepted', { role })),
+    (role) => track('tm-web-invite-accepted', null, { role }),
   );
 
   // Clear every auth-bearing cookie (session + in-flight OIDC state). Used by
@@ -269,9 +303,39 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       );
   });
 
+  /**
+   * Keep "last active" honest on a stateless-cookie app.
+   *
+   * Sessions are signed cookies with no server-side store, so there is no
+   * session table to read a last-activity time from — without this, the only
+   * activity signal is the sign-in itself, and someone using the product daily
+   * on one login would read as dormant. The write is throttled to at most one
+   * per user per interval and fired detached from the response, so it costs an
+   * authenticated request nothing and can never fail one.
+   */
+  const lastSeenAt = new Map<string, string>();
+  // The throttle map only needs recently-active users. Bounded so a long-lived
+  // process cannot accumulate one entry per user who ever signed in; dropping
+  // it costs at most one redundant write per user.
+  const LAST_SEEN_CACHE_MAX = 5000;
+  const touchActivity = (session: Session): void => {
+    const nowIso = new Date(Date.now()).toISOString();
+    if (!shouldTouchLastSeen(lastSeenAt.get(session.userId) ?? null, nowIso)) return;
+    if (lastSeenAt.size >= LAST_SEEN_CACHE_MAX) lastSeenAt.clear();
+    lastSeenAt.set(session.userId, nowIso);
+    void store.touchLastSeen(session.userId, nowIso).catch((error: unknown) => {
+      logLine({
+        level: 'warn',
+        msg: 'last-seen-not-recorded',
+        error: error instanceof Error ? error.name : 'UnknownError',
+      });
+    });
+  };
+
   const requireSession = (request: FastifyRequest, reply: FastifyReply): Session | null => {
     const session = sessionFrom(request, auth.sessionKey);
     if (!session) void reply.redirect('/login');
+    else touchActivity(session);
     return session;
   };
 
@@ -832,42 +896,392 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         )}&back=${encodeURIComponent(back)}">Retry</a>`
       : '—';
 
-  // ---- Overview ----
+  // Customer-table params: the shared list params plus the CRM's own filters.
+  const adminCustomerParams = (request: FastifyRequest): AdminCustomerParams => {
+    const base = adminListParams(request);
+    const query = request.query as Record<string, string | undefined>;
+    const str = (v: string | undefined): string | undefined =>
+      typeof v === 'string' && v !== '' ? v : undefined;
+    const customerStatus = str(query['cstatus']);
+    const health = str(query['health']);
+    const provider = str(query['provider']);
+    const plan = str(query['plan']);
+    const signedUpFrom = str(query['from']);
+    const signedUpTo = str(query['to']);
+    const activeSince = str(query['since']);
+    return {
+      ...base,
+      ...(customerStatus !== undefined ? { customerStatus } : {}),
+      ...(health !== undefined ? { health } : {}),
+      ...(provider !== undefined ? { provider } : {}),
+      ...(plan !== undefined ? { plan } : {}),
+      ...(signedUpFrom !== undefined ? { signedUpFrom } : {}),
+      ...(signedUpTo !== undefined ? { signedUpTo } : {}),
+      ...(activeSince !== undefined ? { activeSince } : {}),
+    };
+  };
+
+  const adminCustomerQueryOf = (
+    p: AdminCustomerParams,
+  ): Record<string, string | number | undefined> => ({
+    ...adminQueryOf(p),
+    cstatus: p.customerStatus,
+    health: p.health,
+    provider: p.provider,
+    plan: p.plan,
+    from: p.signedUpFrom,
+    to: p.signedUpTo,
+    since: p.activeSince,
+  });
+
+  const adCustomerCell = (r: AdminCustomerRow): string =>
+    `<a href="/admin/customers/${encodeURIComponent(r.userId)}">${esc(r.displayName ?? r.email)}</a>${
+      r.displayName ? `<div class="adm-mono">${esc(r.email)}</div>` : ''
+    }`;
+
+  // ---- Executive dashboard ----
   app.get('/admin', async (request, reply) => {
     const gate = await requireAdmin(request, reply);
     if (!gate) return;
-    const counts = await store.adminCounts();
-    const funnel = await store.funnelStats();
-    const recent = await store.adminListAudit({ limit: 6, offset: 0 });
-    const auditCols: AdminColumn<AdminAuditRow>[] = [
-      { key: '', label: 'When', render: (r) => adDate(r.at) },
-      { key: '', label: 'Admin', render: (r) => esc(r.adminEmail) },
-      { key: '', label: 'Action', render: (r) => adminBadge(r.action) },
-      { key: '', label: 'Target', render: (r) => (r.targetId ? adminId(r.targetId) : '—') },
-    ];
+    const nowIso = new Date(Date.now()).toISOString();
+    const [counts, dash, activity] = await Promise.all([
+      store.adminCounts(),
+      store.adminDashboard(nowIso, 30),
+      store.adminActivityFeed({ limit: 12, offset: 0 }),
+    ]);
+    const providerCards = dash.connectedByProvider.map((p) => ({
+      label: `${p.provider} orgs`,
+      value: p.orgs,
+    }));
     const body = `
-      <h2>Platform</h2>
-      ${adminCountCards(counts)}
-      <h2>Activation funnel</h2>
-      ${adminStatCards([
-        { label: 'Signed up', value: funnel.organizations },
-        { label: 'Connected', value: funnel.connectedWorkspaces },
-        { label: 'Ran analysis', value: funnel.analysesRun },
-        { label: 'Viewed report', value: funnel.reportsViewed },
+      <h2>Growth</h2>
+      ${adminMetrics([
+        { label: 'Users', value: dash.users, sub: `+${dash.newUsersToday} today` },
+        {
+          label: 'New this week',
+          value: dash.newUsersWeek,
+          sub: `${dash.newOrgsWeek} new ${dash.newOrgsWeek === 1 ? 'org' : 'orgs'}`,
+        },
+        { label: 'Organizations', value: dash.organizations },
+        { label: 'Returning users', value: dash.returningUsers, sub: 'signed in 2+ times' },
       ])}
-      <h2>Recent admin activity</h2>
-      ${adminTable<AdminAuditRow>({
-        columns: auditCols,
-        rows: recent.rows,
-        baseUrl: '/admin/audit',
-        query: {},
-        total: recent.total,
-        limit: 6,
-        offset: 0,
-        empty: 'No admin actions recorded yet.',
-      })}
+      <h2>Engagement</h2>
+      ${adminMetrics([
+        { label: 'Active (7d)', value: dash.activeUsers7d },
+        { label: 'Active (30d)', value: dash.activeUsers30d },
+        { label: 'Analyses today', value: dash.analysesToday },
+        { label: 'Reports viewed today', value: dash.reportsViewedToday },
+        { label: 'Monitoring workspaces', value: dash.monitoringWorkspaces },
+        { label: 'Churn risk orgs', value: dash.churnRiskOrgs, warn: true },
+      ])}
+      <h2>Integrations &amp; billing</h2>
+      ${adminMetrics([
+        ...providerCards,
+        { label: 'Active trials', value: dash.activeTrials, sub: 'free beta: none yet' },
+        { label: 'Failed imports', value: counts.failedJobs, warn: true },
+        { label: 'Running imports', value: counts.runningJobs },
+      ])}
+      <h2>Signups, last 30 days</h2>
+      ${adminBarChart(
+        dash.signupsByDay.map((d) => ({ date: d.date, value: d.users })),
+        'No signups in the last 30 days.',
+      )}
+      <h2>Analyses, last 30 days</h2>
+      ${adminBarChart(
+        dash.analysesByDay.map((d) => ({ date: d.date, value: d.analyses })),
+        'No analyses in the last 30 days.',
+      )}
+      <h2>Latest activity</h2>
+      ${adminActivityList(activity.rows)}
+      <p class="adm-sub"><a href="/admin/activity">Full activity feed →</a></p>
       <p class="adm-note">Read-only by default. Cross-tenant data is visible only to the COSTFLOW_ADMIN_EMAILS allowlist; every action is CSRF-protected and written to the audit log. No decrypted tokens or raw financial run content are ever shown.</p>`;
     return adminRespond(reply, gate.session, 'overview', 'Overview', body);
+  });
+
+  // ---- Customer database ----
+  app.get('/admin/customers', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminCustomerParams(request);
+    const pageData = await store.adminListCustomers(p);
+    const cols: AdminColumn<AdminCustomerRow>[] = [
+      { key: 'email', label: 'Customer', render: adCustomerCell },
+      {
+        key: 'orgName',
+        label: 'Organization',
+        render: (r) =>
+          `<a href="/admin/tenants/${encodeURIComponent(r.tenantId)}">${esc(r.orgName ?? '(unnamed)')}</a>`,
+      },
+      {
+        key: '',
+        label: 'Status',
+        render: (r) => adminHealthBadge(r.status, CUSTOMER_STATUS_LABELS[r.status]),
+      },
+      { key: 'healthScore', label: 'Health', render: (r) => adminScore(r.healthScore) },
+      {
+        key: '',
+        label: 'Integrations',
+        render: (r) =>
+          r.providers.length === 0
+            ? '—'
+            : r.providers.map((x) => `<span class="adm-chip">${esc(x)}</span>`).join(''),
+      },
+      { key: 'analyses', label: 'Analyses', align: 'right', render: (r) => String(r.analyses) },
+      {
+        key: 'signInCount',
+        label: 'Sign-ins',
+        align: 'right',
+        render: (r) => String(r.identity.signInCount),
+      },
+      { key: 'lastSeenAt', label: 'Last seen', render: (r) => adDate(r.identity.lastSeenAt) },
+      { key: 'createdAt', label: 'Signed up', render: (r) => adDate(r.createdAt) },
+    ];
+    const body = `
+      <h2>Customers</h2>
+      <p class="adm-sub">Identity and sign-in activity are per person; analyses, integrations, and health reflect their organization. ${pageData.total} matching.</p>
+      ${pageData.truncated === true ? adminTruncationNotice(CUSTOMER_SCAN_CAP) : ''}
+      ${adminFilterBar({
+        baseUrl: '/admin/customers',
+        ...(p.q ? { q: p.q } : {}),
+        searchPlaceholder: 'Search name, email, org, id…',
+        selects: [
+          {
+            name: 'cstatus',
+            label: 'statuses',
+            ...(p.customerStatus ? { value: p.customerStatus } : {}),
+            options: CUSTOMER_FILTERS.map((f) => ({ value: f.value, label: f.label })),
+          },
+          {
+            name: 'health',
+            label: 'health',
+            ...(p.health ? { value: p.health } : {}),
+            options: (['healthy', 'needs-attention', 'inactive', 'churn-risk'] as const).map(
+              (b) => ({ value: b, label: HEALTH_BAND_LABELS[b] }),
+            ),
+          },
+          {
+            name: 'provider',
+            label: 'integrations',
+            ...(p.provider ? { value: p.provider } : {}),
+            options: connectors
+              .list()
+              .map((c) => ({ value: c.descriptor.id, label: c.descriptor.name })),
+          },
+        ],
+      })}
+      ${adminTable<AdminCustomerRow>({
+        columns: cols,
+        rows: pageData.rows,
+        baseUrl: '/admin/customers',
+        query: adminCustomerQueryOf(p),
+        ...(p.sort ? { sort: p.sort } : {}),
+        ...(p.dir ? { dir: p.dir } : {}),
+        total: pageData.total,
+        limit: p.limit,
+        offset: p.offset,
+        empty: 'No customers match these filters.',
+      })}`;
+    return adminRespond(reply, gate.session, 'customers', 'Customers', body);
+  });
+
+  // ---- Customer detail ----
+  app.get('/admin/customers/:id', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const userId = (request.params as { id: string }).id;
+    const customer = await store.adminGetCustomer(userId);
+    if (!customer) return notFound(reply);
+    const [timeline, subscription] = await Promise.all([
+      store.adminUserTimeline(userId, 50),
+      store.getSubscription(customer.tenantId),
+    ]);
+    const health = scoreCustomer(customer.signals);
+    const identity: [string, string][] = [
+      ['Name', esc(customer.displayName ?? '—')],
+      ['Email', esc(customer.email)],
+      [
+        'Organization',
+        `<a href="/admin/tenants/${encodeURIComponent(customer.tenantId)}">${esc(customer.orgName ?? '(unnamed)')}</a>`,
+      ],
+      ['Role', adminBadge(customer.role)],
+      [
+        'Email verified',
+        customer.identity.emailVerified === null
+          ? '<span class="adm-mono">not observed</span>'
+          : adminBadge(customer.identity.emailVerified ? 'verified' : 'unverified'),
+      ],
+      ['Auth provider', esc(customer.identity.authProvider ?? '—')],
+      ['User id', `<span class="adm-mono">${esc(customer.userId)}</span>`],
+      ['Tenant id', `<span class="adm-mono">${esc(customer.tenantId)}</span>`],
+      ['Signed up', adDate(customer.createdAt)],
+      ['Status', adminHealthBadge(customer.status, CUSTOMER_STATUS_LABELS[customer.status])],
+    ];
+    const usage: [string, string][] = [
+      ['First sign-in', adDate(customer.identity.firstSeenAt)],
+      ['Last sign-in', adDate(customer.identity.lastSeenAt)],
+      ['Total sign-ins', String(customer.identity.signInCount)],
+      ['Returned after day one', customer.signals.returned ? 'yes' : 'no'],
+      ['Analyses (org)', String(customer.analyses)],
+      ['Analyses, last 30d (org)', String(customer.analyses30d)],
+      ['Last analysis', adDate(customer.lastAnalysisAt)],
+      ['Reports viewed (org)', String(customer.reportsViewed)],
+      ['Monitoring workspaces', `${customer.readyWorkspaces} ready of ${customer.workspaces}`],
+      [
+        'Integrations',
+        customer.providers.length === 0
+          ? '—'
+          : customer.providers.map((x) => `<span class="adm-chip">${esc(x)}</span>`).join(''),
+      ],
+    ];
+    const billing: [string, string][] = [
+      ['Plan', adminBadge(subscription?.plan ?? 'beta')],
+      ['Billing status', adminBadge(subscription?.billingStatus ?? 'free_beta')],
+      ['Provider', esc(subscription?.provider ?? 'none')],
+      ['Trial ends', adDate(subscription?.trialEndsAt ?? null)],
+      ['Renews', adDate(subscription?.renewsAt ?? null)],
+      ['Current period end', adDate(subscription?.currentPeriodEnd ?? null)],
+      ['Cancelled', adDate(subscription?.cancelledAt ?? null)],
+    ];
+    const body = `
+      <h2>${esc(customer.displayName ?? customer.email)}</h2>
+      <p class="adm-sub"><a href="/admin/customers">← All customers</a></p>
+      <div class="adm-cols">
+        <div><h2>Identity</h2>${adminKvPanel(identity)}</div>
+        <div><h2>Product usage</h2>${adminKvPanel(usage)}</div>
+      </div>
+      <h2>Health ${adminScore(customer.healthScore)} ${adminHealthBadge(customer.health, HEALTH_BAND_LABELS[customer.health])}</h2>
+      ${adminHealthBreakdown(health.factors, health.score)}
+      <h2>Subscription</h2>${adminKvPanel(billing)}
+      <p class="adm-note">CostFlow is free during beta, so every organization is on plan <code>beta</code> with no provider attached. The fields above map one-to-one onto Lemon Squeezy customer, subscription, and variant records, so integrating billing fills them in rather than reshaping the schema.</p>
+      <h2>Activity timeline</h2>${adminActivityList(timeline)}`;
+    return adminRespond(reply, gate.session, 'customers', `Customer ${customer.email}`, body);
+  });
+
+  // ---- Onboarding funnel ----
+  app.get('/admin/funnel', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const query = request.query as Record<string, string | undefined>;
+    const iso = (v: string | undefined): string | null =>
+      typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+    const from = iso(query['from']);
+    const to = iso(query['to']);
+    const nowIso = new Date(Date.now()).toISOString();
+    const report = await store.adminFunnel(
+      from ? `${from}T00:00:00.000Z` : null,
+      to ? `${to}T23:59:59.999Z` : null,
+      nowIso,
+    );
+    const first = report.steps[0];
+    const body = `
+      <h2>Onboarding funnel</h2>
+      <p class="adm-sub">Organizations reaching each step, for the signup cohort in the selected range. One unit throughout, so conversion is comparable across steps.</p>
+      <form class="adm-bar" method="get" action="/admin/funnel">
+        <label class="adm-mono">From <input type="date" name="from" value="${esc(from ?? '')}"></label>
+        <label class="adm-mono">To <input type="date" name="to" value="${esc(to ?? '')}"></label>
+        <button type="submit">Apply</button>
+        ${from || to ? '<a class="clr" href="/admin/funnel">Clear</a>' : ''}
+      </form>
+      ${adminFunnelTable(report.steps, {
+        conversion: (i) =>
+          first && report.steps[i] ? conversionPct(report.steps[i], first) : null,
+        dropOff: (i) =>
+          report.steps[i]
+            ? dropOffPct(report.steps[i], i > 0 ? report.steps[i - 1] : undefined)
+            : null,
+        duration: formatDuration,
+      })}
+      <p class="adm-note">Each step is measured independently rather than assuming it implies the ones above it, so a step can read higher than the one before it. That happens when a step is unknown rather than unreached: verified email is the identity provider's claim, and it is blank for accounts that signed in before CostFlow started storing it. Forcing the steps to descend would turn that unknown into a hard zero for every step below, which would be worse than the gap.</p>
+      <p class="adm-note">Steps marked <span class="adm-chip">state</span> are counted from current workspace state because they happened before the activity log existed, so their timing was never recorded. Timing fills in on its own for organizations onboarding from now on. Verified email is a fact rather than a moment, so it never reports a duration.</p>`;
+    return adminRespond(reply, gate.session, 'funnel', 'Funnel', body);
+  });
+
+  // ---- Activity feed ----
+  app.get('/admin/activity', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminActivityFeed(p);
+    const pages = Math.max(0, p.offset - p.limit);
+    const body = `
+      <h2>Activity</h2>
+      <p class="adm-sub">Everything that happened across every organization, newest first. ${pageData.total} events.</p>
+      ${adminFilterBar({
+        baseUrl: '/admin/activity',
+        ...(p.q ? { q: p.q } : {}),
+        searchPlaceholder: 'Search org, email, event type…',
+        selects: [
+          {
+            name: 'status',
+            label: 'event types',
+            ...(p.status ? { value: p.status } : {}),
+            options: EVENT_TYPES.map((t) => ({ value: t, label: t })),
+          },
+        ],
+      })}
+      ${adminActivityList(pageData.rows)}
+      <div class="adm-pg">
+        <span>${pageData.total === 0 ? 0 : p.offset + 1}–${Math.min(p.offset + p.limit, pageData.total)} of ${pageData.total}</span>
+        ${
+          p.offset > 0
+            ? `<a href="${adminQuery('/admin/activity', { ...adminQueryOf(p), offset: pages })}">← Prev</a>`
+            : '<span class="off">← Prev</span>'
+        }
+        ${
+          p.offset + p.limit < pageData.total
+            ? `<a href="${adminQuery('/admin/activity', { ...adminQueryOf(p), offset: p.offset + p.limit })}">Next →</a>`
+            : '<span class="off">Next →</span>'
+        }
+      </div>`;
+    return adminRespond(reply, gate.session, 'activity', 'Activity', body);
+  });
+
+  // ---- Monitoring workspaces ----
+  app.get('/admin/monitoring', async (request, reply) => {
+    const gate = await requireAdmin(request, reply);
+    if (!gate) return;
+    const p = adminListParams(request);
+    const pageData = await store.adminListMonitoringWorkspaces(p);
+    const cols: AdminColumn<AdminMonitoringWorkspaceRow>[] = [
+      { key: 'name', label: 'Workspace', render: (r) => esc(r.name ?? '(unnamed)') },
+      { key: '', label: 'Org', render: (r) => adTenantCell(r.tenantId) },
+      { key: 'provider', label: 'Integration', render: (r) => adminBadge(r.provider) },
+      { key: '', label: 'Scope', render: (r) => esc(r.scopeName ?? '—') },
+      { key: '', label: 'Stage', render: (r) => adminBadge(r.onboarding) },
+      { key: '', label: 'Members', align: 'right', render: (r) => String(r.members) },
+      { key: 'analyses', label: 'Analyses', align: 'right', render: (r) => String(r.analyses) },
+      { key: 'lastAnalysisAt', label: 'Last analysis', render: (r) => adDate(r.lastAnalysisAt) },
+      { key: '', label: 'Last sync', render: (r) => adDate(r.lastSyncAt) },
+    ];
+    const body = `
+      <h2>Monitoring workspaces</h2>
+      <p class="adm-sub">A monitoring workspace is a persistent operational view: its integration, scope, salary assumptions, members, and full run history.</p>
+      ${adminFilterBar({
+        baseUrl: '/admin/monitoring',
+        ...(p.q ? { q: p.q } : {}),
+        searchPlaceholder: 'Search name, integration, id…',
+        selects: [
+          {
+            name: 'status',
+            label: 'stages',
+            ...(p.status ? { value: p.status } : {}),
+            options: ONBOARDING_ORDER.map((s) => ({ value: s, label: s })),
+          },
+        ],
+      })}
+      ${adminTable<AdminMonitoringWorkspaceRow>({
+        columns: cols,
+        rows: pageData.rows,
+        baseUrl: '/admin/monitoring',
+        query: adminQueryOf(p),
+        ...(p.sort ? { sort: p.sort } : {}),
+        ...(p.dir ? { dir: p.dir } : {}),
+        total: pageData.total,
+        limit: p.limit,
+        offset: p.offset,
+        empty: 'No monitoring workspaces.',
+      })}`;
+    return adminRespond(reply, gate.session, 'monitoring', 'Monitoring', body);
   });
 
   // ---- System / diagnostics ----
@@ -968,21 +1382,55 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const back = `/admin/tenants/${encodeURIComponent(tenantId)}`;
     const csrf = gate.session.csrf;
     const small: AdminListParams = { limit: 25, offset: 0, tenantId };
-    const [users, workspaces, jobs, runs, invites, timeline] = await Promise.all([
+    const nowIso = new Date(Date.now()).toISOString();
+    const [users, workspaces, jobs, invites, activity, detail, monitoring] = await Promise.all([
       store.adminListUsers(small),
       store.adminListWorkspaces(small),
       store.adminListJobs(small),
-      store.adminListRuns(small),
       store.adminListInvitations(small),
-      store.adminTenantTimeline(tenantId, 40),
+      store.adminActivityFeed({ limit: 40, offset: 0, tenantId }),
+      store.adminOrgDetail(tenantId, nowIso, 30),
+      store.adminListMonitoringWorkspaces(small),
     ]);
+    const orgHealth = detail ? scoreCustomer(detail.signals) : null;
     const meta: [string, string][] = [
       ['Name', esc(tenant.name ?? '(unnamed)')],
       ['Id', `<span class="adm-mono">${esc(tenant.id)}</span>`],
       ['Created', adDate(tenant.createdAt)],
-      ['Users', String(users.total)],
-      ['Connections', String(workspaces.total)],
-      ['Runs', String(runs.total)],
+      ['Members', String(users.total)],
+      [
+        'Integrations',
+        (detail?.providers ?? []).length === 0
+          ? '—'
+          : (detail?.providers ?? [])
+              .map((x) => `<span class="adm-chip">${esc(x)}</span>`)
+              .join(''),
+      ],
+      [
+        'Monitoring workspaces',
+        `${detail?.readyWorkspaces ?? 0} ready of ${detail?.workspaces ?? 0}`,
+      ],
+      ['Analyses', `${detail?.analyses ?? 0} (${detail?.analyses30d ?? 0} in 30d)`],
+      ['Reports viewed', String(detail?.reportsViewed ?? 0)],
+      ['Last analysis', adDate(detail?.lastAnalysisAt ?? null)],
+      ['Last activity', adDate(detail?.lastActivityAt ?? null)],
+      [
+        'Engagement',
+        orgHealth
+          ? `${adminScore(orgHealth.score)} ${adminHealthBadge(orgHealth.band, HEALTH_BAND_LABELS[orgHealth.band])}`
+          : '—',
+      ],
+      ['Plan', adminBadge(detail?.subscription?.plan ?? 'beta')],
+      ['Billing status', adminBadge(detail?.subscription?.billingStatus ?? 'free_beta')],
+    ];
+    const monitoringCols: AdminColumn<AdminMonitoringWorkspaceRow>[] = [
+      { key: '', label: 'Workspace', render: (r) => esc(r.name ?? '(unnamed)') },
+      { key: '', label: 'Integration', render: (r) => adminBadge(r.provider) },
+      { key: '', label: 'Stage', render: (r) => adminBadge(r.onboarding) },
+      { key: '', label: 'Members', align: 'right', render: (r) => String(r.members) },
+      { key: '', label: 'Analyses', align: 'right', render: (r) => String(r.analyses) },
+      { key: '', label: 'Last analysis', render: (r) => adDate(r.lastAnalysisAt) },
+      { key: '', label: 'Last sync', render: (r) => adDate(r.lastSyncAt) },
     ];
     const userCols: AdminColumn<AdminUserRow>[] = [
       { key: '', label: 'Email', render: (r) => esc(r.email) },
@@ -1020,11 +1468,18 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       <h2>${esc(tenant.name ?? '(unnamed organization)')}</h2>
       <p class="adm-sub"><a href="/admin/tenants">← All organizations</a></p>
       ${adminKvPanel(meta)}
+      <h2>Analyses, last 30 days</h2>
+      ${adminBarChart(
+        (detail?.trend ?? []).map((d) => ({ date: d.date, value: d.analyses })),
+        'No analyses in the last 30 days.',
+      )}
+      ${orgHealth ? `<h2>Engagement breakdown</h2>${adminHealthBreakdown(orgHealth.factors, orgHealth.score)}` : ''}
       <h2>Members</h2>${adminTable<AdminUserRow>({ columns: userCols, rows: users.rows, ...noPage, total: users.total, limit: 25, offset: 0, empty: 'No members.' })}
+      <h2>Monitoring workspaces</h2>${adminTable<AdminMonitoringWorkspaceRow>({ columns: monitoringCols, rows: monitoring.rows, ...noPage, total: monitoring.total, limit: 25, offset: 0, empty: 'No monitoring workspaces.' })}
       <h2>Connections</h2>${adminTable<AdminWorkspaceRow>({ columns: wsCols, rows: workspaces.rows, ...noPage, total: workspaces.total, limit: 25, offset: 0, empty: 'No connections.' })}
       <h2>Imports</h2>${adminTable<AdminJobRow>({ columns: jobCols, rows: jobs.rows, ...noPage, total: jobs.total, limit: 25, offset: 0, empty: 'No import jobs.' })}
       <h2>Invitations</h2>${adminTable<AdminInvitationRow>({ columns: invCols, rows: invites.rows, ...noPage, total: invites.total, limit: 25, offset: 0, empty: 'No invitations.' })}
-      <h2>Activity timeline</h2>${adminTimeline(timeline)}`;
+      <h2>Activity timeline</h2>${adminActivityList(activity.rows)}`;
     return adminRespond(reply, gate.session, 'tenants', `Org ${tenant.name ?? tenantId}`, body);
   });
 
@@ -1552,13 +2007,11 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const providerId = String(body['provider'] ?? '');
     const connector = connectors.get(providerId);
     if (!connector) {
-      telemetry(
-        webEvent('tm-web-workspace-connected', {
-          provider: 'unknown',
-          ok: false,
-          errorClass: 'cli-error',
-        }),
-      );
+      track('tm-web-workspace-connected', at(session), {
+        provider: 'unknown',
+        ok: false,
+        errorClass: 'cli-error',
+      });
       return reply.redirect('/connect?picker=1');
     }
     const provider = connector.descriptor.id;
@@ -1571,9 +2024,11 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       return values;
     };
     if (!parsed.ok) {
-      telemetry(
-        webEvent('tm-web-workspace-connected', { provider, ok: false, errorClass: 'cli-error' }),
-      );
+      track('tm-web-workspace-connected', at(session), {
+        provider,
+        ok: false,
+        errorClass: 'cli-error',
+      });
       return reply
         .code(400)
         .type('text/html')
@@ -1583,7 +2038,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       await connector.gateway.listScopes({ params: parsed.params, secret: parsed.secret });
     } catch (error) {
       const errorClass = error instanceof GatewayError ? error.errorClass : 'unexpected';
-      telemetry(webEvent('tm-web-workspace-connected', { provider, ok: false, errorClass }));
+      track('tm-web-workspace-connected', at(session), { provider, ok: false, errorClass });
       // Shape only (class + optional HTTP status) — the raw gateway message is
       // never echoed, matching the /scope import-error policy.
       const status = error instanceof GatewayError && error.status ? `, HTTP ${error.status}` : '';
@@ -1599,6 +2054,9 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     }
     const tokenCiphertext = encryptSecret(parsed.secret, auth.credentialKey);
     const existing = await soleWorkspace(session);
+    // Which Monitoring Workspace this connection landed on, so the activity
+    // event names its subject rather than just its organization.
+    let connectedWorkspaceId: string | null = existing?.id ?? null;
     if (existing && existing.provider === provider) {
       // Same platform: refresh credentials, keep scope/mapping/assumptions.
       await store.updateWorkspace(session.tenantId, existing.id, {
@@ -1622,13 +2080,18 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         onboarding: 'connected',
       });
     } else {
-      await store.createWorkspace(session.tenantId, {
+      const created = await store.createWorkspace(session.tenantId, {
         provider,
         connectionParams: parsed.params,
         tokenCiphertext,
       });
+      connectedWorkspaceId = created.id;
     }
-    telemetry(webEvent('tm-web-workspace-connected', { provider, ok: true, errorClass: null }));
+    track('tm-web-workspace-connected', at(session, connectedWorkspaceId), {
+      provider,
+      ok: true,
+      errorClass: null,
+    });
     return reply.redirect('/scope');
   });
 
@@ -1765,7 +2228,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           ? workspace.onboarding
           : 'scope-selected',
     });
-    telemetry(webEvent('tm-web-scope-selected', { provider: d.id }));
+    track('tm-web-scope-selected', at(session, workspace.id), { provider: d.id });
     return reply.redirect('/mapping/statuses');
   });
 
@@ -1843,12 +2306,10 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           ? workspace.onboarding
           : 'statuses-mapped',
     });
-    telemetry(
-      webEvent('tm-web-statuses-mapped', {
-        mapped: Object.keys(statusMap).length,
-        droppedCandidates: workspace.observedStatuses.length - Object.keys(statusMap).length,
-      }),
-    );
+    track('tm-web-statuses-mapped', at(session, workspace.id), {
+      mapped: Object.keys(statusMap).length,
+      droppedCandidates: workspace.observedStatuses.length - Object.keys(statusMap).length,
+    });
     return reply.redirect('/mapping/actors');
   });
 
@@ -1905,12 +2366,10 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           ? workspace.onboarding
           : 'actors-mapped',
     });
-    telemetry(
-      webEvent('tm-web-actors-mapped', {
-        mappedToRoles: Object.keys(actorRoleMap).length,
-        unmapped: workspace.observedActors.length - Object.keys(actorRoleMap).length,
-      }),
-    );
+    track('tm-web-actors-mapped', at(session, workspace.id), {
+      mappedToRoles: Object.keys(actorRoleMap).length,
+      unmapped: workspace.observedActors.length - Object.keys(actorRoleMap).length,
+    });
     return reply.redirect('/assumptions');
   });
 
@@ -2189,13 +2648,11 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           : 'assumptions-set',
     });
     const counts = countProvenance(next);
-    telemetry(
-      webEvent('tm-web-assumptions-confirmed', {
-        accepted: counts['customer-accepted'],
-        customized: counts['customer-customized'],
-        vendorRemaining: counts['vendor-suggested'],
-      }),
-    );
+    track('tm-web-assumptions-confirmed', at(session, workspace.id), {
+      accepted: counts['customer-accepted'],
+      customized: counts['customer-customized'],
+      vendorRemaining: counts['vendor-suggested'],
+    });
     return reply.redirect('/dashboard');
   });
 
@@ -2215,26 +2672,28 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     );
     if (active) return reply.redirect(`/jobs/${active.id}`);
     const job = await store.createJob(session.tenantId, workspace.id);
+    // Recorded at the start, not just on completion: an analysis that never
+    // finishes is exactly the thing an operator needs to be able to see.
+    recordEvent('analysis.started', at(session, workspace.id), { provider: workspace.provider });
     const startedMs = Date.now();
     const execution = executeJob(
       {
         store,
         connectors,
         credentialKey: auth.credentialKey,
+        record: recordEvent,
         ...(deps.jobNowFn ? { nowFn: deps.jobNowFn } : {}),
       },
       session.tenantId,
       job.id,
     ).then(async () => {
       const finished = await store.getJob(session.tenantId, job.id);
-      telemetry(
-        webEvent('tm-web-run', {
-          provider: workspace.provider,
-          ok: finished?.status === 'succeeded',
-          errorClass: finished?.errorClass ?? null,
-          durationMs: Date.now() - startedMs,
-        }),
-      );
+      track('tm-web-run', at(session, workspace.id), {
+        provider: workspace.provider,
+        ok: finished?.status === 'succeeded',
+        errorClass: finished?.errorClass ?? null,
+        durationMs: Date.now() - startedMs,
+      });
     });
     if (deps.awaitJobs === true) {
       await execution;
@@ -2351,16 +2810,20 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     return false;
   };
 
-  // The immediately-older run for the same workspace (for the trend section).
+  // The immediately-older run for the same Monitoring Workspace (trend section).
+  // Reads the workspace's ordered history first and fetches exactly one
+  // artifact: the alternative walks every run the org has ever produced with
+  // its run.json, report.md, and telemetry attached, to end up parsing one.
   const previousRunFor = async (
     session: Session,
     record: RunRecord,
   ): Promise<AnalysisRun | null> => {
-    const runs = await store.listRuns(session.tenantId); // newest first
-    const sameWorkspace = runs.filter((r) => r.workspaceId === record.workspaceId);
-    const index = sameWorkspace.findIndex((r) => r.id === record.id);
-    const older = index >= 0 ? sameWorkspace[index + 1] : undefined;
-    return older ? parseRun(older.runJson) : null;
+    const history = await store.listWorkspaceRunHeaders(session.tenantId, record.workspaceId); // newest first
+    const index = history.findIndex((r) => r.id === record.id);
+    const older = index >= 0 ? history[index + 1] : undefined;
+    if (!older) return null;
+    const previous = await store.getRun(session.tenantId, older.id);
+    return previous ? parseRun(previous.runJson) : null;
   };
 
   // Primary: the structured, explorable report view (P5) built from run.json.
@@ -2386,7 +2849,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     if (!attributionOk(body, loaded.workspace, session, reply)) return;
     const nowIso = new Date(Date.now()).toISOString();
     const firstView = await store.markRunViewed(session.tenantId, runId, nowIso);
-    telemetry(webEvent('tm-web-report-viewed', { firstView }));
+    track('tm-web-report-viewed', at(session, loaded.workspace?.id ?? null), { firstView });
     return reply.type('text/html').send(page(session, title, body));
   });
 
@@ -2438,7 +2901,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       .map(
         (w) =>
           `<div class="danger">
-             <h3>${esc(w.scopeName ?? 'Unconfigured workspace')} (${esc(w.scopeId ?? w.provider)})</h3>
+             <h3>${esc(w.name ?? w.scopeName ?? 'Unconfigured workspace')} (${esc(w.scopeId ?? w.provider)})</h3>
              <p class="note">${esc(connectors.get(w.provider)?.describeConnection(w.connectionParams) ?? w.provider)}. Deleting removes this workspace and every run and job derived from it. This cannot be undone.</p>
              <form method="post" action="/workspaces/${esc(w.id)}/delete">${csrfField(session)}
                <label>Type <strong>${DELETE_WORKSPACE_PHRASE}</strong> to confirm <input name="confirm" autocomplete="off" required></label>
@@ -2453,6 +2916,24 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const cfgConnector = cfg ? connectors.get(cfg.provider) : undefined;
     const configCard = (title: string, summary: string, href: string, cta: string): string =>
       `<div class="card"><h3 style="margin-bottom:.3rem">${title}</h3><p class="note" style="margin:0 0 .7rem">${summary}</p><a href="${href}">${cta} →</a></div>`;
+    // A monitoring workspace is a persistent operational view of part of the
+    // organization. Naming it is what makes it one: "Engineering" rather than
+    // "the Jira connection".
+    const nameCard = cfg
+      ? `<h2 style="margin-top:.4rem">Monitoring workspace</h2>
+         <p class="note" style="margin:0 0 .8rem">Name this workspace after the part of the
+         organization it tracks, so its history reads as one continuous view over time.</p>
+         ${
+           (request.query as { done?: string }).done === 'named'
+             ? '<div class="info" role="status">Workspace name saved.</div>'
+             : ''
+         }
+         <form method="post" action="/workspaces/${esc(cfg.id)}/name" style="margin:0 0 2rem">
+           ${csrfField(session)}
+           <label>Name <input name="name" maxlength="60" placeholder="Engineering" value="${esc(cfg.name ?? '')}"></label>
+           <button type="submit">Save name</button>
+         </form>`
+      : '';
     const configCards = cfg
       ? `<h2 style="margin-top:.4rem">Workspace configuration</h2>
          <div class="grid grid-3" style="margin:0 0 2.2rem">
@@ -2470,6 +2951,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         'Settings',
         `<p class="eyebrow">Settings</p>
          <h1 style="margin-top:.6rem">Settings</h1>
+         ${nameCard}
          ${configCards}
          <h2>Data &amp; privacy</h2>
          <p class="lead">You control your data. Deleting is permanent and cascades to every
@@ -2498,6 +2980,34 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     );
   });
 
+  app.post('/workspaces/:workspaceId/name', async (request, reply) => {
+    const session = requireSession(request, reply);
+    if (!session) return;
+    if (!checkCsrf(request, session, reply)) return;
+    const workspaceId = (request.params as { workspaceId: string }).workspaceId;
+    const workspace = await store.getWorkspace(session.tenantId, workspaceId);
+    if (!workspace) return notFound(reply);
+    const raw = String((request.body as { name?: string }).name ?? '').trim();
+    if (raw.length > 60) {
+      return reply
+        .code(400)
+        .type('text/html')
+        .send(
+          page(
+            session,
+            'Settings',
+            '<p class="error">A workspace name can be at most 60 characters. <a href="/settings">Back</a></p>',
+          ),
+        );
+    }
+    // An emptied field clears the name rather than storing '', so the display
+    // falls back to the scope name instead of rendering a blank heading.
+    const name = raw === '' ? null : raw;
+    await store.updateWorkspace(session.tenantId, workspaceId, { name });
+    track('tm-web-workspace-named', at(session, workspaceId), { named: name !== null });
+    return reply.redirect('/settings?done=named');
+  });
+
   app.post('/workspaces/:workspaceId/delete', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
@@ -2518,7 +3028,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     }
     const summary = await store.deleteWorkspace(session.tenantId, workspaceId);
     if (!summary) return notFound(reply);
-    telemetry(webEvent('tm-web-data-deleted', { scope: 'workspace', cascadedRuns: summary.runs }));
+    track('tm-web-data-deleted', at(session), { scope: 'workspace', cascadedRuns: summary.runs });
     return reply.redirect('/settings?done=workspace');
   });
 
@@ -2554,7 +3064,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         );
     }
     const summary = await store.deleteTenantData(session.tenantId);
-    telemetry(webEvent('tm-web-data-deleted', { scope: 'org', cascadedRuns: summary.runs }));
+    track('tm-web-data-deleted', null, { scope: 'org', cascadedRuns: summary.runs });
     // The tenant and user rows are gone; the signed session cookie now points
     // at nothing. Clear it so no dangling session survives, then land on the
     // public post-logout page (local session only — no IdP round-trip here).
@@ -2778,7 +3288,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       );
     }
     await store.updateTenantName(session.tenantId, name);
-    telemetry(webEvent('tm-web-org-renamed', {}));
+    track('tm-web-org-renamed', at(session), {});
     return reply.redirect('/org?done=renamed');
   });
 
@@ -2806,7 +3316,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       token,
       invitedBy: session.userId,
     });
-    telemetry(webEvent('tm-web-member-invited', { role }));
+    track('tm-web-member-invited', at(session), { role });
     return reply.redirect('/org?done=invited');
   });
 
@@ -2817,7 +3327,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const id = (request.params as { id: string }).id;
     const updated = await store.updateInvitationStatus(session.tenantId, id, 'revoked', null);
     if (!updated) return notFound(reply);
-    telemetry(webEvent('tm-web-invite-revoked', {}));
+    track('tm-web-invite-revoked', at(session), {});
     return reply.redirect('/org?done=revoked');
   });
 
@@ -2844,7 +3354,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       return orgBadRequest(session, reply, 'The organization must always have at least one owner.');
     }
     await store.updateUserRole(session.tenantId, targetId, newRole);
-    telemetry(webEvent('tm-web-member-role-changed', { role: newRole }));
+    track('tm-web-member-role-changed', at(session), { role: newRole });
     return reply.redirect('/org?done=role');
   });
 
@@ -2866,7 +3376,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       return orgBadRequest(session, reply, 'The organization must always have at least one owner.');
     }
     await store.removeUser(session.tenantId, targetId);
-    telemetry(webEvent('tm-web-member-removed', {}));
+    track('tm-web-member-removed', at(session), {});
     return reply.redirect('/org?done=removed');
   });
 
@@ -2881,7 +3391,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const member = await store.getUser(session.tenantId, userId);
     if (!member) return orgBadRequest(session, reply, 'Unknown member.');
     await store.addWorkspaceMember(session.tenantId, workspaceId, userId);
-    telemetry(webEvent('tm-web-workspace-member-added', {}));
+    track('tm-web-workspace-member-added', at(session, workspaceId), {});
     return reply.redirect('/org?done=granted');
   });
 
@@ -2893,7 +3403,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const workspace = await store.getWorkspace(session.tenantId, workspaceId);
     if (!workspace) return notFound(reply);
     await store.removeWorkspaceMember(session.tenantId, workspaceId, userId);
-    telemetry(webEvent('tm-web-workspace-member-removed', {}));
+    track('tm-web-workspace-member-removed', at(session, workspaceId), {});
     return reply.redirect('/org?done=ungranted');
   });
 

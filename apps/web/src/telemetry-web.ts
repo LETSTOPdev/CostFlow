@@ -13,6 +13,7 @@ import { serializeTelemetry } from '@costflow/telemetry';
 export type WebTelemetryEventName =
   | 'tm-web-signin'
   | 'tm-web-workspace-connected'
+  | 'tm-web-workspace-named'
   | 'tm-web-scope-selected'
   | 'tm-web-statuses-mapped'
   | 'tm-web-actors-mapped'

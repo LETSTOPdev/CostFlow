@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { decryptSecret, encryptSecret, newId, newSalt, signValue, verifyValue } from './crypto';
 import { esc, layout } from './html';
-import type { OrgRole, Store } from './store/contract';
+import { authProviderFromSub } from './events';
+import type { IdentityObservation, OrgRole, Store } from './store/contract';
 
 /**
  * Authentication (doc 09 P4.1 plan §1). CostFlow never stores passwords.
@@ -231,7 +232,7 @@ export function registerAuthRoutes(
   app: FastifyInstance,
   config: AuthConfig,
   store: Store,
-  onSignIn: (ok: boolean) => void,
+  onSignIn: (ok: boolean, session?: Session) => void,
   log: (line: Record<string, unknown>) => void,
   onInviteAccepted?: (role: OrgRole) => void,
 ): void {
@@ -257,6 +258,7 @@ export function registerAuthRoutes(
     request: FastifyRequest,
     reply: FastifyReply,
     email: string,
+    observation: IdentityObservation = {},
   ): Promise<void> => {
     const { session, acceptedRole } = await signInWithOptionalInvite(
       store,
@@ -266,7 +268,19 @@ export function registerAuthRoutes(
     );
     setSession(reply, session, config.sessionKey, config.secureCookies === true);
     clearInvite(reply);
-    onSignIn(true);
+    // Identity attributes as the IdP reported them, plus the sign-in count and
+    // last-seen this observation establishes. Failure-contained: analytics must
+    // never be the reason someone cannot sign in.
+    try {
+      await store.recordSignIn(session.userId, observation, new Date(Date.now()).toISOString());
+    } catch (error) {
+      log({
+        level: 'warn',
+        msg: 'identity-not-recorded',
+        error: error instanceof Error ? error.name : 'UnknownError',
+      });
+    }
+    onSignIn(true, session);
     if (acceptedRole && onInviteAccepted) onInviteAccepted(acceptedRole);
   };
 
@@ -324,7 +338,7 @@ export function registerAuthRoutes(
       `${discovery.authorization_endpoint}?response_type=code` +
       `&client_id=${encodeURIComponent(oidc.clientId)}` +
       `&redirect_uri=${encodeURIComponent(oidc.redirectUri)}` +
-      `&scope=${encodeURIComponent('openid email')}&state=${state}` +
+      `&scope=${encodeURIComponent('openid email profile')}&state=${state}` +
       (screenHint ? `&screen_hint=${screenHint}` : '');
     return reply.redirect(url);
   };
@@ -435,13 +449,31 @@ export function registerAuthRoutes(
       onSignIn(false);
       return idpFailure();
     }
-    const userinfo = (await userinfoResponse.json()) as { email?: string };
+    const userinfo = (await userinfoResponse.json()) as {
+      email?: string;
+      email_verified?: boolean;
+      name?: string;
+      sub?: string;
+    };
     const email = (userinfo.email ?? '').trim().toLowerCase();
     if (!email) {
       onSignIn(false);
       return reply.code(502).send('Identity provider returned no email.');
     }
-    await completeSignIn(request, reply, email);
+    // Only claims the IdP actually sent. An absent claim stays absent rather
+    // than being defaulted, so "unknown" and "false" never get conflated.
+    const observation: IdentityObservation = {
+      ...(typeof userinfo.email_verified === 'boolean'
+        ? { emailVerified: userinfo.email_verified }
+        : {}),
+      ...(typeof userinfo.name === 'string' && userinfo.name.trim() !== ''
+        ? { displayName: userinfo.name.trim().slice(0, 120) }
+        : {}),
+      ...(authProviderFromSub(userinfo.sub)
+        ? { authProvider: authProviderFromSub(userinfo.sub) as string }
+        : {}),
+    };
+    await completeSignIn(request, reply, email, observation);
     // Retain the id_token for RP-initiated logout (id_token_hint), so a later
     // sign-out terminates this exact Auth0 SSO session (defect D-19). Stored in
     // its own Path=/logout encrypted cookie, never in the session cookie.

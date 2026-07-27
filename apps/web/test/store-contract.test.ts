@@ -51,6 +51,94 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
       expect(await store.getRun(a.id, 'run-1')).not.toBeNull();
     });
 
+    /**
+     * The ordered run history of a Monitoring Workspace. This is the primitive
+     * run comparison and trend series are built on, so the contract pins the
+     * properties those features depend on: workspace-scoped, tenant-scoped,
+     * newest first, and artifact-free.
+     */
+    it('lists a workspace run history newest first, scoped and without artifacts', async () => {
+      const store = await makeStore();
+      const a = (await store.createTenantWithUser('hist-a@y.example', 'sa')).tenant;
+      const b = (await store.createTenantWithUser('hist-b@y.example', 'sb')).tenant;
+      const params = {
+        provider: 'jira' as const,
+        connectionParams: { site: 'https://h.example', email: 'hist-a@y.example' },
+        tokenCiphertext: 'tok',
+      };
+      const engineering = await store.createWorkspace(a.id, params);
+      const marketing = await store.createWorkspace(a.id, params);
+      const run = (id: string, workspaceId: string, createdAt: string): Promise<void> =>
+        store.createRun({
+          id,
+          tenantId: a.id,
+          workspaceId,
+          createdAt,
+          runJson: '{"runId":"x"}',
+          reportMd: '# r',
+          telemetryJsonl: '',
+        });
+      await run('h-1', engineering.id, '2026-01-01T00:00:00Z');
+      await run('h-2', engineering.id, '2026-03-01T00:00:00Z');
+      await run('h-3', engineering.id, '2026-02-01T00:00:00Z');
+      await run('m-1', marketing.id, '2026-04-01T00:00:00Z');
+
+      const history = await store.listWorkspaceRunHeaders(a.id, engineering.id);
+      expect(history.map((r) => r.id)).toEqual(['h-2', 'h-3', 'h-1']);
+      // Artifacts are excluded: the point of the header is that a trend series
+      // over years of analyses does not drag every run.json along with it.
+      expect(Object.keys(history[0]!).sort()).toEqual([
+        'createdAt',
+        'id',
+        'viewedAt',
+        'workspaceId',
+      ]);
+      // Scoped both ways: one workspace's history, and only within the tenant.
+      expect((await store.listWorkspaceRunHeaders(a.id, marketing.id)).map((r) => r.id)).toEqual([
+        'm-1',
+      ]);
+      expect(await store.listWorkspaceRunHeaders(b.id, engineering.id)).toEqual([]);
+
+      await store.markRunViewed(a.id, 'h-2', '2026-03-02T00:00:00Z');
+      const viewed = await store.listWorkspaceRunHeaders(a.id, engineering.id);
+      expect(viewed[0]?.viewedAt).not.toBeNull();
+      expect(viewed[1]?.viewedAt).toBeNull();
+    });
+
+    /**
+     * The events table is the canonical analytics spine, so introducing a new
+     * event type must never require a schema change. This asserts the property
+     * an operator actually depends on: a type the code has never heard of is
+     * stored, counted, listed, and filterable exactly like a known one.
+     */
+    it('accepts, counts, and filters an event type it has never seen before', async () => {
+      const store = await makeStore();
+      const { tenant, user } = await store.createTenantWithUser('spine@y.example', 's');
+      await store.recordEvent({
+        tenantId: tenant.id,
+        userId: user.id,
+        workspaceId: null,
+        type: 'billing.subscription-created',
+        fields: { plan: 'team', seats: 12 },
+      });
+      const page = await store.adminActivityFeed({
+        limit: 50,
+        offset: 0,
+        tenantId: tenant.id,
+        status: 'billing.subscription-created',
+      });
+      expect(page.total).toBe(1);
+      expect(page.rows[0]).toMatchObject({
+        type: 'billing.subscription-created',
+        userEmail: 'spine@y.example',
+        fields: { plan: 'team', seats: 12 },
+      });
+      // And it does not disturb the known vocabulary around it.
+      const all = await store.adminActivityFeed({ limit: 50, offset: 0, tenantId: tenant.id });
+      expect(all.rows.some((r) => r.type === 'org.created')).toBe(true);
+      expect(all.total).toBeGreaterThan(1);
+    });
+
     it('persists workspace configuration patches', async () => {
       const store = await makeStore();
       const { tenant } = await store.createTenantWithUser('c@y.example', 's');

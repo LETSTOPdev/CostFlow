@@ -185,10 +185,15 @@ describe('v1 founder admin page', () => {
       payload: 'email=founder@fbx1.com',
     });
     const cookie = cookieOf(login, 'cf_session');
-    const res = await t.app.inject({ method: 'GET', url: '/admin', headers: { cookie } });
+    // P4.5 moved the funnel off the overview onto its own page, where it gained
+    // per-step conversion, drop-off, and time-to-next-step.
+    const res = await t.app.inject({ method: 'GET', url: '/admin/funnel', headers: { cookie } });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Activation funnel');
+    expect(res.body).toContain('Onboarding funnel');
     expect(res.body).toContain('Signed up');
+    const overview = await t.app.inject({ method: 'GET', url: '/admin', headers: { cookie } });
+    expect(overview.statusCode).toBe(200);
+    expect(overview.body).toContain('Growth');
   });
 
   it('404s a non-admin authenticated user (no disclosure)', async () => {

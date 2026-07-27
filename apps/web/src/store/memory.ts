@@ -1,8 +1,17 @@
 import { newId } from '../crypto';
+import { buildFunnel, type TenantFunnelRow } from '../funnel';
+import { lastActivityOf, matchesCustomerFilter, scoreCustomer } from '../health';
+import { onboardingRank, UNKNOWN_IDENTITY } from './contract';
 import type {
+  AdminActivityRow,
   AdminAuditEntry,
   AdminAuditRow,
   AdminCounts,
+  AdminCustomerParams,
+  AdminCustomerRow,
+  AdminDashboard,
+  AdminMonitoringWorkspaceRow,
+  AdminOrgDetail,
   AdminInvitationRow,
   AdminJobRow,
   AdminListParams,
@@ -10,16 +19,22 @@ import type {
   AdminRunRow,
   AdminSearchHit,
   AdminTenantRow,
-  AdminTimelineEvent,
   AdminUserRow,
   AdminWorkspaceRow,
+  CustomerSignals,
   DeletionSummary,
+  EventInput,
+  EventRecord,
+  FunnelReport,
   FunnelStats,
+  IdentityObservation,
   InvitationRecord,
   JobRecord,
   OrgRole,
+  RunHeader,
   RunRecord,
   Store,
+  SubscriptionRecord,
   TenantRecord,
   UserRecord,
   WorkspacePatch,
@@ -68,6 +83,8 @@ export class MemoryStore implements Store {
   private invitations = new Map<string, InvitationRecord>();
   private workspaceMembers = new Map<string, WorkspaceMember>();
   private adminAudit: AdminAuditRow[] = [];
+  private events: EventRecord[] = [];
+  private subscriptions = new Map<string, SubscriptionRecord>();
 
   private now(): string {
     return new Date(Date.now()).toISOString();
@@ -87,15 +104,38 @@ export class MemoryStore implements Store {
       saltCiphertext,
       createdAt: this.now(),
     };
+    const createdAt = this.now();
     const user: UserRecord = {
       id: newId(),
       tenantId: tenant.id,
       email,
       role: 'owner',
-      createdAt: this.now(),
+      createdAt,
+      identity: UNKNOWN_IDENTITY,
     };
     this.tenants.set(tenant.id, tenant);
     this.users.set(user.id, user);
+    this.subscriptions.set(tenant.id, this.newSubscription(tenant.id, tenant.createdAt));
+    this.events.push(
+      {
+        id: newId(),
+        tenantId: tenant.id,
+        userId: null,
+        workspaceId: null,
+        type: 'org.created',
+        at: tenant.createdAt,
+        fields: {},
+      },
+      {
+        id: newId(),
+        tenantId: tenant.id,
+        userId: user.id,
+        workspaceId: null,
+        type: 'user.created',
+        at: createdAt,
+        fields: { role: user.role },
+      },
+    );
     return { tenant, user };
   }
 
@@ -127,12 +167,14 @@ export class MemoryStore implements Store {
   }
 
   async createUserInTenant(tenantId: string, email: string, role: OrgRole): Promise<UserRecord> {
+    const createdAt = this.now();
     const user: UserRecord = {
       id: newId(),
       tenantId,
       email,
       role,
-      createdAt: this.now(),
+      createdAt,
+      identity: UNKNOWN_IDENTITY,
     };
     this.users.set(user.id, user);
     return user;
@@ -242,6 +284,7 @@ export class MemoryStore implements Store {
     const workspace: WorkspaceRecord = {
       id: newId(),
       tenantId,
+      name: null,
       provider: data.provider,
       connectionParams: data.connectionParams,
       tokenCiphertext: data.tokenCiphertext,
@@ -336,6 +379,17 @@ export class MemoryStore implements Store {
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id));
   }
 
+  async listWorkspaceRunHeaders(tenantId: string, workspaceId: string): Promise<RunHeader[]> {
+    return (await this.listRuns(tenantId))
+      .filter((r) => r.workspaceId === workspaceId)
+      .map((r) => ({
+        id: r.id,
+        workspaceId: r.workspaceId,
+        createdAt: r.createdAt,
+        viewedAt: this.runViews.get(`${r.tenantId}:${r.id}`) ?? null,
+      }));
+  }
+
   async markRunViewed(tenantId: string, runId: string, nowIso: string): Promise<boolean> {
     const key = `${tenantId}:${runId}`;
     if (!this.runs.has(key) || this.runViews.has(key)) return false;
@@ -371,6 +425,10 @@ export class MemoryStore implements Store {
   }
 
   async deleteTenantData(tenantId: string): Promise<DeletionSummary> {
+    // Erasure reaches the activity spine and billing state too (FR-22): an
+    // event log that outlived the tenant it describes would defeat the point.
+    this.events = this.events.filter((e) => e.tenantId !== tenantId);
+    this.subscriptions.delete(tenantId);
     let workspaces = 0;
     for (const [id, workspace] of this.workspaces) {
       if (workspace.tenantId === tenantId) {
@@ -607,41 +665,6 @@ export class MemoryStore implements Store {
     );
   }
 
-  async adminTenantTimeline(tenantId: string, limit: number): Promise<AdminTimelineEvent[]> {
-    const events: AdminTimelineEvent[] = [];
-    const tenant = this.tenants.get(tenantId);
-    if (tenant)
-      events.push({ at: tenant.createdAt, kind: 'tenant', summary: 'Organization created' });
-    for (const u of this.users.values())
-      if (u.tenantId === tenantId)
-        events.push({ at: u.createdAt, kind: 'user', summary: `Member joined (${u.role})` });
-    for (const w of this.workspaces.values())
-      if (w.tenantId === tenantId)
-        events.push({
-          at: w.createdAt,
-          kind: 'workspace',
-          summary: `Connected ${w.provider}${w.scopeName ? ` — ${w.scopeName}` : ''}`,
-        });
-    for (const j of this.jobs.values())
-      if (j.tenantId === tenantId)
-        events.push({
-          at: j.finishedAt ?? j.createdAt,
-          kind: 'job',
-          summary: `Import ${j.status}${j.errorClass ? ` (${j.errorClass})` : ''}`,
-        });
-    for (const r of this.runs.values())
-      if (r.tenantId === tenantId)
-        events.push({ at: r.createdAt, kind: 'run', summary: 'Analysis run completed' });
-    for (const i of this.invitations.values())
-      if (i.tenantId === tenantId)
-        events.push({
-          at: i.createdAt,
-          kind: 'invitation',
-          summary: `Invited ${i.email} (${i.status})`,
-        });
-    return events.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0)).slice(0, limit);
-  }
-
   async adminSearch(q: string, limit: number): Promise<AdminSearchHit[]> {
     const needle = q.trim().toLowerCase();
     if (needle === '') return [];
@@ -703,6 +726,500 @@ export class MemoryStore implements Store {
         (a.targetId ?? '').toLowerCase().includes(q),
     );
     return pageOf(rows, params, { at: (r) => r.at, action: (r) => r.action }, 'at');
+  }
+
+  // -------- Customer database & activity spine (P4.5; cross-tenant) --------
+
+  private newSubscription(tenantId: string, at: string): SubscriptionRecord {
+    return {
+      tenantId,
+      plan: 'beta',
+      billingStatus: 'free_beta',
+      provider: 'none',
+      providerCustomerId: null,
+      providerSubscriptionId: null,
+      providerVariantId: null,
+      trialEndsAt: null,
+      renewsAt: null,
+      currentPeriodEnd: null,
+      cancelledAt: null,
+      endsAt: null,
+      createdAt: at,
+      updatedAt: at,
+    };
+  }
+
+  async recordEvent(event: EventInput): Promise<void> {
+    this.events.push({ ...event, id: newId(), at: this.now() });
+  }
+
+  async recordSignIn(
+    userId: string,
+    observation: IdentityObservation,
+    nowIso: string,
+  ): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    this.users.set(userId, {
+      ...user,
+      identity: {
+        // An omitted claim means "not reported this time", never "changed".
+        emailVerified: observation.emailVerified ?? user.identity.emailVerified,
+        authProvider: observation.authProvider ?? user.identity.authProvider,
+        displayName: observation.displayName ?? user.identity.displayName,
+        firstSeenAt: user.identity.firstSeenAt ?? nowIso,
+        lastSeenAt: nowIso,
+        signInCount: user.identity.signInCount + 1,
+      },
+    });
+  }
+
+  async touchLastSeen(userId: string, nowIso: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (!user) return;
+    this.users.set(userId, { ...user, identity: { ...user.identity, lastSeenAt: nowIso } });
+  }
+
+  async getSubscription(tenantId: string): Promise<SubscriptionRecord | null> {
+    return this.subscriptions.get(tenantId) ?? null;
+  }
+
+  async ensureSubscription(tenantId: string, nowIso: string): Promise<SubscriptionRecord> {
+    const existing = this.subscriptions.get(tenantId);
+    if (existing) return existing;
+    const created = this.newSubscription(tenantId, nowIso);
+    this.subscriptions.set(tenantId, created);
+    return created;
+  }
+
+  /** Organization-level usage signals, measured the same way as PgStore. */
+  private orgSignals(
+    tenantId: string,
+    nowIso: string,
+  ): Omit<CustomerSignals, 'createdAt' | 'lastSeenAt' | 'signInCount'> {
+    const since30d = new Date(Date.parse(nowIso) - 30 * 86_400_000).toISOString();
+    const workspaces = [...this.workspaces.values()].filter((w) => w.tenantId === tenantId);
+    const runs = [...this.runs.values()].filter((r) => r.tenantId === tenantId);
+    const ranks = workspaces.map((w) => onboardingRank(w.onboarding));
+    return {
+      nowIso,
+      workspaces: workspaces.length,
+      readyWorkspaces: workspaces.filter((w) => w.onboarding === 'ready').length,
+      analyses: runs.length,
+      analyses30d: runs.filter((r) => r.createdAt >= since30d).length,
+      lastAnalysisAt: runs.reduce<string | null>(
+        (best, r) => (best === null || r.createdAt > best ? r.createdAt : best),
+        null,
+      ),
+      reportsViewed: runs.filter((r) => this.runViews.has(`${r.tenantId}:${r.id}`)).length,
+      onboardingRank: ranks.length > 0 ? Math.max(...ranks) : -1,
+      returned: false,
+    };
+  }
+
+  private customerOf(user: UserRecord, nowIso: string): AdminCustomerRow {
+    const org = this.orgSignals(user.tenantId, nowIso);
+    const first = user.identity.firstSeenAt;
+    const returned =
+      first !== null &&
+      this.events.some(
+        (e) =>
+          e.userId === user.id &&
+          e.type === 'session.started' &&
+          Date.parse(e.at) > Date.parse(first) + 86_400_000,
+      );
+    const signals: CustomerSignals = {
+      ...org,
+      createdAt: user.createdAt,
+      lastSeenAt: user.identity.lastSeenAt,
+      signInCount: user.identity.signInCount,
+      returned,
+    };
+    const health = scoreCustomer(signals);
+    const subscription = this.subscriptions.get(user.tenantId);
+    const providers = [
+      ...new Set(
+        [...this.workspaces.values()]
+          .filter((w) => w.tenantId === user.tenantId)
+          .map((w) => w.provider),
+      ),
+    ].sort();
+    return {
+      userId: user.id,
+      tenantId: user.tenantId,
+      email: user.email,
+      displayName: user.identity.displayName,
+      orgName: this.tenants.get(user.tenantId)?.name ?? null,
+      role: user.role,
+      createdAt: user.createdAt,
+      identity: user.identity,
+      workspaces: signals.workspaces,
+      readyWorkspaces: signals.readyWorkspaces,
+      providers,
+      analyses: signals.analyses,
+      analyses30d: signals.analyses30d,
+      lastAnalysisAt: signals.lastAnalysisAt,
+      reportsViewed: signals.reportsViewed,
+      lastActivityAt: lastActivityOf(signals),
+      plan: subscription?.plan ?? 'beta',
+      billingStatus: subscription?.billingStatus ?? 'free_beta',
+      status: health.status,
+      health: health.band,
+      healthScore: health.score,
+      signals,
+    };
+  }
+
+  async adminListCustomers(params: AdminCustomerParams): Promise<AdminPage<AdminCustomerRow>> {
+    const nowIso = this.now();
+    const needle = (params.q ?? '').trim().toLowerCase();
+    let rows = [...this.users.values()]
+      .filter((u) => !params.tenantId || u.tenantId === params.tenantId)
+      .map((u) => this.customerOf(u, nowIso));
+    if (needle !== '')
+      rows = rows.filter(
+        (r) =>
+          r.email.toLowerCase().includes(needle) ||
+          (r.displayName ?? '').toLowerCase().includes(needle) ||
+          (r.orgName ?? '').toLowerCase().includes(needle) ||
+          r.userId.toLowerCase().includes(needle),
+      );
+    if (params.signedUpFrom) rows = rows.filter((r) => r.createdAt >= params.signedUpFrom!);
+    if (params.signedUpTo) rows = rows.filter((r) => r.createdAt <= params.signedUpTo!);
+    if (params.activeSince)
+      rows = rows.filter(
+        (r) => r.identity.lastSeenAt !== null && r.identity.lastSeenAt >= params.activeSince!,
+      );
+    if (params.plan) rows = rows.filter((r) => r.plan === params.plan);
+    if (params.provider) rows = rows.filter((r) => r.providers.includes(params.provider!));
+    if (params.customerStatus) rows = rows.filter(matchesCustomerFilter(params.customerStatus));
+    if (params.health) rows = rows.filter((r) => r.health === params.health);
+    return pageOf(
+      rows,
+      params,
+      {
+        createdAt: (r) => r.createdAt,
+        email: (r) => r.email.toLowerCase(),
+        lastSeenAt: (r) => r.identity.lastSeenAt ?? '',
+        lastActivityAt: (r) => r.lastActivityAt ?? '',
+        analyses: (r) => r.analyses,
+        healthScore: (r) => r.healthScore,
+        signInCount: (r) => r.identity.signInCount,
+        orgName: (r) => (r.orgName ?? '').toLowerCase(),
+      },
+      'createdAt',
+    );
+  }
+
+  async adminGetCustomer(userId: string): Promise<AdminCustomerRow | null> {
+    const user = this.users.get(userId);
+    return user ? this.customerOf(user, this.now()) : null;
+  }
+
+  private activityOf(event: EventRecord): AdminActivityRow {
+    const workspace = event.workspaceId ? this.workspaces.get(event.workspaceId) : undefined;
+    return {
+      id: event.id,
+      at: event.at,
+      type: event.type,
+      tenantId: event.tenantId,
+      orgName: this.tenants.get(event.tenantId)?.name ?? null,
+      userId: event.userId,
+      userEmail: event.userId ? (this.users.get(event.userId)?.email ?? null) : null,
+      workspaceId: event.workspaceId,
+      workspaceName: workspace ? (workspace.name ?? workspace.scopeName) : null,
+      fields: event.fields,
+    };
+  }
+
+  async adminUserTimeline(userId: string, limit: number): Promise<AdminActivityRow[]> {
+    return this.events
+      .filter((e) => e.userId === userId)
+      .sort((a, b) => b.at.localeCompare(a.at))
+      .slice(0, limit)
+      .map((e) => this.activityOf(e));
+  }
+
+  async adminActivityFeed(params: AdminListParams): Promise<AdminPage<AdminActivityRow>> {
+    const needle = (params.q ?? '').trim().toLowerCase();
+    let rows = this.events.map((e) => this.activityOf(e));
+    if (params.tenantId) rows = rows.filter((r) => r.tenantId === params.tenantId);
+    if (params.status) rows = rows.filter((r) => r.type === params.status);
+    if (needle !== '')
+      rows = rows.filter(
+        (r) =>
+          (r.orgName ?? '').toLowerCase().includes(needle) ||
+          (r.userEmail ?? '').toLowerCase().includes(needle) ||
+          r.type.toLowerCase().includes(needle),
+      );
+    return pageOf(rows, params, { at: (r) => r.at }, 'at');
+  }
+
+  async adminListMonitoringWorkspaces(
+    params: AdminListParams,
+  ): Promise<AdminPage<AdminMonitoringWorkspaceRow>> {
+    const needle = (params.q ?? '').trim().toLowerCase();
+    let rows = [...this.workspaces.values()]
+      .filter((w) => !params.tenantId || w.tenantId === params.tenantId)
+      .filter((w) => !params.status || w.onboarding === params.status)
+      .map((w) => {
+        const runs = [...this.runs.values()].filter((r) => r.workspaceId === w.id);
+        const syncs = [...this.jobs.values()].filter(
+          (j) => j.workspaceId === w.id && j.status === 'succeeded',
+        );
+        return {
+          id: w.id,
+          tenantId: w.tenantId,
+          name: w.name ?? w.scopeName,
+          provider: w.provider,
+          scopeName: w.scopeName,
+          onboarding: w.onboarding,
+          members: [...this.workspaceMembers.values()].filter((m) => m.workspaceId === w.id).length,
+          analyses: runs.length,
+          lastAnalysisAt: runs.reduce<string | null>(
+            (best, r) => (best === null || r.createdAt > best ? r.createdAt : best),
+            null,
+          ),
+          lastSyncAt: syncs.reduce<string | null>((best, j) => {
+            const at = j.finishedAt ?? j.createdAt;
+            return best === null || at > best ? at : best;
+          }, null),
+          createdAt: w.createdAt,
+        };
+      });
+    if (needle !== '')
+      rows = rows.filter(
+        (r) =>
+          (r.name ?? '').toLowerCase().includes(needle) ||
+          r.provider.toLowerCase().includes(needle) ||
+          r.id.toLowerCase().includes(needle),
+      );
+    return pageOf(
+      rows,
+      params,
+      {
+        createdAt: (r) => r.createdAt,
+        name: (r) => (r.name ?? '').toLowerCase(),
+        provider: (r) => r.provider,
+        analyses: (r) => r.analyses,
+        lastAnalysisAt: (r) => r.lastAnalysisAt ?? '',
+      },
+      'createdAt',
+    );
+  }
+
+  async adminOrgDetail(
+    tenantId: string,
+    nowIso: string,
+    trendDays: number,
+  ): Promise<AdminOrgDetail | null> {
+    const tenant = this.tenants.get(tenantId);
+    if (!tenant) return null;
+    const members = [...this.users.values()].filter((u) => u.tenantId === tenantId);
+    const org = this.orgSignals(tenantId, nowIso);
+    const lastSeenAt = members.reduce<string | null>((best, u) => {
+      const seen = u.identity.lastSeenAt;
+      return seen !== null && (best === null || seen > best) ? seen : best;
+    }, null);
+    const signals: CustomerSignals = {
+      ...org,
+      createdAt: tenant.createdAt,
+      lastSeenAt,
+      signInCount: members.reduce((sum, u) => sum + u.identity.signInCount, 0),
+      returned: members.some((u) => {
+        const first = u.identity.firstSeenAt;
+        return (
+          first !== null &&
+          this.events.some(
+            (e) =>
+              e.userId === u.id &&
+              e.type === 'session.started' &&
+              Date.parse(e.at) > Date.parse(first) + 86_400_000,
+          )
+        );
+      }),
+    };
+    const trendSince = new Date(Date.parse(nowIso) - trendDays * 86_400_000).toISOString();
+    const byDay = new Map<string, number>();
+    for (const run of this.runs.values())
+      if (run.tenantId === tenantId && run.createdAt >= trendSince) {
+        const day = run.createdAt.slice(0, 10);
+        byDay.set(day, (byDay.get(day) ?? 0) + 1);
+      }
+    const lastEventAt = this.events
+      .filter((e) => e.tenantId === tenantId)
+      .reduce<string | null>((best, e) => (best === null || e.at > best ? e.at : best), null);
+    const activity = [lastActivityOf(signals), lastEventAt].filter(
+      (v): v is string => typeof v === 'string',
+    );
+    return {
+      tenantId,
+      name: tenant.name,
+      createdAt: tenant.createdAt,
+      members: members.length,
+      workspaces: signals.workspaces,
+      readyWorkspaces: signals.readyWorkspaces,
+      providers: [
+        ...new Set(
+          [...this.workspaces.values()]
+            .filter((w) => w.tenantId === tenantId)
+            .map((w) => w.provider),
+        ),
+      ].sort(),
+      analyses: signals.analyses,
+      analyses30d: signals.analyses30d,
+      reportsViewed: signals.reportsViewed,
+      lastActivityAt: activity.reduce((a, b) => (b > a ? b : a)),
+      lastAnalysisAt: signals.lastAnalysisAt,
+      subscription: this.subscriptions.get(tenantId) ?? null,
+      signals,
+      trend: [...byDay.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, analyses]) => ({ date, analyses })),
+    };
+  }
+
+  async adminFunnel(from: string | null, to: string | null, nowIso: string): Promise<FunnelReport> {
+    void nowIso;
+    const rows: TenantFunnelRow[] = [...this.tenants.values()]
+      .filter((t) => (!from || t.createdAt >= from) && (!to || t.createdAt <= to))
+      .map((tenant) => {
+        const members = [...this.users.values()].filter((u) => u.tenantId === tenant.id);
+        const workspaces = [...this.workspaces.values()].filter((w) => w.tenantId === tenant.id);
+        const runs = [...this.runs.values()].filter((r) => r.tenantId === tenant.id);
+        const rank = workspaces.length
+          ? Math.max(...workspaces.map((w) => onboardingRank(w.onboarding)))
+          : -1;
+        const eventAt = (type: string): string | null =>
+          this.events
+            .filter((e) => e.tenantId === tenant.id && e.type === type)
+            .reduce<string | null>((best, e) => (best === null || e.at < best ? e.at : best), null);
+        const min = (values: readonly (string | null)[]): string | null =>
+          values.reduce<string | null>(
+            (best, v) => (v !== null && (best === null || v < best) ? v : best),
+            null,
+          );
+        const connectedAt = min(workspaces.map((w) => w.createdAt));
+        const firstAnalysisAt = min(runs.map((r) => r.createdAt));
+        const firstViewAt = min(
+          runs.map((r) => this.runViews.get(`${r.tenantId}:${r.id}`) ?? null),
+        );
+        const loggedInAt = min(members.map((u) => u.identity.firstSeenAt ?? u.createdAt));
+        const created = Date.parse(tenant.createdAt);
+        const returnedAt = this.events
+          .filter(
+            (e) =>
+              e.tenantId === tenant.id &&
+              e.type === 'session.started' &&
+              Date.parse(e.at) > created + 86_400_000 &&
+              Date.parse(e.at) <= created + 7 * 86_400_000,
+          )
+          .reduce<string | null>((best, e) => (best === null || e.at < best ? e.at : best), null);
+        return {
+          tenantId: tenant.id,
+          reached: [
+            true,
+            members.some((u) => u.identity.emailVerified === true),
+            members.some((u) => u.identity.signInCount >= 1),
+            connectedAt !== null,
+            rank >= 1,
+            rank >= 4,
+            firstAnalysisAt !== null,
+            firstViewAt !== null,
+            workspaces.some((w) => w.onboarding === 'ready'),
+            returnedAt !== null,
+          ],
+          at: [
+            tenant.createdAt,
+            null,
+            loggedInAt,
+            connectedAt,
+            eventAt('scope.selected'),
+            eventAt('assumptions.set'),
+            firstAnalysisAt,
+            firstViewAt,
+            eventAt('workspace.ready'),
+            returnedAt,
+          ],
+        };
+      });
+    return buildFunnel(rows, from, to);
+  }
+
+  async adminDashboard(nowIso: string, days: number): Promise<AdminDashboard> {
+    const now = Date.parse(nowIso);
+    const startOfDay = `${new Date(nowIso).toISOString().slice(0, 10)}T00:00:00.000Z`;
+    const since7d = new Date(now - 7 * 86_400_000).toISOString();
+    const since30d = new Date(now - 30 * 86_400_000).toISOString();
+    const sinceTrend = new Date(now - days * 86_400_000).toISOString();
+    const users = [...this.users.values()];
+    const runs = [...this.runs.values()];
+    const byProvider = new Map<string, Set<string>>();
+    for (const workspace of this.workspaces.values()) {
+      const set = byProvider.get(workspace.provider) ?? new Set<string>();
+      set.add(workspace.tenantId);
+      byProvider.set(workspace.provider, set);
+    }
+    const bucket = (
+      items: readonly { readonly at: string }[],
+    ): { date: string; count: number }[] => {
+      const map = new Map<string, number>();
+      for (const item of items)
+        if (item.at >= sinceTrend) {
+          const day = item.at.slice(0, 10);
+          map.set(day, (map.get(day) ?? 0) + 1);
+        }
+      return [...map.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, count]) => ({ date, count }));
+    };
+    let churnRiskOrgs = 0;
+    for (const tenant of this.tenants.values()) {
+      const org = this.orgSignals(tenant.id, nowIso);
+      const members = users.filter((u) => u.tenantId === tenant.id);
+      const signals: CustomerSignals = {
+        ...org,
+        createdAt: tenant.createdAt,
+        lastSeenAt: members.reduce<string | null>((best, u) => {
+          const seen = u.identity.lastSeenAt;
+          return seen !== null && (best === null || seen > best) ? seen : best;
+        }, null),
+        signInCount: members.reduce((sum, u) => sum + u.identity.signInCount, 0),
+        returned: false,
+      };
+      if (scoreCustomer(signals).band === 'churn-risk') churnRiskOrgs += 1;
+    }
+    return {
+      users: users.length,
+      organizations: this.tenants.size,
+      newUsersToday: users.filter((u) => u.createdAt >= startOfDay).length,
+      newUsersWeek: users.filter((u) => u.createdAt >= since7d).length,
+      newOrgsWeek: [...this.tenants.values()].filter((t) => t.createdAt >= since7d).length,
+      activeUsers30d: users.filter(
+        (u) => u.identity.lastSeenAt !== null && u.identity.lastSeenAt >= since30d,
+      ).length,
+      activeUsers7d: users.filter(
+        (u) => u.identity.lastSeenAt !== null && u.identity.lastSeenAt >= since7d,
+      ).length,
+      returningUsers: users.filter((u) => u.identity.signInCount >= 2).length,
+      churnRiskOrgs,
+      connectedByProvider: [...byProvider.entries()]
+        .map(([provider, orgs]) => ({ provider, orgs: orgs.size }))
+        .sort((a, b) => b.orgs - a.orgs),
+      analysesToday: runs.filter((r) => r.createdAt >= startOfDay).length,
+      reportsViewedToday: [...this.runViews.values()].filter((at) => at >= startOfDay).length,
+      monitoringWorkspaces: this.workspaces.size,
+      activeTrials: [...this.subscriptions.values()].filter((s) => s.billingStatus === 'on_trial')
+        .length,
+      signupsByDay: bucket(users.map((u) => ({ at: u.createdAt }))).map((b) => ({
+        date: b.date,
+        users: b.count,
+      })),
+      analysesByDay: bucket(runs.map((r) => ({ at: r.createdAt }))).map((b) => ({
+        date: b.date,
+        analyses: b.count,
+      })),
+    };
   }
 
   async ping(): Promise<void> {
