@@ -95,7 +95,7 @@ main.bleed{display:block}
 .nb-bar{flex:1;min-width:0;height:40px;background:color-mix(in srgb,var(--bg) 82%,transparent);
   -webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px);
   border-bottom:1px solid var(--line)}
-.nb-notch{display:flex;height:64px;flex:none;width:min(94vw,var(--container))}
+.nb-notch{display:flex;height:64px;flex:none;width:min(92vw,54rem)}
 .nb-corner{width:26px;height:64px;flex:none;position:relative}
 .nb-corner svg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .nb-corner path{fill:color-mix(in srgb,var(--bg) 82%,transparent)}
@@ -429,9 +429,9 @@ a.report-card:hover{transform:translateY(-2px);box-shadow:var(--sh-2);border-col
 }
 `;
 
-const MARKETING_LEFT = `<a href="/pricing">Pricing</a><a href="/docs">Docs</a>`;
+const MARKETING_LEFT = `<a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/demo">Sample report</a>`;
 const MARKETING_RIGHT = `<a href="/about">About</a><a href="/blog">Blog</a>`;
-const MARKETING_MOBILE = `<a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/about">About</a><a href="/blog">Blog</a><a href="/demo">Sample report</a>`;
+const MARKETING_MOBILE = `<a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/demo">Sample report</a><a href="/about">About</a><a href="/blog">Blog</a>`;
 
 /**
  * The notch header shell (see the `.nb-*` styles above): a raised center pod
@@ -442,7 +442,7 @@ const MARKETING_MOBILE = `<a href="/pricing">Pricing</a><a href="/docs">Docs</a>
 function renderHeader(csrf?: string): string {
   const loggedOut = csrf === undefined;
   const authDesktop = loggedOut
-    ? `<a href="/demo">Sample report</a><a href="/login">Sign in</a><a class="btn btn-sm" href="/signup">Get started</a>`
+    ? `<a href="/login">Sign in</a><a class="btn btn-sm" href="/signup">Get started</a>`
     : `<a href="/">Home</a><a href="/runs">Runs</a><form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
         csrf as string,
       )}"><button type="submit">Sign out</button></form>`;
