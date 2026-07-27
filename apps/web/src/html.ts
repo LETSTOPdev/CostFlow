@@ -95,7 +95,7 @@ main.bleed{display:block}
 .nb-bar{flex:1;min-width:0;height:40px;background:color-mix(in srgb,var(--bg) 82%,transparent);
   -webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px);
   border-bottom:1px solid var(--line)}
-.nb-notch{display:flex;height:64px;flex:none}
+.nb-notch{display:flex;height:64px;flex:none;width:min(94vw,var(--container))}
 .nb-corner{width:26px;height:64px;flex:none;position:relative}
 .nb-corner svg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .nb-corner path{fill:color-mix(in srgb,var(--bg) 82%,transparent)}
@@ -105,6 +105,11 @@ main.bleed{display:block}
   -webkit-backdrop-filter:saturate(180%) blur(16px);backdrop-filter:saturate(180%) blur(16px);
   border-top:1px solid var(--line);box-shadow:var(--sh-1)}
 .nb-toggle{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+/* 1fr/auto/1fr grid, but only reliable once nb-notch (above) has a *definite*
+   width — a shrink-to-fit pod centers by leftover track space, not viewport
+   center, so an imbalanced left/right link count used to drag the logo off
+   center (or, with an absolutely-positioned logo, let the wider side's links
+   collide with it since nothing reserved room for the logo at all). */
 .nb-row{position:relative;height:100%;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.75rem;
   padding-inline:clamp(1rem,3vw,1.75rem)}
 .nb-col{display:flex;align-items:center;gap:.9rem;min-width:0}
