@@ -2,8 +2,6 @@ import type { AnalysisRun } from '@costflow/analysis';
 import {
   addRanges,
   compareDecimalStrings,
-  dec,
-  decToString,
   formatWholeMoney,
   rangeFromSpec,
   rangeToSpec,
@@ -13,6 +11,7 @@ import {
 } from '@costflow/cost-engine';
 import type { RangeSpec } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
+import { compareRuns, type ChangeDirection } from '@costflow/comparison';
 import { esc } from './html';
 
 /**
@@ -267,39 +266,60 @@ function renderUnpriced(
     <ul>${rows}</ul></section>`;
 }
 
-/** Run-over-run trend: match priced frictions by stable instance id. */
+const CHANGE_LABEL: Record<ChangeDirection, string> = {
+  new: '<span class="up">new</span>',
+  resolved: '<span class="down">resolved</span>',
+  increased: '<span class="up">▲ increased</span>',
+  decreased: '<span class="down">▼ decreased</span>',
+  unchanged: 'unchanged',
+};
+
+/**
+ * Run-over-run trend, gated on the comparability verdict (doc 19 MW1).
+ *
+ * A trend is a CLAIM — that a number moved because the work changed. When the
+ * verdict says the two runs are not measuring the same thing, no trend is
+ * rendered at all: a wrong trend is worse than no trend, and a caveat above a
+ * table of arrows does not stop anyone reading the arrows. What replaces it is
+ * an explanation of what differs and, where there is one, what to do about it.
+ *
+ * Until MW1 this rendered unconditionally, so a salary edit between two runs
+ * showed up as the team improving.
+ */
 export function renderTrend(current: AnalysisRun, previous: AnalysisRun | null): string {
   if (!previous) return '';
   const currency = current.assumptions.currency;
-  const cur = new Map(
-    buildReportModel(current).ranked.map((r) => [r.instance.id, r.estimate.cost]),
-  );
-  const prev = new Map(
-    buildReportModel(previous).ranked.map((r) => [r.instance.id, r.estimate.cost]),
-  );
-  const ids = [...new Set([...cur.keys(), ...prev.keys()])].sort();
-  const rows = ids
-    .map((id) => {
-      const c = cur.get(id) ?? null;
-      const p = prev.get(id) ?? null;
-      // Delta of expected values via the engine's Money decimal (never a float);
-      // range subtraction isn't offered because ranges are non-negative.
-      const deltaExpected = decToString(dec(c?.expected ?? '0').minus(dec(p?.expected ?? '0')));
-      const dir = !p ? 'new' : !c ? 'resolved' : compareDecimalStrings(c.expected, p.expected);
-      const label =
-        dir === 'new'
-          ? '<span class="up">new</span>'
-          : dir === 'resolved'
-            ? '<span class="down">resolved</span>'
-            : dir > 0
-              ? '<span class="up">▲ increased</span>'
-              : dir < 0
-                ? '<span class="down">▼ decreased</span>'
-                : 'unchanged';
-      return `<tr><td>${esc(id)}</td><td>${p ? money(p.expected, currency) : 'n/a'}</td><td>${c ? money(c.expected, currency) : 'n/a'}</td><td>${money(deltaExpected, currency)}</td><td>${label}</td></tr>`;
-    })
+  const { verdict, findings, diff } = compareRuns(previous, current);
+
+  if (verdict === 'not-comparable') {
+    const blocking = findings.filter((f) => f.severity === 'blocking');
+    const items = blocking
+      .map(
+        (f) =>
+          `<li>${esc(f.detail)}${f.remedy ? ` <span class="note">${esc(f.remedy)}</span>` : ''}</li>`,
+      )
+      .join('');
+    return `<section><h2>Change since previous run</h2>
+      <p class="note" style="margin:0 0 .5rem">No comparison is shown, because these two runs are not measuring the same thing. Putting a number on the difference would be misleading rather than incomplete.</p>
+      <ul style="margin:0;padding-left:1.1rem">${items}</ul></section>`;
+  }
+
+  const notes = findings
+    .filter((f) => f.severity === 'note')
+    .map((f) => `<li>${esc(f.detail)}</li>`)
     .join('');
-  return `<section><h2>Change since previous run</h2>
+  const caveat =
+    notes === ''
+      ? ''
+      : `<p class="note" style="margin:0 0 .5rem">Read this alongside:</p><ul class="note" style="margin:0 0 .6rem;padding-left:1.1rem">${notes}</ul>`;
+
+  const rows = diff.instances
+    .map(
+      (i) =>
+        `<tr><td>${esc(i.instanceId)}</td><td>${i.baselineCost ? money(i.baselineCost.expected, currency) : 'n/a'}</td><td>${i.currentCost ? money(i.currentCost.expected, currency) : 'n/a'}</td><td>${money(i.expectedDelta, currency)}</td><td>${CHANGE_LABEL[i.direction]}</td></tr>`,
+    )
+    .join('');
+  return `<section><h2>Change since previous run</h2>${caveat}
     <div class="table-wrap"><table><tr><th>Friction</th><th>Previous (expected)</th><th>Current (expected)</th><th>Δ expected</th><th>Change</th></tr>${rows}</table></div></section>`;
 }
 

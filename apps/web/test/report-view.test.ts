@@ -126,3 +126,82 @@ describe('P5 structured report view', () => {
     expect(t.events.some((e) => e.event === 'tm-web-report-viewed')).toBe(false);
   });
 });
+
+/**
+ * MW1 (doc 19). A trend is a claim. When the two runs are not measuring the
+ * same thing, the product renders no trend at all — a wrong trend is worse than
+ * no trend, and a caveat above a table of arrows does not stop anyone reading
+ * the arrows.
+ */
+describe('MW1: the trend is gated on comparability', () => {
+  const withEngine = (json: string, costModels: Record<string, string>) => {
+    const run = JSON.parse(json) as { engineVersions: { costModels: unknown } };
+    run.engineVersions.costModels = costModels;
+    return JSON.stringify(run);
+  };
+  const withAgingThreshold = (json: string, value: number) => {
+    const run = JSON.parse(json) as {
+      assumptions: { parameters: { agingThresholdDays: { value: number } } };
+    };
+    run.assumptions.parameters.agingThresholdDays.value = value;
+    return JSON.stringify(run);
+  };
+
+  it('renders the change table when the runs are comparable', async () => {
+    const t = await makeApp();
+    const cookie = await signIn(t, 'mw1a@example.com');
+    await seedRun(t, 'mw1a@example.com', 'r-old', '2026-07-01T00:00:00Z');
+    await seedRun(t, 'mw1a@example.com', 'r-new', '2026-07-02T00:00:00Z');
+
+    const res = await get(t, cookie, '/reports/r-new');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Change since previous run');
+    expect(res.body).toContain('Δ expected');
+    expect(res.body).not.toContain('not measuring the same thing');
+  });
+
+  it('refuses the trend, and explains why, when the engine version moved', async () => {
+    const t = await makeApp();
+    const email = 'mw1b@example.com';
+    const cookie = await signIn(t, email);
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    await seedRun(t, email, 'r-old', '2026-07-01T00:00:00Z');
+    const old = (await t.store.getRun(tenantId, 'r-old'))!;
+    await seedRun(t, email, 'r-new', '2026-07-02T00:00:00Z');
+    // Rewrite the OLDER run as if a previous engine produced it.
+    await t.store.createRun({
+      ...old,
+      id: 'r-old2',
+      createdAt: '2026-07-01T12:00:00Z',
+      runJson: withEngine(old.runJson, { 'c1-legacy': '0.0.1' }),
+    });
+
+    const res = await get(t, cookie, '/reports/r-new');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('not measuring the same thing');
+    expect(res.body).toContain('The change is ours, not yours');
+    // No table of arrows anywhere.
+    expect(res.body).not.toContain('Δ expected');
+    expect(res.body).not.toContain('▲ increased');
+  });
+
+  it('refuses when a threshold change alters which work counts', async () => {
+    const t = await makeApp();
+    const email = 'mw1c@example.com';
+    const cookie = await signIn(t, email);
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    await seedRun(t, email, 'r-old', '2026-07-01T00:00:00Z');
+    const old = (await t.store.getRun(tenantId, 'r-old'))!;
+    await seedRun(t, email, 'r-new', '2026-07-02T00:00:00Z');
+    await t.store.createRun({
+      ...old,
+      id: 'r-old2',
+      createdAt: '2026-07-01T12:00:00Z',
+      runJson: withAgingThreshold(old.runJson, 99),
+    });
+
+    const res = await get(t, cookie, '/reports/r-new');
+    expect(res.body).toContain('which work counts');
+    expect(res.body).not.toContain('Δ expected');
+  });
+});

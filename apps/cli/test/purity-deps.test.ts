@@ -16,6 +16,7 @@ const ALLOWED_EXTERNAL: Record<string, string[]> = {
   friction: [],
   'cost-engine': ['decimal.js'],
   analysis: [],
+  comparison: [],
   reporting: [],
   telemetry: [],
   diagnostics: [],

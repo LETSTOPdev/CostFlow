@@ -11,7 +11,7 @@
  * apps/ is the only effectful edge.
  */
 const PURE =
-  '^packages/(domain|ingestion|friction|cost-engine|analysis|reporting|telemetry|diagnostics)/';
+  '^packages/(domain|ingestion|friction|cost-engine|analysis|reporting|telemetry|diagnostics|comparison)/';
 
 module.exports = {
   forbidden: [
@@ -57,6 +57,25 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/telemetry/src/' },
       to: { path: '^(packages/(?!domain/|analysis/|telemetry/)|apps/)' },
+    },
+    {
+      name: 'comparison-only-domain-analysis-costengine',
+      comment:
+        'doc 19 MW1: comparison CONSUMES run artifacts, so it must not live inside analysis, ' +
+        'which produces them, and must not reach the store, the web app or a connector. It may ' +
+        'import cost-engine so money arithmetic is never reimplemented outside the engine (D-10).',
+      severity: 'error',
+      from: { path: '^packages/comparison/' },
+      to: { path: '^(packages/(?!domain/|analysis/|cost-engine/|comparison/)|apps/)' },
+    },
+    {
+      name: 'analysis-never-imports-comparison',
+      comment:
+        'The dependency arrow points from consumer to producer and never back: a comparison ' +
+        'need must never leak into how a run is produced.',
+      severity: 'error',
+      from: { path: '^packages/analysis/' },
+      to: { path: '^packages/comparison/' },
     },
     {
       name: 'diagnostics-only-domain-analysis-costengine',

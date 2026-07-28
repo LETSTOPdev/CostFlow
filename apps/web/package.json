@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@costflow/analysis": "workspace:*",
+    "@costflow/comparison": "workspace:*",
     "@costflow/cost-engine": "workspace:*",
     "@costflow/diagnostics": "workspace:*",
     "@costflow/domain": "workspace:*",

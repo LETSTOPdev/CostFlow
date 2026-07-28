@@ -68,6 +68,9 @@ importers:
       '@costflow/analysis':
         specifier: workspace:*
         version: link:../../packages/analysis
+      '@costflow/comparison':
+        specifier: workspace:*
+        version: link:../../packages/comparison
       '@costflow/cost-engine':
         specifier: workspace:*
         version: link:../../packages/cost-engine
@@ -117,6 +120,18 @@ importers:
       '@costflow/friction':
         specifier: workspace:*
         version: link:../friction
+
+  packages/comparison:
+    dependencies:
+      '@costflow/analysis':
+        specifier: workspace:*
+        version: link:../analysis
+      '@costflow/cost-engine':
+        specifier: workspace:*
+        version: link:../cost-engine
+      '@costflow/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/cost-engine:
     dependencies:

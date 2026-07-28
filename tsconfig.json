@@ -21,6 +21,7 @@
       "@costflow/friction": ["packages/friction/src/index.ts"],
       "@costflow/cost-engine": ["packages/cost-engine/src/index.ts"],
       "@costflow/analysis": ["packages/analysis/src/index.ts"],
+      "@costflow/comparison": ["packages/comparison/src/index.ts"],
       "@costflow/diagnostics": ["packages/diagnostics/src/index.ts"],
       "@costflow/reporting": ["packages/reporting/src/index.ts"],
       "@costflow/telemetry": ["packages/telemetry/src/index.ts"]
