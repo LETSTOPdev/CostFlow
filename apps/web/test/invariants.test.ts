@@ -36,8 +36,29 @@ const BUDGET = {
   reportHtmlKb: 300,
   /** Full analysis + render of a realistic project must feel instant. */
   timeToReportMs: 1500,
-  /** Cold start (buildServer + first request) must stay fast for platform healthchecks. */
-  coldStartMs: 1500,
+  /**
+   * Cold start (buildServer + first request) must stay cheap for platform
+   * healthchecks — measured in CPU time, not wall time.
+   *
+   * Wall time here measured scheduler contention rather than the code. The same
+   * work benchmarks at 157ms wall alone, 56ms wall inside the suite, and
+   * 2200–2700ms wall when the machine is loaded, while CPU time stays at 69–72ms
+   * throughout. A budget against a number that moves 40x on machine load is a
+   * coin flip, and a gate that fails at random stops being read.
+   *
+   * The default vitest pool is `forks`, so each test file owns its process and
+   * `process.cpuUsage()` accrues only this file's own work. 400ms against ~70ms
+   * observed is a ~5.7x margin: strictly TIGHTER than the 1500ms wall budget it
+   * replaces, because it is no longer padded to absorb noise.
+   */
+  coldStartCpuMs: 400,
+  /**
+   * A loose wall-clock backstop, because CPU time cannot see async I/O waiting.
+   * Cold start does no I/O today; if it ever grows a database connect or a
+   * remote config fetch, CPU time would under-measure it and this would catch
+   * the hang. Set far above any contention this suite can produce.
+   */
+  coldStartWallMs: 8000,
 } as const;
 
 describe('INVARIANT: report HTML size budget', () => {
@@ -64,8 +85,9 @@ describe('INVARIANT: time-to-report budget', () => {
 });
 
 describe('INVARIANT: cold-start budget', () => {
-  it('buildServer + first healthcheck is fast', async () => {
-    const t0 = performance.now();
+  it('buildServer + first healthcheck is cheap', async () => {
+    const wall0 = performance.now();
+    const cpu0 = process.cpuUsage();
     const app = buildServer({
       store: new MemoryStore(),
       connectors: stubConnectors(),
@@ -73,7 +95,13 @@ describe('INVARIANT: cold-start budget', () => {
       telemetry: () => {},
     });
     await app.inject({ method: 'GET', url: '/healthz' });
-    expect(performance.now() - t0).toBeLessThan(BUDGET.coldStartMs);
+    const cpu = process.cpuUsage(cpu0);
+
+    // Primary: the cost of the work itself, immune to what else the machine is
+    // doing. This is the assertion that should fail when cold start regresses.
+    expect((cpu.user + cpu.system) / 1000).toBeLessThan(BUDGET.coldStartCpuMs);
+    // Backstop: catches a hang or an async I/O dependency that burns no CPU.
+    expect(performance.now() - wall0).toBeLessThan(BUDGET.coldStartWallMs);
   });
 });
 
