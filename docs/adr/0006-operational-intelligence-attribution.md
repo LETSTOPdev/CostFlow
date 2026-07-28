@@ -162,6 +162,62 @@ explanatory *why* beneath a priced recommendation, and may never carry its own
 recovery figure. `ContextObservation` is structurally incapable of holding one,
 and stays that way.
 
+### 7. Every diagnostic declares its minimum evidence
+
+**Standing requirement, added after OI1's UX review. The policy below binds; the
+per-diagnostic reconciliation in "Open items" is follow-up work.**
+
+Thresholds are how a diagnostic decides whether it has enough to speak. Left
+unmanaged they become a drawer of independent heuristics, each defensible on its
+own and collectively meaningless, and no reviewer can tell whether a silent
+diagnostic is being careful or is broken.
+
+So every diagnostic MUST declare, in its own source and in one place:
+
+1. **What minimum evidence it requires** before it may produce a finding at all.
+2. **Whether falling short suppresses the finding or lowers its confidence
+   grade.**
+3. **Why that choice is right for that diagnostic**, in terms of what its claim
+   asserts rather than by analogy to another diagnostic.
+
+Thresholds need not match across diagnostics. A share-of-total claim and a
+rate-of-arrival claim do not become trustworthy at the same n, and forcing one
+number on all of them would be a different kind of arbitrary. What must be
+uniform is that the choice is stated and reasoned.
+
+**The rule for choosing suppression over a grade:**
+
+> Suppress when the number itself would mislead. Downgrade when the number is
+> sound but its interpretation is uncertain.
+
+A grade is a caveat, and a caveat on a headline is still a headline. "80% of
+your overdue exposure sits in one stage" is a distributional claim; at three
+items it is a statement about three items wearing a percentage, and no label
+repairs that — hence suppression. By contrast, a concentration that is real and
+observed but driven by a single outlier is a true statement whose
+generalizability is limited, which is exactly what a B grade is for.
+
+The practical test: if a reader who fully understood the caveat would act the
+same way, a grade suffices. If they would act on something the evidence cannot
+support, suppress.
+
+**Thresholds stay global constants, never tenant-configurable.** Findings must
+not appear or disappear because a customer moved a slider; a threshold a
+customer can tune is a threshold they can tune until they get the answer they
+wanted, which would put the diagnostic layer on the wrong side of the same line
+the provenance policy draws around assumptions. Revisit only on evidence that
+organizations genuinely need different defaults, and then as a versioned,
+declared variant rather than a free parameter.
+
+## Open items
+
+- **Reconcile the existing three diagnostics against §7.** As shipped, DC and D4
+  suppress below five contributing items while D3 lowers its grade to B in the
+  same situation. D3 has structural guards the others lack (it must be a
+  review-kind stage and must clear both a wait share and a path share), so its
+  behaviour may well be correct — but the divergence is currently accidental
+  rather than argued, and §7 requires it be argued either way.
+
 ## Consequences
 
 - **CostFlow cannot answer "who is my worst performer."** Accepted; it is the
