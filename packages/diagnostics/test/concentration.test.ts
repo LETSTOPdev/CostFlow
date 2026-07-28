@@ -75,11 +75,30 @@ describe('DC — friction concentration', () => {
     expect(f.statement).toContain('driven by an outlier');
   });
 
-  it('caps confidence at B when the concentration rests on too few items', () => {
+  /**
+   * A hard floor, not a downgrade. A grade is a caveat, and a caveat on a
+   * headline is still a headline: "80% of your overdue exposure is in one
+   * stage" reads as a finding whether or not it is labelled B, and on a
+   * three-item workspace it is really a statement about three items. Very small
+   * workspaces are where a confident-sounding number costs the most trust.
+   */
+  it('suppresses the finding entirely below the declared item floor', () => {
     const run = runWith([overdueAt(stage('Open'), [10, 10]), overdueAt(stage('pending'), [1])]);
-    const f = detectConcentration(run, WITH_SNAPSHOTS).findings[0]!;
-    expect(f.confidence.tier).toBe('B');
-    expect(f.confidence.reasons.join(' ')).toContain('fewer than');
+    const result = detectConcentration(run, WITH_SNAPSHOTS);
+    expect(result.findings).toEqual([]);
+    expect(result.unavailable).toBeNull();
+  });
+
+  it('fires as soon as the item floor is met, and not before', () => {
+    const below = Array<number>(CONCENTRATION_THRESHOLDS.minItems - 1).fill(10);
+    const at = Array<number>(CONCENTRATION_THRESHOLDS.minItems).fill(10);
+    const build = (open: number[]) =>
+      runWith([overdueAt(stage('Open'), open), overdueAt(stage('pending'), [1])]);
+
+    expect(detectConcentration(build(below), WITH_SNAPSHOTS).findings).toEqual([]);
+    const fired = detectConcentration(build(at), WITH_SNAPSHOTS).findings;
+    expect(fired).toHaveLength(1);
+    expect(fired[0]!.facts['items']).toBe(CONCENTRATION_THRESHOLDS.minItems);
   });
 
   it('does not fire below the declared share threshold', () => {

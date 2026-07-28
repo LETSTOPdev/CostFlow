@@ -164,7 +164,7 @@ describe('OI1 — the operational layer on the report', () => {
         primitive: 'add-stage-sla' as const,
         complexity: 'Low' as const,
         effortClass: 'policy' as const,
-        label: 'Set a service-level target for this stage',
+        recommendation: 'Set a service-level target for this stage.',
         stage: { name: 'Contract Review', kind: 'review' as const },
       },
     };
@@ -196,7 +196,7 @@ describe('OI1 — the operational layer on the report', () => {
           primitive,
           complexity: 'Low' as const,
           effortClass: 'policy' as const,
-          label,
+          recommendation: label,
           stage,
         },
       }) as unknown as DiagnosticFinding;
@@ -231,7 +231,7 @@ describe('OI1 — the operational layer on the report', () => {
           primitive: 'review-queue' as const,
           complexity: 'Low' as const,
           effortClass: 'process-change' as const,
-          label: 'Review',
+          recommendation: 'Review',
           stage: { name, kind: 'queue' as const },
         },
       }) as unknown as DiagnosticFinding;

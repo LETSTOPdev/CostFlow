@@ -34,7 +34,16 @@ export const CONCENTRATION_THRESHOLDS = {
    * no information. Concentration is a comparative claim or it is nothing.
    */
   minStages: 2,
-  /** Below this, a single item can move the share by more than the threshold. */
+  /**
+   * A hard floor, NOT a confidence cap. Below this the finding is suppressed
+   * entirely rather than shown at a lower grade.
+   *
+   * A grade is a caveat, and a caveat on a headline is still a headline: "80% of
+   * your overdue exposure is in one stage" reads as a finding whether or not it
+   * is labelled B, and on a three-item workspace it is really a statement about
+   * three items. Very small workspaces are exactly where a confident-sounding
+   * number does the most damage to trust, so the honest move is silence.
+   */
   minItems: 5,
   /** A single item at or above this share of the stage total is an outlier, not a pattern. */
   outlierItemSharePercent: 50,
@@ -121,15 +130,11 @@ export function detectConcentration(
 
     const sharePercent = pct(top.total, total);
     if (sharePercent < CONCENTRATION_THRESHOLDS.sharePercent) continue;
+    // Suppressed outright, not downgraded — see the threshold's note.
+    if (top.items < CONCENTRATION_THRESHOLDS.minItems) continue;
 
     const outlierSharePercent = pct(top.largestItem, top.total);
     const caps: ConfidenceCap[] = [];
-    if (top.items < CONCENTRATION_THRESHOLDS.minItems) {
-      caps.push({
-        tier: 'B',
-        reason: `Concentration rests on ${top.items} item${top.items === 1 ? '' : 's'}; fewer than ${CONCENTRATION_THRESHOLDS.minItems} means one item can move the share.`,
-      });
-    }
     if (outlierSharePercent >= CONCENTRATION_THRESHOLDS.outlierItemSharePercent) {
       caps.push({
         tier: 'B',

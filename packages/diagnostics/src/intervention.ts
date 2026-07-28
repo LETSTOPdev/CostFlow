@@ -44,8 +44,19 @@ export interface InterventionSpec {
   readonly primitive: InterventionPrimitive;
   readonly complexity: Complexity;
   readonly effortClass: EffortClass;
-  /** Imperative, structural, and about the work — never about a person. */
-  readonly label: string;
+  /**
+   * The recommendation, phrased as a suggestion rather than a conclusion.
+   *
+   * This wording carries a boundary (doc 07 §2.1). CostFlow MEASURES that the
+   * concentration exists; it does not derive that an escalation policy is the
+   * best answer. That comes from a curated playbook authored by humans and
+   * matched deterministically to the pattern. Imperative phrasing ("Add an
+   * escalation rule") reads as a computed conclusion and quietly overclaims,
+   * so the copy stays suggestive and the render layer labels its provenance.
+   *
+   * Structural and about the work — never about a person (ADR-0006 §2).
+   */
+  readonly recommendation: string;
 }
 
 export const INTERVENTIONS: Readonly<Record<InterventionPrimitive, InterventionSpec>> =
@@ -54,61 +65,71 @@ export const INTERVENTIONS: Readonly<Record<InterventionPrimitive, InterventionS
       primitive: 'review-queue',
       complexity: 'Low',
       effortClass: 'process-change',
-      label: 'Review this queue',
+      recommendation:
+        'Review this queue directly, to establish whether the work in it is still wanted before treating the backlog as a capacity problem.',
     },
     'assign-ownership': {
       primitive: 'assign-ownership',
       complexity: 'Low',
       effortClass: 'process-change',
-      label: 'Assign ownership for the unowned items in this stage',
+      recommendation:
+        'Give the unowned items in this stage an explicit owner, so that responsibility for moving them is not left to whoever happens to notice.',
     },
     'escalate-on-age': {
       primitive: 'escalate-on-age',
       complexity: 'Low',
       effortClass: 'policy',
-      label: 'Add an escalation rule for items past their due date',
+      recommendation:
+        'Introduce an escalation policy for items that remain overdue beyond a threshold you define, so that ageing work surfaces without someone having to go looking for it.',
     },
     'add-stage-sla': {
       primitive: 'add-stage-sla',
       complexity: 'Low',
       effortClass: 'policy',
-      label: 'Set a service-level target for this stage',
+      recommendation:
+        'Set a service-level target for this stage, so the wait becomes something the organization measures and owns rather than absorbs.',
     },
     'change-wip-limit': {
       primitive: 'change-wip-limit',
       complexity: 'Medium',
       effortClass: 'process-change',
-      label: 'Introduce or adjust a work-in-progress limit',
+      recommendation:
+        'Introduce or adjust a work-in-progress limit for this stage, to stop new work entering faster than it can leave.',
     },
     'change-batching-cadence': {
       primitive: 'change-batching-cadence',
       complexity: 'Medium',
       effortClass: 'policy',
-      label: 'Change how often work is released through this stage',
+      recommendation:
+        'Change how often work is released through this stage, if the delay follows your release rhythm rather than the volume of work.',
     },
     'reassign-routing': {
       primitive: 'reassign-routing',
       complexity: 'Medium',
       effortClass: 'process-change',
-      label: 'Redistribute how work is routed into this stage',
+      recommendation:
+        'Redistribute how work is routed into this stage, so that arriving volume is matched to where the capacity actually is.',
     },
     'remove-gate': {
       primitive: 'remove-gate',
       complexity: 'Medium',
       effortClass: 'policy',
-      label: 'Remove this approval gate for lower-risk item classes',
+      recommendation:
+        'Consider removing this approval gate for lower-risk classes of work, so that scrutiny is spent where the risk actually is.',
     },
     'split-or-merge-stage': {
       primitive: 'split-or-merge-stage',
       complexity: 'High',
       effortClass: 'process-change',
-      label: 'Split or merge this stage',
+      recommendation:
+        'Consider splitting or merging this stage, if the work passing through it is really two different kinds of work with different needs.',
     },
     'add-capacity': {
       primitive: 'add-capacity',
       complexity: 'High',
       effortClass: 'staffing',
-      label: 'Add capacity to this stage',
+      recommendation:
+        'Consider adding capacity to this stage, once the cheaper policy and routing options above have been ruled out.',
     },
   });
 
