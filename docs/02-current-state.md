@@ -32,8 +32,9 @@ not, and a document that is usually slightly wrong stops being trusted.
 
 ## What works end to end
 
-A customer can sign up, connect Jira or ClickUp, select a scope, map statuses to
-stage kinds, map actors to roles, set salary and attention assumptions, run an
+A customer can sign up, connect Jira or ClickUp, search and select a scope, map
+statuses to stage kinds, map actors to roles, set pay (as an hourly rate or a
+monthly salary that is divided into one) and attention assumptions, run an
 analysis, and read a priced report with a formula trace behind every number.
 
 On top of that:
@@ -68,6 +69,13 @@ per-signal diff. The report's trend section is gated on it.
 import batch and carried in the artifact. ClickUp declares its reconstruction
 limits; other providers currently declare none.
 
+**Onboarding.** Scope selection has server-side search (a GET round trip, since
+there is no client JavaScript) and submits the scope id rather than a list
+position. The rate card leads with the people mapped to each role, and pay can
+be entered as a monthly salary that is divided into an hourly rate by exact
+decimal arithmetic — the salary and divisor live in workspace configuration, not
+in the assumption set, so the engine still prices on hourly rates alone.
+
 **Admin console.** Twenty routes at `/admin`: executive dashboard, customer
 database with per-customer detail, activity feed, onboarding funnel, monitoring
 workspaces, organisations, users, workspaces, jobs, runs, invitations, audit log,
@@ -99,6 +107,9 @@ database already exist, so the scope is **unconfirmed**. Ask before building.
 - Should the recommendations section appear on `/demo` and `/try/report`? Those
   are public marketing surfaces; showing it would demonstrate the layer to
   prospects.
+- A workspace analyses **one** scope. Managers reason across an organisation, so
+  a monitoring workspace should span several spaces, folders or lists. This is
+  the next milestone; see `03-roadmap.md`.
 - Billing is a Lemon Squeezy-shaped scaffold with nothing behind it: every
   organisation is plan `beta`, status `free_beta`, provider `none`, all dates
   null. The schema maps one-to-one onto Lemon Squeezy records, so integrating

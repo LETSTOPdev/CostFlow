@@ -51,6 +51,20 @@ The checklists for before and after a push are in
 | `COSTFLOW_STORE` | `memory` for a throwaway demo. Never in production. |
 | `COSTFLOW_MAX_ISSUES` | Optional import ceiling. |
 
+### Getting a ClickUp API token
+
+Verified against the live ClickUp UI, July 2026. **ClickUp's own developer
+documentation is stale** and still gives the old "Settings → Apps" path.
+
+Avatar (top right) → **Settings** → under *Integrations & ClickApps*, **ClickUp
+API** → under **API Token**, click **Copy**. Tokens start with `pk_`.
+
+Use **Regenerate** only if there is no token yet: it asks for the account
+password and invalidates the existing token, breaking anything already using it.
+
+Wait-time analysis additionally needs the **Total Time in Status** ClickApp,
+which a Workspace admin enables.
+
 **Configuration is read at boot.** Changing a variable requires a redeploy.
 
 Auth0 itself is configured in the Auth0 dashboard, not in code. Sign-up and

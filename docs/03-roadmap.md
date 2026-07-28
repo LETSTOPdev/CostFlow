@@ -3,7 +3,8 @@
 Future work only. **When a milestone completes, delete it from this file** and
 update `02-current-state.md` instead.
 
-Nothing is in progress. The next milestone is unconfirmed — see P0.
+Multi-scope monitoring (P2) is the active milestone. P0 is blocked on the
+operator and blocks nothing else.
 
 ---
 
@@ -43,11 +44,32 @@ design discussion.
 
 ---
 
-## P2 — Next milestone, unconfirmed
+## P2 — Multi-scope monitoring (next milestone)
 
-The founder named "the admin database/dashboard" but the console and customer
-database already exist, so this is an extension rather than a build. **Ask which
-before starting.** Candidates, roughly by business value:
+### A monitoring workspace spans several scopes
+
+**Goal.** A workspace analyses several spaces, folders, lists or projects as one
+connected body of work, instead of a single isolated scope.
+
+**Reason.** Managers reason across an organisation. Engineering, Legal, Design
+and QA in one analysis is what makes a cross-team bottleneck visible at all; a
+single list can only ever show friction inside itself. This is foundational for
+organisational intelligence rather than a convenience.
+
+**Dependencies.** A schema change (`scopeId` is one nullable column today),
+fetching several scopes per run, and merging them into one `ImportBatch` while
+keeping item ids unique. Bulk selection in the UI (Select All, Deselect All)
+lands here too — it is meaningless against a single-scope model, which is why
+the search half shipped first and the bulk half did not.
+
+**Status.** Design starting. Treat as foundational.
+
+---
+
+## P3 — Admin console extensions
+
+The console and customer database already exist, so these are extensions rather
+than builds. Candidates, roughly by business value:
 
 ### Real billing integration
 
@@ -92,7 +114,7 @@ first.
 
 ---
 
-## P3 — Monitoring Workspaces continued
+## P4 — Monitoring Workspaces continued
 
 Design in `reference/19-monitoring-workspaces.md`. MW1 shipped; MW2 onward
 remain.
@@ -145,7 +167,7 @@ thresholds, and change attribution.
 
 ---
 
-## P4 — Operational Intelligence continued
+## P5 — Operational Intelligence continued
 
 ### OI2 — simulation
 
@@ -161,6 +183,25 @@ by real customers.** Start with the SLA-cap transform, which is high-fidelity
 arithmetic over observed waits rather than a queue model.
 
 **Status.** Deliberately deferred. This is a decision, not an oversight.
+
+### Dependency-aware analysis
+
+**Goal.** Detect that ten blocked tasks share one blocker, and report the
+bottleneck rather than ten slow tasks.
+
+**Reason.** The single largest gap between what CostFlow reports and what a
+manager needs. "Legal approval is blocking 14 downstream tasks" is a dependency
+claim, and today the engine cannot count the 14.
+
+**Dependencies.** `WorkItem` carries no dependency link of any kind. The raw
+ClickUp payload already contains `dependencies`, `linked_tasks`, `parent` and
+`top_level_parent` — fetched, retained, and deliberately not canonicalised
+because no consumer existed. So the path is a domain field, then ingestion, then
+a diagnostic. Touches the frozen engine, so golden regeneration with a stated
+reason.
+
+**Status.** **Design only, by explicit instruction.** The canonical model is to
+be designed and every affected site identified, but the engine change waits.
 
 ### MC-5 continued — connector capability expansion
 
