@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { assessComparability } from '@costflow/comparison';
 import type { AnalysisRun } from '@costflow/analysis';
 import { GatewayError, resolveSelection, type ScopeRef } from '../src/connectors/types';
-import { get, makeApp, post, signIn, type TestApp } from './helpers';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { ROOT, get, makeApp, post, signIn, type TestApp } from './helpers';
 
 const CLICKUP_TOKEN = 'pk_1234567_SECRETSECRETSECRET';
 
@@ -380,5 +382,83 @@ describe('friction is attributed to the origin it happened in', () => {
     const workspace = (await t.store.listWorkspaces(tenantId))[0]!;
     // One origin: every friction shares it, so nothing is partitioned.
     expect(workspace.scopes).toHaveLength(1);
+  });
+});
+
+/**
+ * The dashboard is the first surface a returning user sees, so it has the same
+ * obligation as the report: a workspace spanning several teams cannot say "the
+ * review queue" and mean anything. A workspace covering one origin already
+ * names it in the page foot, so repeating it on every card would be noise —
+ * the qualifier appears only when it distinguishes something.
+ */
+describe('the dashboard names the team when there is more than one', () => {
+  const GOLDEN = readFileSync(join(ROOT, 'tools/golden/expected/demo-flow/run.json'), 'utf8');
+
+  /** The golden run, re-attributed across two origins. */
+  const acrossOrigins = (labels: readonly { id: string; label: string }[]): string => {
+    const run = JSON.parse(GOLDEN) as {
+      batch: { scopes: unknown[]; items: { id: string; originScopeId: string | null }[] };
+      frictions: { location: { originScopeId: string | null } }[];
+    };
+    run.batch.scopes = labels.map((l, i) => ({ ...l, itemCount: i + 1 }));
+    const first = labels[0] as { id: string };
+    run.batch.items.forEach((item, i) => {
+      item.originScopeId = (labels[i % labels.length] as { id: string }).id;
+    });
+    for (const f of run.frictions) f.location.originScopeId = first.id;
+    return JSON.stringify(run);
+  };
+
+  const seed = async (t: TestApp, email: string, runJson: string): Promise<string> => {
+    const cookie = await signIn(t, email);
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const workspace = await t.store.createWorkspace(tenantId, {
+      provider: 'jira',
+      connectionParams: { site: 'https://acme.atlassian.net', email },
+      tokenCiphertext: 'tok',
+    });
+    await t.store.updateWorkspace(tenantId, workspace.id, {
+      scopes: [{ id: 'OPS', kind: 'project', name: 'Operations' }],
+      onboarding: 'ready',
+    });
+    await t.store.createRun({
+      id: 'r-dash',
+      tenantId,
+      workspaceId: workspace.id,
+      createdAt: '2026-07-20T00:00:00Z',
+      runJson,
+      reportMd: '# report',
+      telemetryJsonl: '',
+    });
+    return cookie;
+  };
+
+  it('qualifies the headline friction with its origin', async () => {
+    const t = makeApp();
+    const cookie = await seed(
+      t,
+      'dash-multi@acme.example',
+      acrossOrigins([
+        { id: 'eng', label: 'Engineering' },
+        { id: 'legal', label: 'Legal' },
+      ]),
+    );
+    const dash = await get(t, cookie, '/dashboard');
+    expect(dash.statusCode).toBe(200);
+    expect(dash.body).toContain('costing about');
+    expect(dash.body).toContain('in Engineering');
+  });
+
+  it('stays quiet when the workspace covers a single origin', async () => {
+    const t = makeApp();
+    const cookie = await seed(
+      t,
+      'dash-single@acme.example',
+      acrossOrigins([{ id: 'eng', label: 'Engineering' }]),
+    );
+    const dash = await get(t, cookie, '/dashboard');
+    expect(dash.body).toContain('costing about');
+    expect(dash.body).not.toContain('in Engineering');
   });
 });

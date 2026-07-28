@@ -1,7 +1,7 @@
 import { describeSelection, selectionNames } from './scopes';
 import type { WorkspaceScope } from './store/contract';
 import { compareDecimalStrings, dec, decToString, formatWholeMoney } from '@costflow/cost-engine';
-import type { RangeSpec } from '@costflow/domain';
+import type { BatchScope, RangeSpec } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import type { AnalysisRun } from '@costflow/analysis';
 import { esc } from './html';
@@ -213,6 +213,18 @@ const insightCards = (latest: RunDigest, latestRunId: string): string => {
   const { ranked, total, currency } = latest;
   const top = ranked[0];
   if (!top) return '';
+  /**
+   * Which team's queue this is, when saying so distinguishes anything. A
+   * workspace covering one origin already names it in the page foot, so
+   * repeating it on every card is noise; a workspace covering several cannot
+   * say "the review queue" and mean anything.
+   */
+  const scopes = (latest.run.batch.scopes as readonly BatchScope[] | undefined) ?? [];
+  const whose = (location: { readonly originScopeId: string | null }): string => {
+    if (scopes.length < 2 || location.originScopeId === null) return '';
+    const label = scopes.find((sc) => sc.id === location.originScopeId)?.label;
+    return label === undefined ? '' : ` in ${esc(label)}`;
+  };
   const topStage = top.instance.location.stage.name;
   const topSubject = frictionSubject(top.instance.frictionType, topStage);
   // Share of total: CSS-only presentation float (same sanctioned pattern as
@@ -234,7 +246,7 @@ const insightCards = (latest: RunDigest, latestRunId: string): string => {
   const strongestCard = strongest
     ? `<div class="insight">
         <p class="k">How solid is this</p>
-        <p class="lede">Strongest evidence: ${lowerFirst(frictionSubject(strongest.instance.frictionType, strongest.instance.location.stage.name).subject)} at about <strong>${money(strongest.estimate.cost.expected, currency)}</strong>, grade&nbsp;${esc(strongest.estimate.confidence.tier)}.</p>
+        <p class="lede">Strongest evidence: ${lowerFirst(frictionSubject(strongest.instance.frictionType, strongest.instance.location.stage.name).subject)}${whose(strongest.instance.location)} at about <strong>${money(strongest.estimate.cost.expected, currency)}</strong>, grade&nbsp;${esc(strongest.estimate.confidence.tier)}.</p>
         <p class="note">${tierPills(ranked)}</p>
       </div>`
     : '';
@@ -242,7 +254,7 @@ const insightCards = (latest: RunDigest, latestRunId: string): string => {
   return `<div class="dash-cards">
     <div class="insight">
       <p class="k">Where it's going</p>
-      <p class="lede">${topSubject.subject} ${topSubject.verb} costing about <strong>${money(top.estimate.cost.expected, currency)}</strong>.</p>
+      <p class="lede">${topSubject.subject}${whose(top.instance.location)} ${topSubject.verb} costing about <strong>${money(top.estimate.cost.expected, currency)}</strong>.</p>
       ${share}
       <a class="go" href="/reports/${esc(latestRunId)}">See the evidence →</a>
     </div>
