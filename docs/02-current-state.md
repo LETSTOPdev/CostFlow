@@ -89,7 +89,8 @@ artifact keeps full decimal precision. The statuses step explains what each of
 the six stage kinds changes, because that choice decides whether time is
 measured as work or as waiting.
 
-The report is ordered for a two-minute executive read:
+The run history names what each analysis found rather than listing dollar
+amounts. The report is ordered for a two-minute executive read:
 total, then recommendations, then a labelled boundary, then supporting detail.
 The printable export and both public sample surfaces render the same body; the
 public ones mark the recommendations as computed from demonstration data. See

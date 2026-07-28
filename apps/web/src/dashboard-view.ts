@@ -5,7 +5,7 @@ import type { BatchScope, RangeSpec } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import type { AnalysisRun } from '@costflow/analysis';
 import { esc } from './html';
-import { frictionInsight, parseRun, totalRange } from './report-view';
+import { frictionInsight, frictionSubject, parseRun, totalRange } from './report-view';
 
 /**
  * Executive dashboard. One dominant number, three plain-English decisions,
@@ -81,24 +81,6 @@ const digestOf = (runJson: string): RunDigest | null => {
     };
   } catch {
     return null;
-  }
-};
-
-/**
- * A friction as an executive subject ("Work waiting in the “Review” queue"),
- * with its verb — so cards read as sentences about money, not as categories.
- */
-const frictionSubject = (type: string, stage: string): { subject: string; verb: string } => {
-  const s = `“${esc(stage)}”`;
-  switch (type) {
-    case 'queue-wait':
-      return { subject: `Work waiting in the ${s} queue`, verb: 'is' };
-    case 'aging':
-      return { subject: `Items sitting untouched in ${s}`, verb: 'are' };
-    case 'overdue':
-      return { subject: `Missed due dates in ${s}`, verb: 'are' };
-    default:
-      return { subject: `Friction concentrated in ${s}`, verb: 'is' };
   }
 };
 

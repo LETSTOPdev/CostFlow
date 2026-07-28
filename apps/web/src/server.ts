@@ -411,14 +411,20 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // the number a reader scans for — with a safe fallback when the artifact
   // can't be summarized.
   const runRow = (r: { id: string; createdAt: string; runJson: string }): string => {
+    // What the analysis FOUND leads; the money supports it (D22). A history
+    // list titled with dollar amounts is a ledger — a returning executive
+    // scanning it should be able to see what each analysis was about without
+    // opening every one.
     const s = runSummary(r.runJson);
     const title =
       s === null
         ? 'Friction analysis'
         : s.priced === 0
-          ? 'No priced frictions'
-          : `${esc(s.expectedText)} expected`;
-    const sub = `${fmtWhen(r.createdAt)}${s !== null && s.priced > 0 ? `, ${s.priced} priced` : ''}. Ref ${esc(r.id)}`;
+          ? 'No priced frictions above thresholds'
+          : (s.headline ?? `${esc(s.expectedText)} expected`);
+    const sub = `${
+      s !== null && s.priced > 0 ? `${esc(s.expectedText)} expected, ${s.priced} priced. ` : ''
+    }${fmtWhen(r.createdAt)}. Ref ${esc(r.id)}`;
     return `<li class="row"><a class="row-main" href="/reports/${esc(r.id)}"><span>${title}</span><span class="row-sub">${sub}</span></a><span class="row-go">View report →</span></li>`;
   };
 
@@ -3229,7 +3235,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
                <div class="empty">
                  <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18 10 12 14 15 20 8"/><circle cx="10" cy="12" r="1.4"/><circle cx="14" cy="15" r="1.4"/></svg></span>
                  <h3>No reports yet</h3>
-                 <p>Run your first analysis to see what friction is costing your team.</p>
+                 <p>Run your first analysis to see the highest-leverage change to make in your delivery process, and what it is costing you not to make it.</p>
                  <a class="btn" href="/">Start an analysis</a>
                </div>`
           : `<h1>Reports</h1>

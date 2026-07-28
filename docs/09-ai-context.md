@@ -201,9 +201,22 @@ ways that will fail your build for reasons that look mysterious otherwise.
 canonical model rather than with what a customer sees has started in the wrong
 place.
 
-**Propose before you build.** The founder works by approval gate: propose, get an
-explicit go-ahead, implement, stop for review. Do not start a milestone
-unprompted.
+**Operate autonomously; interrupt only for these three.** Founder directive,
+2026-07-28, superseding the earlier propose-and-wait default:
+
+1. **A genuine product decision** — one the project's principles cannot settle.
+   Bring the trade-offs, not a recommendation dressed as a question.
+2. **Several architectural directions with meaningful trade-offs.** Not "two ways
+   to write this"; two futures the codebase would live in.
+3. **Customer feedback that contradicts a current assumption.** That outranks
+   everything, including a decision already made.
+
+Everything else runs to completion: implementation, tests, deploy, verify, docs.
+The bar for interrupting is that the answer changes what gets built, and cannot
+be inferred from `04-engineering-principles.md`, `05-decisions.md`, or the North
+Star. Notice the asymmetry — shipping something wrong is recoverable in one
+commit; asking the founder to adjudicate what you could have reasoned out costs
+them the thing autonomy was meant to buy.
 
 For anything structural — a new package, a change to the canonical model, a new
 vocabulary, a change to how numbers are produced — write an architecture review

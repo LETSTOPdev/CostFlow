@@ -115,6 +115,26 @@ export const humanizeMagnitude = (value: number | string, unit: string): string 
 // business terms and where the leverage is. Derived only from the friction type
 // and the stage name (never a fabricated number, never AI-written per-report):
 // this is the "so what do I do?" a buyer looks for, kept honest.
+/**
+ * A friction as an executive subject ("Work waiting in the “Review” queue"),
+ * with its verb — so a card or a list row reads as a sentence about the work,
+ * not as a category. Shared by the dashboard, the run history and the report so
+ * all three name the same finding the same way.
+ */
+export const frictionSubject = (type: string, stage: string): { subject: string; verb: string } => {
+  const s = `“${esc(stage)}”`;
+  switch (type) {
+    case 'queue-wait':
+      return { subject: `Work waiting in the ${s} queue`, verb: 'is' };
+    case 'aging':
+      return { subject: `Items sitting untouched in ${s}`, verb: 'are' };
+    case 'overdue':
+      return { subject: `Missed due dates in ${s}`, verb: 'are' };
+    default:
+      return { subject: `Friction concentrated in ${s}`, verb: 'is' };
+  }
+};
+
 export const frictionInsight = (type: string, stage: string, agingDays: number): string => {
   const s = `“${esc(stage)}”`;
   switch (type) {
@@ -601,14 +621,24 @@ export function parseRun(runJson: string): AnalysisRun {
  * Same deterministic model + formatter the report uses; null on any parse
  * failure so callers fall back to a generic label.
  */
-export function runSummary(runJson: string): { expectedText: string; priced: number } | null {
+export function runSummary(
+  runJson: string,
+): { expectedText: string; priced: number; headline: string | null } | null {
   try {
     const run = parseRun(runJson);
     const model = buildReportModel(run);
     const total = totalRange(model.ranked);
+    const top = model.ranked[0];
     return {
       priced: model.ranked.length,
       expectedText: formatWholeMoney(total.expected, run.assumptions.currency),
+      // What the analysis FOUND, in the same words every other surface uses.
+      // A history list titled with dollar amounts is a ledger; a returning
+      // executive scanning it should see what each analysis was about (D22).
+      headline:
+        top === undefined
+          ? null
+          : frictionSubject(top.instance.frictionType, top.instance.location.stage.name).subject,
     };
   } catch {
     return null;

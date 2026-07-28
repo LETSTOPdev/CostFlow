@@ -154,3 +154,37 @@ describe('executive dashboard', () => {
     expect(settings.body).toContain('Data &amp; privacy');
   });
 });
+
+/**
+ * The run history was the last surface still leading with money — a ledger of
+ * dollar amounts that told a returning executive nothing about what any
+ * analysis said to do. D22 applies here too.
+ */
+describe('run history', () => {
+  it('titles each analysis with what it found, and carries the money beneath', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'ceo@dash.example');
+    const { tenantId, workspaceId } = await seedWorkspace(t, 'ceo@dash.example');
+    await seedRun(t, tenantId, workspaceId, 'run-a', '2026-07-20T10:00:00Z');
+
+    const res = await get(t, cookie, '/runs');
+    expect(res.statusCode).toBe(200);
+    const summary = runSummary(RUN_JSON)!;
+    expect(summary.headline).not.toBeNull();
+    // The finding is the row title; the total moved into the sub-line.
+    const title = res.body.indexOf(summary.headline as string);
+    const amount = res.body.indexOf(`${summary.expectedText} expected`);
+    expect(title).toBeGreaterThan(-1);
+    expect(amount).toBeGreaterThan(title);
+    // Same vocabulary the dashboard and the report use for the same finding.
+    expect(summary.headline).toMatch(/waiting|untouched|due dates|concentrated/);
+  });
+
+  it('promises the briefing, not a cost breakdown, before the first run', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'ceo@dash.example');
+    await seedWorkspace(t, 'ceo@dash.example');
+    const res = await get(t, cookie, '/runs');
+    expect(res.body).toContain('highest-leverage change');
+  });
+});
