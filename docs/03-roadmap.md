@@ -3,6 +3,13 @@
 Future work only. **When a milestone completes, delete it from this file** and
 update `02-current-state.md` instead.
 
+**The roadmap is a guide, not a contract. The North Star is the contract.**
+Founder directive, 2026-07-28. Do not stop to re-rank this file: when a
+milestone finishes, pick the next item that most improves an executive's ability
+to know what to do next, and start. If no item here meaningfully improves that
+outcome, say so, name the gap, and propose replacing the item rather than
+following the list mechanically.
+
 ## The North Star
 
 > An executive opens a report, reads it in under two minutes, and leaves with
@@ -35,8 +42,8 @@ the front of the queue. This does not stop engine work — it requires that engi
 work be justified by the product outcome it unlocks, not by the capability
 itself.
 
-The items below predate this directive and are ordered by their old logic.
-Re-rank them against the test above before picking one up.
+The items below predate the North Star and are ordered by their old logic.
+Rank them against it as you go, not in a separate pass.
 
 No milestone is active. P0 is blocked on the operator and blocks nothing else;
 P1 is waiting on real customer usage, which the founder made a precondition for

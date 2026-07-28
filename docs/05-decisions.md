@@ -474,3 +474,34 @@ nothing-priced result. `ADR-0006 §5` is intact: impact and complexity appear as
 separate chips on the hero and are never fused. The dashboard, the printable
 export, `/demo`, `/try/report` and the landing page all carry the same order, so
 a customer meets one product rather than two.
+
+---
+
+## D23 — "Nothing priced" is not "nothing wrong"
+
+**Decision.** A run that found frictions but priced none of them is presented as
+a BLOCKED analysis with confirming the assumptions as the recommended action,
+never as a healthy result. The healthy message is reserved for a run that found
+nothing and left nothing unpriced.
+
+**Reason.** Report mode refuses to price a vendor suggestion (D4), so a customer
+who supplies values without confirming them gets zero priced findings. The
+report rendered that as *"No priced friction crossed your thresholds. That is a
+genuinely healthy sign."* — with eight measured frictions listed below it. It
+told a first-time executive their process was fine at the moment the analysis
+found eight problems and declined to cost them.
+
+Found by walking the realistic first-run path: type your own rate, ignore the
+six accept checkboxes for parameters you have no opinion about. No test caught
+it because every test either accepted everything or accepted nothing while
+asserting on the unpriced list rather than the headline.
+
+**Tradeoffs.** The blocked state now occupies the hero, which is more prominent
+than a caveat. That is correct: it is the highest-leverage action available to
+that reader, and a briefing they cannot act on is worth less than a clear
+instruction for making it actionable.
+
+**Consequences.** The unconfirmed assumptions are listed by the names the
+customer saw on the assumptions step, read from the artifact's own provenance
+rather than parsed out of the engine's skip-reason prose. The dashboard carries
+the same split. `isCustomerOwned` is the single test for both.

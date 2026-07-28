@@ -82,7 +82,9 @@ single highest-leverage action, with the cost at stake beneath it as the
 evidence that acting is worth it, and the total across the analysis in the
 supporting detail (D22). The recommendation says it was chosen for strongest
 evidence rather than largest figure (D21), and the cost-ordered list below
-explains why its order differs. The hero is never empty while money is priced —
+explains why its order differs. A run that found frictions but priced none reads as a blocked analysis with
+confirming the assumptions as the action, never as a healthy result (D23). The
+hero is never empty while money is priced —
 with no diagnostic above its evidence gate it names the largest measured cost
 and labels it as measured (D20). Durations are formatted for a reader; the
 artifact keeps full decimal precision. The statuses step explains what each of

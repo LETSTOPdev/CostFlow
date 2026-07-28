@@ -10,6 +10,7 @@ import {
   type TraceTerm,
 } from '@costflow/cost-engine';
 import type { BatchScope, RangeSpec } from '@costflow/domain';
+import { isCustomerOwned } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import { compareRuns, type ChangeDirection } from '@costflow/comparison';
 import { esc } from './html';
@@ -121,6 +122,45 @@ export const humanizeMagnitude = (value: number | string, unit: string): string 
  * not as a category. Shared by the dashboard, the run history and the report so
  * all three name the same finding the same way.
  */
+
+/**
+ * Which assumptions are still vendor-suggested, by the names the customer saw
+ * on the assumptions step. Read from the artifact's own provenance rather than
+ * parsed out of the engine's skip-reason prose, so a reworded reason cannot
+ * quietly break the list.
+ */
+const ASSUMPTION_LABELS: Record<string, string> = {
+  agingThresholdDays: 'the aging threshold',
+  attentionHoursPerDay: 'attention on aging items',
+  queueWaitAttentionHoursPerDay: 'follow-up attention on queued items',
+  overdueAttentionHoursPerDay: 'chasing attention on overdue items',
+};
+
+function unconfirmed(run: AnalysisRun): string[] {
+  const names: string[] = [];
+  if (!isCustomerOwned(run.assumptions.defaultRate.provenance))
+    names.push('the default hourly rate');
+  for (const [key, label] of Object.entries(ASSUMPTION_LABELS)) {
+    const parameter =
+      run.assumptions.parameters[key as keyof AnalysisRun['assumptions']['parameters']];
+    if (parameter && !isCustomerOwned(parameter.provenance)) names.push(label);
+  }
+  for (const rate of run.assumptions.rates) {
+    if (!isCustomerOwned(rate.provenance)) names.push(`the rate for ${esc(rate.roleRef)}`);
+  }
+  return names;
+}
+
+const unconfirmedCount = (run: AnalysisRun): number => unconfirmed(run).length;
+
+const unconfirmedList = (run: AnalysisRun): string => {
+  const names = unconfirmed(run);
+  if (names.length === 0) return '';
+  const shown = names.slice(0, 4);
+  const rest = names.length - shown.length;
+  return `Still unconfirmed: ${shown.join(', ')}${rest > 0 ? `, and ${rest} more` : ''}.`;
+};
+
 export const frictionSubject = (type: string, stage: string): { subject: string; verb: string } => {
   const s = `“${esc(stage)}”`;
   switch (type) {
@@ -449,7 +489,9 @@ export function renderReportBody(
   const agingDays = run.assumptions.parameters.agingThresholdDays.value;
   const ranked =
     model.ranked.length === 0
-      ? `<div class="info">No priced friction crossed your thresholds in this import. That's a genuinely healthy sign for the work analyzed. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`
+      ? model.unpriced.length > 0
+        ? `<div class="info">Nothing here could be priced. The findings are listed under <strong>Unpriced frictions</strong> below, each with the assumption it is waiting on.</div>`
+        : `<div class="info">No friction crossed your thresholds in this import. That's a genuinely healthy sign for the work analyzed. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`
       : model.ranked
           .map((rf) =>
             renderRankedFriction(
@@ -565,9 +607,30 @@ export function renderReportBody(
       ${evidenceChips(stake, `<span class="chip">Confidence ${esc(largest.estimate.confidence.tier)}</span>`)}
       <p class="note" style="margin:.7rem 0 0">No pattern in this analysis cleared the evidence threshold, so this is the largest <strong>measured</strong> cost rather than a fitted recommendation. A workspace with more history behind each stage gives the diagnostics enough to name an intervention as well.</p>
     </section>`;
+  } else if (model.unpriced.length > 0) {
+    /**
+     * Frictions were found and NONE could be priced. This used to render as
+     * "no priced friction crossed your thresholds — a genuinely healthy sign",
+     * which is the most damaging sentence the product could produce: it tells
+     * an executive their process is fine at the exact moment the analysis found
+     * eight problems and declined to put a number on any of them.
+     *
+     * It is also, usefully, a real action — and the highest-leverage one
+     * available to that reader. Report mode refuses to price a vendor
+     * suggestion (D4), so the thing standing between them and a briefing is a
+     * handful of confirmations.
+     */
+    headline = 'Start here';
+    hero = `<section class="report-hero">
+      <p class="note" style="margin:0;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Confirm your assumptions</p>
+      <p class="act">CostFlow found ${model.unpriced.length} friction${model.unpriced.length === 1 ? '' : 's'} and could not price ${model.unpriced.length === 1 ? 'it' : 'any of them'}.</p>
+      <p class="act-why">Nothing is priced on a value you have not confirmed. ${unconfirmedList(run)} Confirm ${unconfirmedCount(run) === 1 ? 'it' : 'them'} and run again to get a priced briefing.</p>
+      <p style="margin:.8rem 0 0"><a class="btn" href="/assumptions">Review assumptions</a></p>
+      <p class="note" style="margin:.7rem 0 0">This is not a clean bill of health: the frictions below are real and their magnitudes are measured. Only the cost is missing.</p>
+    </section>`;
   } else {
     headline = 'Nothing crossed your thresholds';
-    hero = `<div class="info">No priced friction crossed your thresholds in this analysis. That is a genuinely healthy sign for the work covered. If you expected findings, your aging and queue thresholds may be set conservatively — lower them and run again to surface smaller effects.</div>`;
+    hero = `<div class="info">No friction crossed your thresholds in this analysis, and nothing was left unpriced. That is a genuinely healthy sign for the work covered. If you expected findings, your aging and queue thresholds may be set conservatively — lower them and run again to surface smaller effects.</div>`;
   }
 
   // Always rendered when diagnostics exist: even with no finding it carries

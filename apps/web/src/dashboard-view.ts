@@ -176,13 +176,27 @@ const heroWithFindings = (
   </section>`;
 };
 
+/**
+ * Nothing priced. Whether that is good news depends entirely on whether
+ * anything was FOUND, and the two must never read the same: telling an
+ * executive their process is healthy when the analysis found problems and
+ * declined to price them is the worst thing either surface can say.
+ */
 const heroNothingPriced = (input: DashboardInput, latest: RunDigest): string =>
-  `<section class="dash-hero">
-    <p class="hero-eyebrow">Potential recoverable cost</p>
-    <p class="figure-hero quiet">No priced friction above your thresholds</p>
-    <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}${latest.unpricedCount > 0 ? `. ${latest.unpricedCount} unpriced finding${latest.unpricedCount === 1 ? '' : 's'} awaiting a confirmed assumption` : ''}</p>
-    ${runForm(input.csrfField, 'Analyze again', safetyNote(input.providerName))}
-  </section>`;
+  latest.unpricedCount > 0
+    ? `<section class="dash-hero">
+        <p class="hero-eyebrow">Start here</p>
+        <p class="figure-hero quiet">Confirm your assumptions to price ${latest.unpricedCount} finding${latest.unpricedCount === 1 ? '' : 's'}</p>
+        <p class="hero-sub">The frictions are real and measured. Nothing is priced on a value you have not confirmed, so the cost is all that is missing. <a href="/assumptions">Review assumptions →</a></p>
+        <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}</p>
+        ${runForm(input.csrfField, 'Analyze again', safetyNote(input.providerName))}
+      </section>`
+    : `<section class="dash-hero">
+        <p class="hero-eyebrow">Latest analysis</p>
+        <p class="figure-hero quiet">No friction crossed your thresholds</p>
+        <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}. Nothing was left unpriced either, so this is a clean result rather than a missing one.</p>
+        ${runForm(input.csrfField, 'Analyze again', safetyNote(input.providerName))}
+      </section>`;
 
 const heroUnreadable = (input: DashboardInput): string =>
   `<section class="dash-hero">

@@ -198,7 +198,10 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
     const report = await get(t, cookie, jobPage.headers['location'] as string);
     expect(report.body).toContain('Unpriced frictions');
     expect(report.body).toContain('vendor-suggested');
-    expect(report.body).toContain('No priced friction crossed your thresholds'); // nothing priced at all
+    // Nothing priced at all — and the report says so as a blocked analysis
+    // rather than a healthy one, because frictions WERE found (D23).
+    expect(report.body).toContain('could not price');
+    expect(report.body).not.toContain('genuinely healthy sign');
   });
 
   it('"Accept all suggested values" (v1) reaches a priced report in one click', async () => {

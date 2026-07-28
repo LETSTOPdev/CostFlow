@@ -599,3 +599,88 @@ describe('what a first-time executive is prevented from understanding', () => {
     expect(page.body).toContain('map it to <em>queue</em> instead');
   });
 });
+
+/**
+ * The most damaging sentence the product could produce, found by walking the
+ * realistic first-run path: a customer who types their own rate and does not
+ * tick the six "accept" boxes for the parameters they have no opinion about.
+ *
+ * Report mode refuses to price a vendor suggestion (D4), so NOTHING gets a
+ * cost — and the report used to render that as "no priced friction crossed
+ * your thresholds, a genuinely healthy sign". Eight measured frictions, and the
+ * product told them their process was fine.
+ */
+describe('when frictions are found but none can be priced', () => {
+  async function unpricedRun(t: TestApp, email: string) {
+    const cookie = await clickupWorkspace(t, email);
+    await post(t, cookie, '/scope', { scope: '790', action: 'import' });
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const workspace = (await t.store.listWorkspaces(tenantId))[0]!;
+    await post(
+      t,
+      cookie,
+      '/mapping/statuses',
+      Object.fromEntries(
+        workspace.observedStatuses.map((st, i) => [
+          `s${i}`,
+          st === 'complete' || st === 'done' ? 'done' : st === 'review' ? 'review' : 'queue',
+        ]),
+      ),
+    );
+    await post(
+      t,
+      cookie,
+      '/mapping/actors',
+      Object.fromEntries(workspace.observedActors.map((_, i) => [`a${i}`, 'Ops'])),
+    );
+    // Values supplied, nothing accepted: every assumption stays
+    // vendor-suggested, so report mode prices none of it.
+    await post(t, cookie, '/assumptions', {
+      defaultRate: '30',
+      agingThresholdDays: '14',
+      attention_low: '0.15',
+      attention_expected: '0.3',
+      attention_high: '0.6',
+      queueWait_low: '0.1',
+      queueWait_expected: '0.2',
+      queueWait_high: '0.4',
+      overdue_low: '0.1',
+      overdue_expected: '0.2',
+      overdue_high: '0.4',
+      rate0: '30',
+    });
+    await post(t, cookie, '/runs', {});
+    const runs = await t.store.listRuns(tenantId);
+    const run = JSON.parse(runs[0]!.runJson) as AnalysisRun;
+    return { cookie, run, report: await get(t, cookie, `/reports/${run.runId}`) };
+  }
+
+  it('never calls an unpriced analysis healthy', async () => {
+    const t = makeApp();
+    const { run, report } = await unpricedRun(t, 'unpriced@acme.example');
+    // Preconditions: frictions found, none priced.
+    expect(run.frictions.length).toBeGreaterThan(0);
+    expect(run.estimates).toHaveLength(0);
+
+    expect(report.body).not.toContain('genuinely healthy sign');
+    expect(report.body).toContain('could not price');
+    expect(report.body).toContain('not a clean bill of health');
+  });
+
+  /** The blocker IS the action, and it is the highest-leverage one available. */
+  it('makes confirming the assumptions the recommended next step', async () => {
+    const t = makeApp();
+    const { report } = await unpricedRun(t, 'confirm@acme.example');
+    expect(report.body).toContain('Confirm your assumptions');
+    expect(report.body).toContain('Still unconfirmed:');
+    expect(report.body).toContain('href="/assumptions"');
+  });
+
+  it('says the same thing on the dashboard', async () => {
+    const t = makeApp();
+    const { cookie } = await unpricedRun(t, 'dashunpriced@acme.example');
+    const dash = await get(t, cookie, '/dashboard');
+    expect(dash.body).toContain('Confirm your assumptions to price');
+    expect(dash.body).not.toContain('No friction crossed your thresholds');
+  });
+});
