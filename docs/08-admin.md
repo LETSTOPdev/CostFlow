@@ -33,12 +33,8 @@ Migrations are idempotent: `schema.sql` is re-applied in full on every deploy,
 using `create table if not exists` and `create index if not exists` throughout,
 with backfills written to be safely re-runnable.
 
-Before pushing: run `pnpm check` on the combined tree after `git fetch`. Another
-session sometimes pushes to `main`, so verify their commits too.
-
-After pushing: poll `/healthz` until it reports your SHA, then probe roughly ten
-times to confirm both replicas rolled. See `07-testing.md` for the full
-post-deploy checklist.
+The checklists for before and after a push are in
+[`09-ai-context.md` §9](09-ai-context.md).
 
 ---
 

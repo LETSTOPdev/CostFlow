@@ -27,6 +27,7 @@ describe('the documentation matches the codebase', () => {
     '06-known-risks',
     '07-testing',
     '08-admin',
+    '09-ai-context',
   ];
 
   it('has every living document the contributing guide promises', () => {
@@ -140,9 +141,38 @@ describe('the documentation matches the codebase', () => {
     expect(broken).toEqual([]);
   });
 
-  /** The Definition of Done is stated where a fresh session will actually find it. */
-  it('states the Definition of Done in both entry points', () => {
-    expect(read('docs/README.md')).toContain('Definition of Done');
-    expect(read('CLAUDE.md')).toContain('Definition of Done');
+  /**
+   * Operational guidance lives in exactly one place. The entry points point at
+   * it; they do not restate it, because two copies of a rule drift and then
+   * neither is trusted.
+   */
+  it('routes every entry point to the operational guide', () => {
+    for (const entry of ['CLAUDE.md', 'docs/README.md', 'docs/00-project-brief.md']) {
+      expect(read(entry), `${entry} must point at docs/09-ai-context.md`).toContain(
+        '09-ai-context',
+      );
+    }
+  });
+
+  it('keeps the Definition of Done in one document', () => {
+    const owners = ['docs/09-ai-context.md'];
+    const others = [
+      'docs/00-project-brief.md',
+      'docs/01-architecture.md',
+      'docs/02-current-state.md',
+      'docs/03-roadmap.md',
+      'docs/04-engineering-principles.md',
+      'docs/05-decisions.md',
+      'docs/06-known-risks.md',
+      'docs/07-testing.md',
+      'docs/08-admin.md',
+    ];
+    for (const o of owners) expect(read(o)).toContain('Definition of Done');
+    // Others may reference it by name, but must not restate the numbered rules.
+    for (const f of others) {
+      expect(read(f), `${f} restates the Definition of Done instead of linking it`).not.toMatch(
+        /Never create hand-off documents/i,
+      );
+    }
   });
 });

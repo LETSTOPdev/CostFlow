@@ -2,6 +2,9 @@
 
 **Read this first.** Under five minutes. Everything else exists to expand on it.
 
+If you are an AI assistant, read [`09-ai-context.md`](09-ai-context.md) next — it
+is the operational guide for working on this repository.
+
 ---
 
 ## What CostFlow is
@@ -141,6 +144,7 @@ rather than what to build. **Ask before starting.**
 | What could go wrong | `06-known-risks.md` |
 | How correctness is enforced | `07-testing.md` |
 | Deploying and debugging production | `08-admin.md` |
+| **How to work on this repository** | [`09-ai-context.md`](09-ai-context.md) |
 | The original design corpus | `reference/`, and `adr/` for decision records |
 
 **Before you change anything**, read `04-engineering-principles.md`. Several

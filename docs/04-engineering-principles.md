@@ -244,40 +244,12 @@ leave the machine.
 
 ---
 
-## Building
+## How to work here
 
-### Refactor because reality demands it, not because you can already imagine it
+Process guidance — how to verify, review, implement, deploy, and maintain these
+documents — lives in **[`09-ai-context.md`](09-ai-context.md)** and nowhere else.
 
-The governing rule. An abstraction with one caller is a liability. Where debt is
-known but not yet worth paying down, record it with **the trigger that makes it
-worth doing** rather than acting speculatively.
-
-### Root cause, not workarounds
-
-### Verify actual state before acting
-
-Do not assume auth, configuration, or production behaviour. Check.
-
-*This has cost real time.* A stale internal note contradicted the code and was
-believed; it cost a milestone's premise. The note is still wrong and still on the
-machine — R5 in `06-known-risks.md`.
-
-### The gate is the approval mechanism
-
-`pnpm check` — typecheck, lint, format, boundaries, tests — before any deploy.
-A gate that fails intermittently stops being read, so a flaky test is a bug in
-the test.
-
-### Documentation is part of Done
-
-Updating the living documentation under `docs/` is part of finishing a piece of
-work, not a follow-up task. Obsolete text is deleted rather than appended to,
-and documentation found to disagree with reality is corrected on sight.
-
-*Partly enforced:* `docs-sync.test.ts` fails the build where the two can be shown
-to disagree. The rest is judgement. Full rules in `docs/README.md`.
-
-### Deploy is push to `main`
-
-There is no separate deploy step and no staging environment. Confirm before
-pushing, and verify the deployed commit on both replicas afterwards.
+It covers the rules that used to sit at the foot of this document: refactor
+because reality demands it, root cause over workarounds, verify actual state
+before acting, the gate as the approval mechanism, and deploy being a push to
+`main`.

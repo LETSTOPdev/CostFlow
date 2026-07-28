@@ -142,33 +142,12 @@ runs everywhere.
 
 ---
 
-## Deployment validation
+## Deployment and production verification
 
-Before pushing:
-
-1. `pnpm check` green on the **combined** tree, after `git fetch` and any rebase.
-   Another session may have pushed; their commits are yours to verify too.
-2. If any golden changed, confirm it was intended and state why in the commit.
-3. If the artifact shape changed, confirm every `report.md` is byte-identical.
-
----
-
-## Production verification
-
-Deploy is a push to `main`, so verification happens afterwards, against the live
-site. Poll `/healthz` until it reports the pushed SHA, then:
-
-- **Both replicas** — repeat the health probe roughly ten times; every response
-  must carry the new commit. There are two replicas and a rolling deploy, so a
-  single probe proves nothing.
-- **CSP intact** — `script-src 'none'` still present.
-- **Gated routes still gated** — `/reports/*` and `/admin` redirect or 404 for
-  an unauthenticated caller.
-- **The Auth0 contract** — `/brand/logo.svg` returns 200. The Auth0 login page
-  references it, so that route must never move.
-
-What cannot be verified without credentials is stated plainly rather than
-assumed. Signing in as the operator is not something to do on their behalf.
+The checklists — what to confirm before pushing and how to verify a deploy on
+both replicas afterwards — are in
+**[`09-ai-context.md` §9](09-ai-context.md)**, because they are expectations of
+the assistant rather than descriptions of the test suites.
 
 ---
 
