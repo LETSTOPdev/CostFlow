@@ -111,10 +111,12 @@ Detail: **`02-current-state.md`**.
   domain concept.
 - **MW1, comparability verdict** — run-over-run comparison that refuses to draw
   a trend when the two runs are not measuring the same thing.
+- **Multi-scope monitoring** — a workspace spans several Spaces, Folders, Lists
+  or projects, with what each run actually covered recorded on the artifact.
 
 ## Current milestone
 
-**None active.** The last three milestones completed and the founder chose to
+**None active.** The last four milestones completed and the founder chose to
 stop expanding that area until real customers have used it.
 
 The stated next area is the admin dashboard, but its scope is unconfirmed — the
