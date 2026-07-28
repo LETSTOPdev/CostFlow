@@ -96,20 +96,23 @@ describe('OI1 — the operational layer on the report', () => {
     expect(res.body).toContain('What this data cannot tell you yet');
     expect(res.body).toContain('Serial gatekeeping could not be assessed');
     expect(res.body).toContain('transition history');
-    // The platform genuinely cannot supply it, and the copy says so rather
-    // than blaming the import or leaving a dead end.
-    expect(res.body).toContain('does not expose transition history');
+    // This platform CAN supply it behind a workspace setting, so the copy must
+    // not claim incapability.
+    expect(res.body).not.toContain('does not expose transition history');
   });
 
   /**
-   * The aggregate-only platform gates its Time-in-Status ClickApp, but enabling
-   * it yields aggregate durations, which still cannot feed a wait-based
-   * diagnostic. Suggesting it would be false hope, so the surface must NOT: it
-   * only ever explains capabilities a diagnostic actually asked for. Until the
-   * aggregate ingestion mode exists (cu01 MC-5), the honest answer here is that
-   * the platform cannot supply what this diagnostic needs, full stop.
+   * The gated platform CAN supply transition history: its Time-in-Status
+   * entries carry the instant each status was entered, which the ingestion
+   * transform reconstructs into a real event chain (see the demo-clickup
+   * golden, where queue wait runs). So a workspace missing it must be told the
+   * actionable thing — enable the ClickApp and re-import — not that the
+   * platform is incapable.
+   *
+   * This test previously asserted the opposite, on the strength of a
+   * partner-run note written from a plan probe that never returned a payload.
    */
-  it('offers no unlock that would not actually unlock anything', async () => {
+  it('offers the unlock when the capability is gated rather than impossible', async () => {
     const t = await makeApp();
     const email = 'oi4@example.com';
     const cookie = await signIn(t, email);
@@ -129,8 +132,9 @@ describe('OI1 — the operational layer on the report', () => {
     await seedRun(t, email, 'r-snap', 'clickup', snapshotOnly);
 
     const res = await get(t, cookie, '/reports/r-snap');
-    expect(res.body).toContain('does not expose transition history');
-    expect(res.body).not.toContain('Total Time in Status');
+    expect(res.body).toContain('Total Time in Status');
+    expect(res.body).toContain('re-import');
+    expect(res.body).not.toContain('does not expose transition history');
   });
 
   /**

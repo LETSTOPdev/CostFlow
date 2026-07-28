@@ -244,16 +244,24 @@ const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
              <li>Paste it above. For status-history analysis, ask a Workspace admin to enable the <strong>Total Time in Status</strong> ClickApp.</li>
            </ol>`,
   pickerBlurb: 'ClickUp Lists: tasks, statuses, assignees, due dates, and time-in-status history.',
-  // Time-in-Status returns AGGREGATE durations per status, and only when the
-  // ClickApp is enabled — so it is status history, gated, and it is not
-  // transition history: there is no public ordered-transition endpoint, so the
-  // entry time of a stage cannot be reconstructed (partner run cu01, MC-5).
-  // Synthesizing transitions from aggregates is explicitly refused.
+  // Time-in-Status DOES yield ordered transitions. Each status entry carries
+  // `total_time.since`, the instant the task entered that status, so the CU1
+  // rule in the ingestion transform reconstructs a real event chain from real
+  // observed instants — see the demo-clickup golden, where queue wait runs.
+  //
+  // Both capabilities are gated behind the same ClickApp, and both are declared
+  // so that a workspace without it is told the actionable thing ("enable it and
+  // re-import") rather than the false and demoralizing one ("your platform
+  // cannot do this"). The earlier declaration here claimed the latter, on the
+  // strength of a partner-run note written from a plan probe that never
+  // returned a payload.
   provides: {
-    canProvide: ['stage-snapshots', 'status-history', 'due-dates'],
-    planGated: ['status-history'],
+    canProvide: ['stage-snapshots', 'status-history', 'transition-history', 'due-dates'],
+    planGated: ['status-history', 'transition-history'],
     planGateHint: {
       'status-history':
+        'Ask a Workspace admin to enable the Total Time in Status ClickApp, then re-import.',
+      'transition-history':
         'Ask a Workspace admin to enable the Total Time in Status ClickApp, then re-import.',
     },
   },

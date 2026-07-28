@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { CapabilityProfile, ImportBatch } from '@costflow/domain';
+import { ROOT } from './helpers';
 import { EVIDENCE_CAPABILITIES } from '@costflow/diagnostics';
 import { NOT_BUILT, actionableGaps, assessEvidence, type ConnectorEvidence } from '../src/evidence';
 import { buildJiraConnector } from '../src/connectors/jira';
@@ -208,24 +211,53 @@ describe('evidence translation', () => {
     });
 
     /**
-     * Partner run cu01, MC-5: Time-in-Status is plan-gated AND returns aggregate
-     * durations rather than ordered transitions, so the entry time of a stage
-     * cannot be reconstructed. The connector must not claim transition history.
+     * The time-in-status platform DOES yield ordered transitions: each status
+     * entry carries `total_time.since`, the instant the task entered it, which
+     * the ingestion transform reconstructs into a real event chain (CU1). The
+     * demo-clickup golden is the proof — queue wait runs on it.
+     *
+     * Both capabilities sit behind the same ClickApp, so both are declared
+     * gated. Declaring them unavailable instead would tell a workspace that its
+     * platform is incapable when the truth is that a setting is off, which is
+     * the one message here a customer can actually act on.
      */
-    it('the aggregate-only platform claims status history, gated, and never transitions', () => {
+    it('the time-in-status platform claims both histories, and gates both', () => {
       const clickup = connectorFor('clickup');
       expect(clickup.descriptor.provides.canProvide).toContain('status-history');
-      expect(clickup.descriptor.provides.canProvide).not.toContain('transition-history');
+      expect(clickup.descriptor.provides.canProvide).toContain('transition-history');
       expect(clickup.descriptor.provides.planGated).toContain('status-history');
-      expect(clickup.descriptor.provides.planGateHint['status-history']).toBeTruthy();
+      expect(clickup.descriptor.provides.planGated).toContain('transition-history');
+      expect(clickup.descriptor.provides.planGateHint['transition-history']).toBeTruthy();
     });
 
     it('produces the actionable message for a workspace without the gated ClickApp', () => {
       const clickup = connectorFor('clickup');
       const a = assessEvidence(clickup.descriptor, batch({ items: someItems }));
-      expect(statusOf(a, 'status-history').reason).toBe('plan-gated');
-      expect(statusOf(a, 'status-history').explanation).toContain('Total Time in Status');
-      expect(statusOf(a, 'transition-history').reason).toBe('platform-cannot');
+      for (const capability of ['status-history', 'transition-history'] as const) {
+        expect(statusOf(a, capability).reason).toBe('plan-gated');
+        expect(statusOf(a, capability).explanation).toContain('Total Time in Status');
+      }
+    });
+
+    /**
+     * The golden is the standing proof that the claim above is not aspirational:
+     * if the transform ever stopped reconstructing transitions, this connector
+     * would be advertising a capability it cannot deliver.
+     */
+    it('is backed by a golden in which the reconstruction actually produced events', () => {
+      const golden = JSON.parse(
+        readFileSync(join(ROOT, 'tools/golden/expected/demo-clickup/run.json'), 'utf8'),
+      ) as {
+        batch: {
+          events: { from: unknown; to: unknown; at: string }[];
+          capability: Record<string, boolean>;
+        };
+        detectors: { signalId: string; status: string }[];
+      };
+      expect(golden.batch.capability['hasEventHistory']).toBe(true);
+      expect(golden.batch.events.length).toBeGreaterThan(0);
+      expect(golden.batch.events.some((e) => e.from !== null)).toBe(true);
+      expect(golden.detectors.find((d) => d.signalId === 'f1-queue-wait')?.status).toBe('ran');
     });
   });
 });
