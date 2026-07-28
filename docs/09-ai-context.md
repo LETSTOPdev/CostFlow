@@ -67,11 +67,63 @@ run it: the goldens under `tools/golden/expected/` are real artifacts, and a
 short `npx tsx` script against them answers most questions definitively.
 
 **When documentation and code disagree, the code wins** — then fix the
-documentation immediately, even if unrelated to your task. See §7.
+documentation immediately, even if unrelated to your task. See §8.
 
 ---
 
-## 3. Engineering philosophy, in one paragraph
+## 3. Start as a customer, not as an engineer
+
+**Every milestone begins by looking at the product, before reading any
+architecture.** Founder directive, 2026-07-28. In this order:
+
+1. **The rendered UI** — the actual HTML a signed-in customer receives.
+2. **The exported report** — `/reports/:runId/print`, the surface that gets
+   forwarded to people who never opened CostFlow.
+3. **Onboarding** — connect, scope, statuses, actors, assumptions, in sequence.
+4. **The dashboard** — what a returning user sees first.
+
+Only then the implementation.
+
+**Why this is a rule and not a preference.** The last milestone found a defect
+that no amount of reading the architecture would have surfaced: the printable
+export never rendered the recommendations at all, and on the report page they
+came last, after the methodology. Both facts lived in the ORDER of a template
+literal and the argument list of two call sites. The architecture was correct
+and the product was wrong.
+
+**The product experience is the primary design input. Architecture exists to
+support it, not the other way around.** When the two disagree about what to
+build next, the experience wins and the architecture changes.
+
+### How to actually see it
+
+```
+pnpm preview
+```
+
+The real server on `http://127.0.0.1:3901` — same `buildServer`, routes,
+templates and CSP as production — with the test stub gateways in place of the
+HTTP ones. Sign in at `/login` with any email, connect ClickUp with any token
+starting `pk_`, and walk the funnel. The ClickUp stub serves a Space → Folder →
+List hierarchy, so container selection, path-aware search and per-origin
+attribution all have something real to act on. Source and rationale in
+`apps/web/test/preview.ts`.
+
+That substitution is the point: the dev server in `.claude/launch.json` wires the
+REAL gateways, so without a live provider token you cannot get past `/connect`,
+which is exactly where looking at the product stops being possible.
+
+Drive it with `curl -c/-b` on a cookie jar and read the HTML — strip the tags and
+print the text. What you are checking is the ORDER and the WORDS, which plain
+text shows more clearly than a screenshot does. Note that the in-app browser
+reliably hangs navigating to `file://`, so saving a page and opening it is not a
+route.
+
+Rendering through a test works too, and is cheaper for a single surface.
+
+---
+
+## 4. Engineering philosophy, in one paragraph
 
 Every number CostFlow shows must survive a hostile CFO. That single commitment
 produces the rest: determinism over probability, never fabricating a value,
@@ -86,7 +138,11 @@ ways that will fail your build for reasons that look mysterious otherwise.
 
 ---
 
-## 4. Approaching architecture changes
+## 5. Approaching architecture changes
+
+**Look at the product first (§3).** An architecture review that opens with the
+canonical model rather than with what a customer sees has started in the wrong
+place.
 
 **Propose before you build.** The founder works by approval gate: propose, get an
 explicit go-ahead, implement, stop for review. Do not start a milestone
@@ -122,7 +178,7 @@ real data.
 
 ---
 
-## 5. Implementation quality
+## 6. Implementation quality
 
 **Prefer implementation over abstraction.** An abstraction with one caller is a
 liability. The governing rule: *refactor because reality demands it, not because
@@ -154,13 +210,13 @@ confidence composition and tier ordering live in the engine and are imported.
 
 ---
 
-## 6. Reviews
+## 7. Reviews
 
 ### Reviewing your own work before showing it
 
 - Does every claim you are about to make hold against the code you just read?
 - Did you run the full gate — `pnpm check` — not just the tests you touched?
-- Did anything you changed make a document wrong? (§7)
+- Did anything you changed make a document wrong? (§8)
 - Are you reporting what actually happened, including what failed or was skipped?
 
 ### Reviewing code you did not write
@@ -185,7 +241,7 @@ earlier, correct it plainly in one sentence and move on.
 
 ---
 
-## 7. The Definition of Done: documentation is part of it
+## 8. The Definition of Done: documentation is part of it
 
 **A task is not complete until the documentation reflects it.** This applies to
 every milestone, feature, architectural decision, refactor, deployment, and
@@ -203,7 +259,7 @@ change in production behaviour — not only large ones.
    explicitly asked. Rewrite the living documents instead. Git holds history.
 6. **Keep `00-project-brief.md` under five minutes.** If it grows, move the
    detail into whichever document owns that subject.
-7. **`reference/` and `adr/` are historical and are not rewritten.** See §8.
+7. **`reference/` and `adr/` are historical and are not rewritten.** See §9.
 8. **The living documents `00`–`09` are the canonical source of truth.**
 
 **Never write down a value that changes on most commits.** A passing-test count
@@ -231,7 +287,7 @@ is your responsibility.
 
 ---
 
-## 8. `reference/` and `adr/`
+## 9. `reference/` and `adr/`
 
 **Neither is a living document. Neither is rewritten.**
 
@@ -261,7 +317,7 @@ means today.
 
 ---
 
-## 9. Deployment and production verification
+## 10. Deployment and production verification
 
 **Deploy is `git push origin main`.** There is no separate deploy step and no
 staging environment. Railway builds, runs migrations in a pre-deploy phase, and
@@ -294,7 +350,7 @@ credentials is theirs to check, not yours to attempt.
 
 ---
 
-## 10. Never change these without strong evidence
+## 11. Never change these without strong evidence
 
 Each is load-bearing and enforced. Changing one is a decision, not a refactor.
 
@@ -318,7 +374,7 @@ Each is load-bearing and enforced. Changing one is a decision, not a refactor.
 
 ---
 
-## 11. Common mistakes
+## 12. Common mistakes
 
 Every one of these has actually happened here.
 
@@ -360,7 +416,7 @@ routes before starting. The admin console was nearly rebuilt.
 
 ---
 
-## 12. Tone and reporting
+## 13. Tone and reporting
 
 Write for a founder who reads carefully and dislikes padding.
 

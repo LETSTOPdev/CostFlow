@@ -17,6 +17,7 @@
     "test:pg": "node -e \"if(!process.env.COSTFLOW_TEST_DATABASE_URL){console.error('COSTFLOW_TEST_DATABASE_URL is required for the zero-skip Postgres contract run');process.exit(1)}\" && vitest run apps/web/test/store-contract.test.ts",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm depcruise && pnpm test",
     "costflow": "tsx apps/cli/src/main.ts",
+    "preview": "tsx apps/web/test/preview.ts",
     "golden:update": "pnpm golden:update:demo-ops && pnpm golden:update:demo-flow && pnpm golden:update:demo-jira && pnpm golden:update:demo-monday && pnpm golden:update:demo-asana && pnpm golden:update:demo-clickup",
     "golden:update:demo-ops": "tsx apps/cli/src/main.ts analyze --csv tools/golden/fixtures/demo-ops.csv --mapping tools/golden/fixtures/mapping.json --assumptions tools/golden/fixtures/assumptions.json --org costflow-golden --salt-file tools/golden/fixtures/salt.txt --now 2026-07-20T00:00:00Z --run-id golden-demo-ops --out tools/golden/expected/demo-ops --quiet",
     "golden:update:demo-flow": "tsx apps/cli/src/main.ts analyze --csv tools/golden/fixtures/demo-flow.csv --events tools/golden/fixtures/demo-flow-events.csv --mapping tools/golden/fixtures/demo-flow-mapping.json --assumptions tools/golden/fixtures/demo-flow-assumptions.json --org costflow-golden --salt-file tools/golden/fixtures/salt.txt --now 2026-07-20T00:00:00Z --run-id golden-demo-flow --out tools/golden/expected/demo-flow --quiet",

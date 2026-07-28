@@ -16,6 +16,11 @@ can immediately see, understand and benefit from, in this order:
 5. Customer adoption
 6. New engine capabilities
 
+**Look at the product before proposing anything** — the rendered UI, the
+exported report, onboarding, the dashboard, and only then the implementation.
+The method is in `09-ai-context.md` §3, including how to actually render those
+surfaces locally.
+
 **The test to apply before proposing anything: "will a customer notice this
 within the next report?"** If the answer is no, challenge whether it belongs at
 the front of the queue. This does not stop engine work — it requires that engine
