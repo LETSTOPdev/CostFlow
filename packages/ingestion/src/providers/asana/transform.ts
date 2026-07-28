@@ -10,10 +10,12 @@ import { parseIsoUtc } from '@costflow/domain';
 import { ImportError } from '../../errors';
 import {
   buildCapability,
+  coverageFor,
   orderAndValidateEvents,
   resolveActorValue,
   stageForStatus,
   type CanonicalEventInput,
+  type TransformScope,
 } from '../../canonical';
 
 /**
@@ -61,6 +63,8 @@ export interface AsanaTransformInput {
   /** Raw GET /projects/{gid}/sections document (A1 authoritative scope). */
   readonly sectionsDoc: string;
   readonly mapping: AsanaMapping;
+  /** Which project or board these pages came from, when the caller knows it. */
+  readonly scope?: TransformScope | undefined;
   readonly importedAt: IsoDateString;
   readonly pseudonymization?: PseudonymizationContext | undefined;
 }
@@ -109,8 +113,16 @@ function requireComplete(doc: { next_page?: unknown }, label: string): void {
 }
 
 export function transformAsana(input: AsanaTransformInput): ImportBatch {
-  const { batchId, taskPages, storiesByTask, sectionsDoc, mapping, importedAt, pseudonymization } =
-    input;
+  const {
+    batchId,
+    taskPages,
+    storiesByTask,
+    sectionsDoc,
+    mapping,
+    scope,
+    importedAt,
+    pseudonymization,
+  } = input;
   if (taskPages.length === 0) {
     throw new ImportError('Asana transform received no task pages.');
   }
@@ -336,6 +348,7 @@ export function transformAsana(input: AsanaTransformInput): ImportBatch {
       actors: true,
     }),
     evidence: [],
+    scopes: coverageFor(scope, items.length),
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

@@ -141,7 +141,7 @@ describe('graceful gateway failure on /scope', () => {
     });
     // The gateway now fails to list projects on the scope step.
     t.gateway.failListWith = new GatewayError('auth-error', 'list-projects', 'nope', 401);
-    const res = await post(t, cookie, '/scope', { project: '0' });
+    const res = await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' });
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('Import failed');
     expect(res.body).not.toContain('nope'); // raw gateway message is not echoed
@@ -179,7 +179,7 @@ describe('graceful gateway failure on /scope', () => {
       email: 'ops@acme.example',
       token: 'secret-jira-token-abc123',
     });
-    const res = await post(t, cookie, '/scope', { project: '0' });
+    const res = await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' });
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain('999,999');
     expect(res.body).toContain('50,000');

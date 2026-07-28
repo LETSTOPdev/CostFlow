@@ -54,15 +54,17 @@ describe('ClickUp journey (ADR-0005 acceptance)', () => {
 
     // 2. scope: ClickUp vocabulary (Lists), stub offers two.
     const scopePage = await get(t, cookie, '/scope');
-    expect(scopePage.body).toContain('Choose the List to import');
-    expect(scopePage.body).toContain('Sprint Board (Delivery / Sprints)');
-    const scoped = await post(t, cookie, '/scope', { scope: '0' });
-    expect(scoped.statusCode).toBe(302);
+    expect(scopePage.body).toContain('Choose what to analyse');
+    // The hierarchy is rendered as a path, not baked into the name.
+    expect(scopePage.body).toContain('Delivery / Sprints');
+    expect(scopePage.body).toContain('Sprint Board');
+    const scoped = await post(t, cookie, '/scope', { scope: '901', action: 'import' });
+    expect(scoped.statusCode).toBe(303);
     expect(t.clickup.lastFetchScopeId).toBe('901');
 
     // Observed vocabulary + provider-metadata hints persisted for the form.
     workspace = (await t.store.listWorkspaces(tenantId))[0]!;
-    expect(workspace.scopeId).toBe('901');
+    expect(workspace.scopes).toEqual([{ id: '901', kind: 'List', name: 'Sprint Board' }]);
     expect(workspace.observedStatuses).toEqual(['backlog', 'complete', 'in progress', 'review']);
     expect(workspace.statusHints).toMatchObject({
       backlog: 'queue', // ClickUp status type "open"
@@ -144,10 +146,10 @@ describe('ClickUp journey (ADR-0005 acceptance)', () => {
       email: 'ops@acme.example',
       token: 'secret-jira-token-abc123',
     });
-    await post(t, cookie, '/scope', { scope: '0' });
+    await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' });
     const tenantId = (await t.store.findUserByEmail('switcher@acme.example'))!.tenantId;
     let workspace = (await t.store.listWorkspaces(tenantId))[0]!;
-    expect(workspace.scopeId).toBe('OPS');
+    expect(workspace.scopes).toEqual([{ id: 'OPS', kind: 'project', name: 'Operations' }]);
 
     // The reconnect form warns about the switch...
     const warn = await get(t, cookie, '/connect?provider=clickup');
@@ -156,7 +158,7 @@ describe('ClickUp journey (ADR-0005 acceptance)', () => {
     await post(t, cookie, '/connect', { provider: 'clickup', token: CLICKUP_TOKEN });
     workspace = (await t.store.listWorkspaces(tenantId))[0]!;
     expect(workspace.provider).toBe('clickup');
-    expect(workspace.scopeId).toBeNull();
+    expect(workspace.scopes).toEqual([]);
     expect(workspace.statusMap).toBeNull();
     expect(workspace.onboarding).toBe('connected');
   });

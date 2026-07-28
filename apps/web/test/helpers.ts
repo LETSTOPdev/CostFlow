@@ -33,8 +33,8 @@ export class StubJiraGateway implements ConnectorGateway {
   lastCredentials: ConnectorCredentials | null = null;
   lastFetchScopeId: string | null = null;
   projects: ScopeRef[] = [
-    { id: 'OPS', name: 'Operations' },
-    { id: 'MKT', name: 'Marketing Website' },
+    { id: 'OPS', name: 'Operations', kind: 'project', parentId: null, fetchable: true },
+    { id: 'MKT', name: 'Marketing Website', kind: 'project', parentId: null, fetchable: true },
   ];
 
   async listScopes(credentials: ConnectorCredentials): Promise<ScopeRef[]> {
@@ -61,16 +61,89 @@ export const CLICKUP_FIXTURE_HISTORY = readFileSync(
   'utf8',
 );
 
+/**
+ * A second ClickUp List, defined here rather than as a fixture file: it exists
+ * only to be the OTHER origin in a multi-scope run, and its whole point is
+ * carrying no status history so the merged capability is an intersection.
+ */
+export const CLICKUP_SECOND_LIST_PAGE = JSON.stringify({
+  tasks: [
+    {
+      id: '86dzz01',
+      name: 'Renew vendor contracts',
+      status: {
+        status: 'backlog',
+        type: 'open',
+        orderindex: 0,
+      },
+      date_created: '1781913600000',
+      date_updated: '1784073600000',
+      due_date: '1783641600000',
+      assignees: [
+        {
+          id: 191,
+          username: 'Dan Ops',
+          email: 'dan@example.test',
+        },
+      ],
+      list: {
+        id: '902',
+        name: 'Backlog',
+      },
+      space: {
+        id: '790',
+      },
+    },
+    {
+      id: '86dzz02',
+      name: 'Archive closed audits',
+      status: {
+        status: 'done',
+        type: 'closed',
+        orderindex: 3,
+      },
+      date_created: '1781913600000',
+      date_updated: '1784073600000',
+      due_date: null,
+      assignees: [
+        {
+          id: 183,
+          username: 'Noa Legal',
+          email: 'noa@example.test',
+        },
+      ],
+      list: {
+        id: '902',
+        name: 'Backlog',
+      },
+      space: {
+        id: '790',
+      },
+    },
+  ],
+  last_page: true,
+});
+
 /** Fixture-backed ClickUp stub: golden ClickUp raw pages. */
 export class StubClickUpGateway implements ConnectorGateway {
   failListWith: GatewayError | null = null;
   failFetchWith: GatewayError | null = null;
   lastCredentials: ConnectorCredentials | null = null;
   lastFetchScopeId: string | null = null;
+  /**
+   * A real ClickUp shape: a Space holding a Folder, the Folder holding a List,
+   * and a second List sitting directly under the Space. Container selection and
+   * path-aware search only mean anything against a hierarchy, so the stub has
+   * one.
+   */
   lists: ScopeRef[] = [
-    { id: '901', name: 'Sprint Board (Delivery / Sprints)' },
-    { id: '902', name: 'Backlog (Delivery)' },
+    { id: '790', name: 'Delivery', kind: 'Space', parentId: null, fetchable: false },
+    { id: '457', name: 'Sprints', kind: 'Folder', parentId: '790', fetchable: false },
+    { id: '901', name: 'Sprint Board', kind: 'List', parentId: '457', fetchable: true },
+    { id: '902', name: 'Backlog', kind: 'List', parentId: '790', fetchable: true },
   ];
+  /** Scope ids fetched during the last multi-scope pass, in call order. */
+  fetched: string[] = [];
 
   async listScopes(credentials: ConnectorCredentials): Promise<ScopeRef[]> {
     this.lastCredentials = credentials;
@@ -81,7 +154,13 @@ export class StubClickUpGateway implements ConnectorGateway {
   async fetchAll(credentials: ConnectorCredentials, scopeId: string): Promise<ClickUpRawFetch> {
     this.lastCredentials = credentials;
     this.lastFetchScopeId = scopeId;
+    this.fetched.push(scopeId);
     if (this.failFetchWith) throw this.failFetchWith;
+    if (scopeId === '902') {
+      // A second List with its own tasks and NO status history — the mixed
+      // capability case a single-scope stub cannot produce.
+      return { provider: 'clickup', taskPages: [CLICKUP_SECOND_LIST_PAGE], timeInStatusPages: [] };
+    }
     if (scopeId !== '901') throw new GatewayError('fetch-error', 'tasks', 'Unknown list.');
     return {
       provider: 'clickup',
@@ -155,9 +234,14 @@ export function csrfOf(cookie: string): string {
   return session.csrf;
 }
 
-export function form(fields: Record<string, string>): string {
+/** An array value becomes a repeated field, exactly as a browser sends checkboxes. */
+export function form(fields: Record<string, string | string[]>): string {
   return Object.entries(fields)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .flatMap(([k, v]) =>
+      (Array.isArray(v) ? v : [v]).map(
+        (one) => `${encodeURIComponent(k)}=${encodeURIComponent(one)}`,
+      ),
+    )
     .join('&');
 }
 
@@ -165,7 +249,7 @@ export async function post(
   t: TestApp,
   cookie: string,
   url: string,
-  fields: Record<string, string>,
+  fields: Record<string, string | string[]>,
 ) {
   return t.app.inject({
     method: 'POST',

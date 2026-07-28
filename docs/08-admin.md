@@ -49,7 +49,8 @@ The checklists for before and after a push are in
 | `COSTFLOW_AUTH` | `auth0` in production; `dev` locally. |
 | Auth0 settings | Domain, client id, client secret, callback URL. |
 | `COSTFLOW_STORE` | `memory` for a throwaway demo. Never in production. |
-| `COSTFLOW_MAX_ISSUES` | Optional import ceiling. |
+| `COSTFLOW_MAX_ISSUES` | Optional item ceiling, counted across the whole scope selection. Default 50,000. |
+| `COSTFLOW_MAX_SCOPES` | Optional cap on how many scopes one workspace may select. Default 25. |
 
 ### Getting a ClickUp API token
 

@@ -35,10 +35,82 @@ export interface ConnectorCredentials {
   readonly secret: string;
 }
 
-/** One selectable import scope (a Jira project, a ClickUp List, …). */
+/**
+ * One selectable import scope, at any level of the platform's own hierarchy: a
+ * ClickUp Space, Folder or List, a Jira project, and whatever a future platform
+ * calls its containers.
+ *
+ * A connector returns the hierarchy FLAT, with `parentId` carrying the shape.
+ * Flat is deliberate: a tree would push rendering, filtering and selection
+ * arithmetic into a recursive structure that every caller then has to walk,
+ * when all any of them needs is "group these under their parent". Depth is a
+ * property of the data here, not of the type, so a platform with four levels
+ * needs no new type and no new code.
+ */
 export interface ScopeRef {
   readonly id: string;
   readonly name: string;
+  /**
+   * The platform's OWN word for this level ('Space', 'Folder', 'List',
+   * 'project'), shown to the customer as-is. Provider vocabulary lives here and
+   * never reaches the domain (doc 06 N4) — the engine has no concept of a
+   * Folder, and giving it one would be the first provider name in the core.
+   */
+  readonly kind: string;
+  /** Parent in the platform's hierarchy; null at the level the connector roots at. */
+  readonly parentId: string | null;
+  /**
+   * True when this scope can be fetched on its own. A container is selectable
+   * but NOT fetchable: choosing a Space means "everything inside it, as it
+   * stands at run time", which is resolved fresh on every run rather than
+   * frozen at selection time. That is why a Space gaining a List later shows up
+   * as a coverage change in the run artifact and blocks a false trend, instead
+   * of silently widening a total.
+   */
+  readonly fetchable: boolean;
+}
+
+/**
+ * Expand a customer's selection into the fetchable scopes it covers RIGHT NOW.
+ *
+ * Provider-independent by construction: the only thing it needs is the
+ * hierarchy each connector already describes, so a new platform gets container
+ * selection for free by filling in `parentId` and `fetchable`. Selecting a
+ * container includes every fetchable scope beneath it at any depth; selecting a
+ * container and one of its children yields that child once.
+ *
+ * Deterministic: the result is sorted by id, so two runs over an unchanged
+ * hierarchy resolve byte-identically regardless of the order the platform
+ * happened to list things in.
+ */
+export function resolveSelection(
+  all: readonly ScopeRef[],
+  selectedIds: readonly string[],
+): ScopeRef[] {
+  const childrenOf = new Map<string, ScopeRef[]>();
+  for (const scope of all) {
+    if (scope.parentId === null) continue;
+    const siblings = childrenOf.get(scope.parentId) ?? [];
+    siblings.push(scope);
+    childrenOf.set(scope.parentId, siblings);
+  }
+  const byId = new Map(all.map((s) => [s.id, s]));
+  const resolved = new Map<string, ScopeRef>();
+  const visited = new Set<string>();
+  const walk = (scope: ScopeRef): void => {
+    if (visited.has(scope.id)) return;
+    visited.add(scope.id);
+    if (scope.fetchable) resolved.set(scope.id, scope);
+    for (const child of childrenOf.get(scope.id) ?? []) walk(child);
+  };
+  for (const id of selectedIds) {
+    const scope = byId.get(id);
+    // A selection the platform no longer reports is silently absent here. The
+    // caller compares counts and refuses to run rather than analysing less than
+    // the customer asked for — see `jobs.ts`.
+    if (scope) walk(scope);
+  }
+  return [...resolved.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 /**
@@ -133,6 +205,12 @@ export interface ObservedWorkspace {
 export interface BuildBatchInput {
   readonly batchId: string;
   readonly raw: RawFetch;
+  /**
+   * Which origin `raw` came from. Always supplied by the app: a run always
+   * knows what it fetched, and a batch that cannot say where its items came
+   * from cannot be compared against the next one.
+   */
+  readonly scope: { readonly id: string; readonly label: string };
   readonly mappingId: string;
   readonly mappingVersion: string;
   readonly statusMap: Readonly<Record<string, StageKind>>;

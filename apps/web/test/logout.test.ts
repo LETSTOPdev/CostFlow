@@ -46,7 +46,7 @@ describe('authenticated sign-out control (doc 09 P4.2 Gate 2 fix)', () => {
   it('is present on every deeper onboarding page and the dashboard', async () => {
     const t = makeApp();
     const cookie = await connectOnly(t, 'deep@acme.example');
-    await post(t, cookie, '/scope', { project: '0' });
+    await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' });
     await post(t, cookie, '/mapping/statuses', { s0: 'active', s1: 'review', s2: 'queue' });
     await post(t, cookie, '/mapping/actors', { a0: 'Ops', a1: '', a2: 'Legal' });
     await post(t, cookie, '/assumptions', {

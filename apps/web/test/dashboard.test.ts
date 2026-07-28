@@ -24,8 +24,7 @@ async function seedWorkspace(
     tokenCiphertext: 'tok',
   });
   await t.store.updateWorkspace(tenantId, ws.id, {
-    scopeId: 'OPS',
-    scopeName: 'Operations',
+    scopes: [{ id: 'OPS', kind: 'project', name: 'Operations' }],
     onboarding: 'ready',
   });
   return { tenantId, workspaceId: ws.id };

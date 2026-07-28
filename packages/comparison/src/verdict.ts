@@ -11,7 +11,7 @@
  * verdict is `not-comparable` the product renders no trend at all.
  */
 import type { AnalysisRun } from '@costflow/analysis';
-import type { AssumptionSet, EvidenceNote, WorkItem } from '@costflow/domain';
+import type { AssumptionSet, BatchScope, EvidenceNote, WorkItem } from '@costflow/domain';
 import { isCustomerOwned } from '@costflow/domain';
 
 export type Comparability = 'comparable' | 'comparable-with-note' | 'not-comparable';
@@ -30,6 +30,8 @@ export const COMPARABILITY_ASPECTS = [
   'assumptions',
   /** The selection changed: a different provider, template, or status-to-stage mapping. */
   'scope',
+  /** The set of origins the run was computed over changed (doc 02 §2.3 coverage). */
+  'coverage',
   /** How the observations were obtained changed (doc 21 evidence quality). */
   'evidence',
   /** One run priced vendor-suggested assumptions and the other did not. */
@@ -257,6 +259,55 @@ export function assessComparability(
       severity: 'blocking',
       detail: `The workflow mapping changed for ${remapped.join(', ')}. Items moved between stage kinds, so different detectors saw them.`,
       remedy: 'Comparisons from the next run onward will use the current mapping consistently.',
+    });
+  }
+
+  // ── coverage ──────────────────────────────────────────────────────────────
+  // The case multi-scope made reachable, and the reason coverage is on the
+  // artifact at all: a workspace that monitors a Space silently covers more
+  // work the day someone adds a List to it. The selection did not change, the
+  // configuration did not change, and the total goes up. Without this check
+  // that reads as the team getting worse.
+  //
+  // Absent coverage means the artifact predates the field, so the set it
+  // covered is unknowable rather than empty. Comparing a known set against an
+  // unknown one cannot establish they match, and a population that may have
+  // doubled is not something to caveat — so this blocks, exactly like a
+  // detector that ran on only one side.
+  const coverageOf = (r: AnalysisRun): readonly BatchScope[] | undefined =>
+    r.batch.scopes as readonly BatchScope[] | undefined;
+  const idsOf = (scopes: readonly BatchScope[]): string[] => scopes.map((s) => s.id).sort();
+  const beforeCoverage = coverageOf(baseline);
+  const nowCoverage = coverageOf(current);
+  if (beforeCoverage === undefined || nowCoverage === undefined) {
+    if (beforeCoverage !== nowCoverage) {
+      findings.push({
+        aspect: 'coverage',
+        severity: 'blocking',
+        detail:
+          'One of these analyses predates CostFlow recording which parts of your work it covered, so there is no way to confirm both measured the same thing.',
+        remedy: 'Run the analysis again; comparisons from that point on will line up.',
+      });
+    }
+  } else if (JSON.stringify(idsOf(beforeCoverage)) !== JSON.stringify(idsOf(nowCoverage))) {
+    const wasById = new Map(beforeCoverage.map((s) => [s.id, s]));
+    const nowById = new Map(nowCoverage.map((s) => [s.id, s]));
+    const added = nowCoverage.filter((s) => !wasById.has(s.id)).map((s) => s.label);
+    const removed = beforeCoverage.filter((s) => !nowById.has(s.id)).map((s) => s.label);
+    findings.push({
+      aspect: 'coverage',
+      severity: 'blocking',
+      detail:
+        'These analyses covered different work: ' +
+        [
+          added.length > 0 ? `${added.sort().join(', ')} appears only in the newer one` : '',
+          removed.length > 0 ? `${removed.sort().join(', ')} appears only in the older one` : '',
+        ]
+          .filter(Boolean)
+          .join(', and ') +
+        '. A total measured over a different population has not moved, it has been recalculated.',
+      remedy:
+        'This is expected after changing what the workspace monitors, or when a container gained or lost something. The next two runs will line up.',
     });
   }
 

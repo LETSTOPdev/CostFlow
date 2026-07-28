@@ -115,8 +115,19 @@ export class HttpClickUpGateway implements ConnectorGateway {
 
   /**
    * Scope discovery walks the hierarchy: workspaces → spaces → folders
-   * (lists embedded) + folderless lists. Every List is one selectable scope,
-   * labelled with its Space (and Folder) so same-named lists stay tellable.
+   * (lists embedded) + folderless lists, and returns EVERY level as a
+   * selectable scope rather than only the Lists.
+   *
+   * A manager reasons in Spaces ("analyse Engineering"), not in the twenty
+   * Lists that happen to sit inside one today. Returning the containers is what
+   * lets them say so, and returning them as scopes rather than as a UI-only
+   * grouping is what lets the selection survive a List being added next month:
+   * only fetchable Lists are ever fetched, and which Lists a Space contains is
+   * resolved on every run.
+   *
+   * Teams (ClickUp's own "Workspaces") are traversed but not returned. They are
+   * the account root, not a unit of work anyone monitors, and CostFlow's own
+   * Monitoring Workspace already owns that word in this product.
    */
   async listScopes(credentials: ConnectorCredentials): Promise<ScopeRef[]> {
     const scopes: ScopeRef[] = [];
@@ -129,7 +140,13 @@ export class HttpClickUpGateway implements ConnectorGateway {
         .spaces;
       for (const space of spaces ?? []) {
         if (!space.id) continue;
-        const spaceName = space.name ?? space.id;
+        scopes.push({
+          id: space.id,
+          name: space.name ?? space.id,
+          kind: 'Space',
+          parentId: null,
+          fetchable: false,
+        });
         const foldersText = await this.getJson(
           credentials,
           clickupFoldersUrl(space.id),
@@ -137,15 +154,26 @@ export class HttpClickUpGateway implements ConnectorGateway {
         );
         const folders = (
           JSON.parse(foldersText) as {
-            folders?: { name?: string; lists?: { id?: string; name?: string }[] }[];
+            folders?: { id?: string; name?: string; lists?: { id?: string; name?: string }[] }[];
           }
         ).folders;
         for (const folder of folders ?? []) {
+          if (!folder.id) continue;
+          scopes.push({
+            id: folder.id,
+            name: folder.name ?? folder.id,
+            kind: 'Folder',
+            parentId: space.id,
+            fetchable: false,
+          });
           for (const list of folder.lists ?? []) {
             if (!list.id) continue;
             scopes.push({
               id: list.id,
-              name: `${list.name ?? list.id} (${spaceName} / ${folder.name ?? 'Folder'})`,
+              name: list.name ?? list.id,
+              kind: 'List',
+              parentId: folder.id,
+              fetchable: true,
             });
           }
         }
@@ -157,7 +185,13 @@ export class HttpClickUpGateway implements ConnectorGateway {
         const lists = (JSON.parse(listsText) as { lists?: { id?: string; name?: string }[] }).lists;
         for (const list of lists ?? []) {
           if (!list.id) continue;
-          scopes.push({ id: list.id, name: `${list.name ?? list.id} (${spaceName})` });
+          scopes.push({
+            id: list.id,
+            name: list.name ?? list.id,
+            kind: 'List',
+            parentId: space.id,
+            fetchable: true,
+          });
         }
       }
     }
@@ -337,6 +371,7 @@ export function buildClickUpConnector(gateway: ConnectorGateway): Connector {
           statusMap: input.statusMap,
           ...(input.actorRoleMap ? { actorRoleMap: input.actorRoleMap } : {}),
         },
+        scope: input.scope,
         importedAt: input.importedAt,
         pseudonymization: input.pseudonymization,
       });

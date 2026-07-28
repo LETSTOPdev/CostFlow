@@ -10,10 +10,12 @@ import { parseIsoUtc } from '@costflow/domain';
 import { ImportError } from '../../errors';
 import {
   buildCapability,
+  coverageFor,
   orderAndValidateEvents,
   resolveActorValue,
   stageForStatus,
   type CanonicalEventInput,
+  type TransformScope,
 } from '../../canonical';
 
 /**
@@ -59,6 +61,8 @@ export interface MondayTransformInput {
   /** Raw GraphQL activity_logs response documents, verbatim, in fetch order. */
   readonly activityPages?: readonly string[] | undefined;
   readonly mapping: MondayMapping;
+  /** Which project or board these pages came from, when the caller knows it. */
+  readonly scope?: TransformScope | undefined;
   readonly importedAt: IsoDateString;
   readonly pseudonymization?: PseudonymizationContext | undefined;
 }
@@ -103,7 +107,8 @@ function firstPerson(text: string): string {
 }
 
 export function transformMonday(input: MondayTransformInput): ImportBatch {
-  const { batchId, itemsPages, activityPages, mapping, importedAt, pseudonymization } = input;
+  const { batchId, itemsPages, activityPages, mapping, scope, importedAt, pseudonymization } =
+    input;
   if (itemsPages.length === 0) {
     throw new ImportError('monday transform received no items pages.');
   }
@@ -307,6 +312,7 @@ export function transformMonday(input: MondayTransformInput): ImportBatch {
       actors: mapping.peopleColumnId !== undefined,
     }),
     evidence: [],
+    scopes: coverageFor(scope, items.length),
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

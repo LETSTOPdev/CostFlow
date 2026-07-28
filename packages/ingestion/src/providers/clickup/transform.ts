@@ -11,10 +11,12 @@ import { parseIsoUtc } from '@costflow/domain';
 import { ImportError } from '../../errors';
 import {
   buildCapability,
+  coverageFor,
   orderAndValidateEvents,
   resolveActorValue,
   stageForStatus,
   type CanonicalEventInput,
+  type TransformScope,
 } from '../../canonical';
 
 /**
@@ -80,6 +82,8 @@ export interface ClickUpTransformInput {
    */
   readonly singleTimeInStatusByTask?: Readonly<Record<string, string>> | undefined;
   readonly mapping: ClickUpMapping;
+  /** Which List these pages came from, when the caller knows (multi-scope runs). */
+  readonly scope?: TransformScope | undefined;
   readonly importedAt: IsoDateString;
   readonly pseudonymization?: PseudonymizationContext | undefined;
 }
@@ -146,6 +150,7 @@ export function transformClickUp(input: ClickUpTransformInput): ImportBatch {
     timeInStatusPages,
     singleTimeInStatusByTask,
     mapping,
+    scope,
     importedAt,
     pseudonymization,
   } = input;
@@ -370,6 +375,7 @@ export function transformClickUp(input: ClickUpTransformInput): ImportBatch {
     diagnostics,
     capability: buildCapability(items, events, { dueDates: true, lastUpdated: true, actors: true }),
     evidence,
+    scopes: coverageFor(scope, items.length),
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

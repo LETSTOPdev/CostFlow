@@ -39,7 +39,7 @@ function agingIssues(n: number): string[] {
 class BulkGateway implements ConnectorGateway {
   constructor(private readonly pages: string[]) {}
   async listScopes() {
-    return [{ id: 'AGE', name: 'Aging Project' }];
+    return [{ id: 'AGE', name: 'Aging Project', kind: 'project', parentId: null, fetchable: true }];
   }
   async fetchAll(_c: ConnectorCredentials, scopeId: string): Promise<JiraRawFetch> {
     if (scopeId !== 'AGE') throw new GatewayError('fetch-error', 'search', 'unknown');
@@ -60,7 +60,7 @@ describe('report drill-down scale cap', () => {
       email: 'ops@acme.example',
       token: 'secret-token',
     });
-    await post(t, cookie, '/scope', { project: '0' });
+    await post(t, cookie, '/scope', { scope: 'AGE', action: 'import' });
     const statuses = await get(t, cookie, '/mapping/statuses');
     const idx = [...statuses.body.matchAll(/name="s(\d+)"/g)].map((m) => m[1]);
     const smap: Record<string, string> = { csrf };

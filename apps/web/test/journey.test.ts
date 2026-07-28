@@ -28,7 +28,7 @@ async function completeJourneyToAssumptions(t: TestApp, cookie: string): Promise
   );
   // 3. choose the imported scope (project OPS is index 0 in the stub)
   record(await get(t, cookie, '/scope'));
-  record(await post(t, cookie, '/scope', { project: '0' }));
+  record(await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' }));
   // 4a. map statuses (observed, sorted: In Progress, Review, To Do)
   record(await get(t, cookie, '/mapping/statuses'));
   record(await post(t, cookie, '/mapping/statuses', { s0: 'active', s1: 'review', s2: 'queue' }));
@@ -171,7 +171,7 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
       email: 'ops@acme.example',
       token: TOKEN,
     });
-    await post(t, cookie, '/scope', { project: '0' });
+    await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' });
     await post(t, cookie, '/mapping/statuses', { s0: 'active', s1: 'review', s2: 'queue' });
     await post(t, cookie, '/mapping/actors', { a0: 'Ops', a1: '', a2: 'Legal' });
     // Submit assumptions accepting/customizing NOTHING: everything stays vendor-suggested.
@@ -210,7 +210,7 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
       email: 'ops@acme.example',
       token: TOKEN,
     });
-    await post(t, cookie, '/scope', { project: '0' });
+    await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' });
     await post(t, cookie, '/mapping/statuses', { s0: 'active', s1: 'review', s2: 'queue' });
     await post(t, cookie, '/mapping/actors', { a0: 'Ops', a1: '', a2: 'Legal' });
     // Keep the suggested values as-is and tick ONLY the master "accept all" box.

@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto';
-import { ImportError } from '@costflow/ingestion';
+import { ImportError, mergeBatches } from '@costflow/ingestion';
 import { runAnalysis } from '@costflow/analysis';
 import { buildReportModel, renderMarkdown } from '@costflow/reporting';
 import { deriveRunTelemetry, serializeTelemetry } from '@costflow/telemetry';
 import { buildPseudonymizationContext, decryptSecret } from './crypto';
-import { GatewayError } from './connectors/types';
+import { GatewayError, resolveSelection } from './connectors/types';
 import type { ConnectorRegistry } from './connectors/registry';
+import { hasSelection } from './scopes';
 import type { EventRecorder } from './events';
 import type { JobErrorClass, Store } from './store/contract';
 
@@ -60,7 +61,7 @@ export async function executeJob(deps: JobDeps, tenantId: string, jobId: string)
   // session here: the event is attributed to the organization and the
   // workspace, with no actor. Claiming a user did it would be a guess.
   const context = { tenantId, userId: null, workspaceId: job.workspaceId };
-  if (!workspace || !tenant || !workspace.scopeId || !workspace.assumptions) {
+  if (!workspace || !tenant || !hasSelection(workspace?.scopes ?? []) || !workspace.assumptions) {
     await store.updateJob(tenantId, jobId, {
       status: 'failed',
       errorClass: 'unexpected',
@@ -92,17 +93,73 @@ export async function executeJob(deps: JobDeps, tenantId: string, jobId: string)
   await store.updateJob(tenantId, jobId, { status: 'running' });
   try {
     const secret = decryptSecret(workspace.tokenCiphertext, credentialKey);
-    const raw = await connector.gateway.fetchAll(
-      { params: workspace.connectionParams, secret },
-      workspace.scopeId,
-    );
+    const credentials = { params: workspace.connectionParams, secret };
+
+    // The selection may name containers, so what it covers is resolved FRESH on
+    // every run rather than frozen when the customer picked. A Space that
+    // gained a List since last time genuinely covers more work now, and the
+    // artifact records that so the next comparison can refuse to call it a
+    // trend.
+    const catalogue = await connector.gateway.listScopes(credentials);
+    const selectedIds = workspace.scopes.map((s) => s.id);
+    const targets = resolveSelection(catalogue, selectedIds);
+    if (targets.length === 0) {
+      // Every selected scope has vanished, or the ones that remain are empty
+      // containers. Analysing nothing and reporting zero friction would be the
+      // most misleading possible outcome.
+      throw new ImportError(
+        'None of the selected scopes are visible to this connection any more. Open the scope step and choose again.',
+      );
+    }
 
     const salt = decryptSecret(tenant.saltCiphertext, credentialKey);
     const pseudonymization = buildPseudonymizationContext(tenantId, salt);
     const mappingId = `ws-${workspace.id}`;
     const mappingVersion = '1';
+
+    // Fetch and transform PER ORIGIN, sequentially: a platform rate limit is
+    // per token, so firing every scope at once is how a nine-List workspace
+    // earns a 429 storm. A scope that fails fails the whole run and says which
+    // one — a run that quietly covers eight of nine origins reports a total
+    // that has silently shrunk.
+    const raws: unknown[] = [];
+    const perScopeBatches = [];
+    for (const target of targets) {
+      let raw;
+      try {
+        raw = await connector.gateway.fetchAll(credentials, target.id);
+      } catch (error) {
+        throw error instanceof GatewayError
+          ? new GatewayError(
+              error.errorClass,
+              error.stage,
+              `${error.message} (while reading "${target.name}")`,
+              error.status,
+            )
+          : error;
+      }
+      raws.push(raw);
+      perScopeBatches.push(
+        connector.buildBatch({
+          batchId: `batch-${target.id}`,
+          raw,
+          scope: { id: target.id, label: target.name },
+          mappingId,
+          mappingVersion,
+          statusMap: workspace.statusMap,
+          ...(workspace.actorRoleMap ? { actorRoleMap: workspace.actorRoleMap } : {}),
+          importedAt: nowIso,
+          pseudonymization,
+        }),
+      );
+    }
+
+    // The run id fingerprints everything the analysis consumed, coverage
+    // included: two runs over the same data but a different set of origins are
+    // different runs, and must not collide.
     const runId = createHash('sha256')
-      .update(JSON.stringify(raw))
+      .update(JSON.stringify(raws))
+      .update(JSON.stringify(targets.map((t) => t.id)))
       .update(JSON.stringify({ mappingId, statusMap: workspace.statusMap }))
       .update(JSON.stringify(workspace.actorRoleMap ?? {}))
       .update(JSON.stringify(workspace.assumptions))
@@ -111,15 +168,10 @@ export async function executeJob(deps: JobDeps, tenantId: string, jobId: string)
       .digest('hex')
       .slice(0, 16);
 
-    const batch = connector.buildBatch({
+    const batch = mergeBatches({
+      batches: perScopeBatches,
       batchId: `batch-${runId}`,
-      raw,
-      mappingId,
-      mappingVersion,
-      statusMap: workspace.statusMap,
-      ...(workspace.actorRoleMap ? { actorRoleMap: workspace.actorRoleMap } : {}),
       importedAt: nowIso,
-      pseudonymization,
     });
     const analysisRun = runAnalysis({
       runId,

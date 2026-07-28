@@ -1,3 +1,5 @@
+import { describeSelection, selectionNames } from './scopes';
+import type { WorkspaceScope } from './store/contract';
 import { compareDecimalStrings, dec, decToString, formatWholeMoney } from '@costflow/cost-engine';
 import type { RangeSpec } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
@@ -31,8 +33,8 @@ export interface DashboardFailure {
 }
 
 export interface DashboardInput {
-  readonly scopeName: string | null;
-  readonly scopeId: string | null;
+  /** The workspace's scope selection, in stored order. */
+  readonly scopes: readonly WorkspaceScope[];
   /** Connector's describeConnection() line — provider-correct by construction. */
   readonly connectionText: string;
   /** Connector display name (e.g. "Jira", "ClickUp"). */
@@ -164,7 +166,8 @@ const heroWithFindings = (
   previous: RunDigest | null,
 ): string => {
   const { total, currency, ranked, unpricedCount } = latest;
-  const scope = input.scopeName ? ` for “${esc(input.scopeName)}”` : '';
+  const selection = describeSelection(input.scopes);
+  const scope = selection ? ` for “${esc(selection)}”` : '';
   const sub = `Range ${money(total.low, currency)} to ${money(total.high, currency)}. ${ranked.length} priced finding${ranked.length === 1 ? '' : 's'}${unpricedCount > 0 ? `, ${unpricedCount} unpriced` : ''}.`;
   return `<section class="dash-hero">
     <p class="hero-eyebrow">Potential recoverable cost</p>
@@ -294,7 +297,12 @@ const failureBanner = (failures: readonly DashboardFailure[]): string =>
 // ---------- page ----------
 
 export function renderDashboard(input: DashboardInput): string {
-  const foot = `<p class="dash-foot">${esc(input.scopeName ?? 'Your workspace')}${input.scopeId ? ` (${esc(input.scopeId)})` : ''}. ${esc(input.connectionText)}. Credentials encrypted at rest. <a href="/settings">Settings</a></p>`;
+  // The foot names every selected scope rather than summarising: this is the
+  // one place with room for it, and a manager reading a total needs to be able
+  // to check what it covers without leaving the page.
+  const names = selectionNames(input.scopes);
+  const covers = names.length === 0 ? 'Your workspace' : names.join(', ');
+  const foot = `<p class="dash-foot">${esc(covers)}. ${esc(input.connectionText)}. Credentials encrypted at rest. <a href="/settings">Settings</a></p>`;
 
   if (input.runs.length === 0) {
     return heroFirstRun(input) + failureBanner(input.failures) + foot;

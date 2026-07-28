@@ -120,6 +120,7 @@ const batch = (items: readonly WorkItem[]): ImportBatch => ({
     hasActors: true,
   },
   evidence: [],
+  scopes: [],
   pseudonymizationScope: null,
   items,
   events: [],

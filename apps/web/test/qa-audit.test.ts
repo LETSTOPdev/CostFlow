@@ -357,7 +357,7 @@ describe('concurrent-run guard', () => {
       email: 'ops@acme.example',
       token: TOKEN,
     });
-    await post(t, cookie, '/scope', { project: '0' });
+    await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' });
     await post(t, cookie, '/mapping/statuses', { s0: 'active', s1: 'review', s2: 'queue' });
     await post(t, cookie, '/mapping/actors', {});
     await post(t, cookie, '/assumptions', {

@@ -108,7 +108,18 @@ export class HttpJiraGateway implements ConnectorGateway {
       };
       const values = doc.values ?? [];
       for (const value of values) {
-        if (value.key) projects.push({ id: value.key, name: value.name ?? value.key });
+        // Jira's hierarchy above a project (categories) is optional metadata
+        // rather than a place work lives, so projects are the only level worth
+        // selecting: every one of them is a flat, directly fetchable root.
+        if (value.key) {
+          projects.push({
+            id: value.key,
+            name: value.name ?? value.key,
+            kind: 'project',
+            parentId: null,
+            fetchable: true,
+          });
+        }
       }
       startAt += values.length;
       if (doc.isLast === true || values.length === 0 || startAt >= (doc.total ?? startAt)) break;
@@ -339,6 +350,7 @@ export function buildJiraConnector(gateway: ConnectorGateway): Connector {
           statusMap: input.statusMap,
           ...(input.actorRoleMap ? { actorRoleMap: input.actorRoleMap } : {}),
         },
+        scope: input.scope,
         importedAt: input.importedAt,
         pseudonymization: input.pseudonymization,
       });

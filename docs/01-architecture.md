@@ -82,9 +82,52 @@ Jira status or a ClickUp list.
   unrepresentable.**
 - **`WorkItemEvent`** — an ordered, timestamped stage transition.
 - **`ImportBatch`** — the items and events, plus what the import can support
-  (capability), what is weak about it (evidence), and provenance counts.
+  (capability), what is weak about it (evidence), which origins it covered
+  (`BatchScope[]`), and provenance counts.
 - **`AssumptionSet`** — rates, thresholds and attention-hour ranges, each
   carrying provenance.
+
+### Selection and coverage
+
+A Monitoring Workspace spans a **set** of scopes, so two different questions
+have to be answered separately, and conflating them is how a settings change
+becomes a false trend.
+
+**Selection** is what the customer asked to monitor. It lives in workspace
+configuration and can name a *container* — a ClickUp Space, a Folder — rather
+than a leaf. It changes only when the customer changes it.
+
+**Coverage** is what a particular run actually fetched, resolved from the
+selection at run time and recorded on the artifact as `BatchScope[]`. Selecting
+a Space and later adding a List to it leaves the selection identical and the
+coverage wider.
+
+Coverage is the one that belongs on the immutable artifact, because it is the
+only one that states what the numbers were computed from. Comparison compares
+coverage, and blocks a trend when it moves (§8).
+
+`BatchScope` deliberately carries no scope *kind*. "List", "Folder", "Space" and
+"project" are provider vocabulary, and the domain does not learn provider
+vocabulary — kind lives in the connector layer, where it renders a hierarchy the
+customer recognises. See D16.
+
+### Merging several origins into one analysis
+
+Fetch and transform are per origin; `mergeBatches` is the single seam where a
+set becomes one analysis. It is pure and order-independent — inputs are sorted
+by scope id before anything is concatenated, so fetch order never reaches a
+total. Three rules carry weight:
+
+- **Items de-duplicate.** A ClickUp task can belong to several Lists. Counting
+  it twice would inflate every total silently.
+- **Capability is the intersection, never the union.** If one List has status
+  history and another does not, a union would let a detector report a confident
+  figure for a population half of which it never observed. The intersection
+  makes the detector skip, which the report already knows how to explain.
+- **Evidence is the union**, with each note attributed to its origin, and a
+  `partial-coverage` note added when capability is not uniform. A customer
+  seeing a detector skip needs to know *which* two of their nine Lists caused
+  it.
 
 ## 4. The pure engine
 
@@ -225,6 +268,11 @@ to skip now runs. The verdict separates those:
 - `comparable` — nothing else moved.
 - `comparable-with-note` — something moved that must be shown alongside.
 - `not-comparable` — the two runs are not measuring the same thing.
+
+Seven aspects: engine, detectors, assumptions, scope, **coverage**, evidence,
+policy. Coverage is blocking, and it is the aspect multi-scope made necessary: a
+workspace monitoring a Space silently covers more work the day someone adds a
+List to it, with no configuration change to point at.
 
 **On `not-comparable`, no trend is rendered at all** — replaced by what differs
 and what to do about it. A wrong trend is worse than no trend.

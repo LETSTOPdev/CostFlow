@@ -31,9 +31,11 @@ create index if not exists users_tenant on users (tenant_id);
 alter table users add column if not exists role text not null default 'owner';
 
 -- `site`/`email` are legacy Jira-era columns (pre-ADR-0005), superseded by the
--- provider-shaped connection_params jsonb; `project_key`/`project_name` are the
--- legacy column names for the generic scope id/name. Kept (nullable) so the
--- deployed database migrates in place without a rewrite.
+-- provider-shaped connection_params jsonb; `project_key`/`project_name` held the
+-- single scope id/name before a workspace could span several, superseded by the
+-- `scopes` jsonb below. Kept (nullable) so the deployed database migrates in
+-- place without a rewrite, and so a rollback to the previous image still finds
+-- what it wrote. Nothing reads them after the backfill below.
 create table if not exists workspaces (
   id uuid primary key,
   tenant_id uuid not null references tenants (id) on delete cascade,
@@ -59,6 +61,24 @@ alter table workspaces alter column site drop not null;
 alter table workspaces alter column email drop not null;
 alter table workspaces add column if not exists connection_params jsonb;
 alter table workspaces add column if not exists status_hints jsonb;
+-- Multi-scope migration (idempotent): a Monitoring Workspace spans a SET of
+-- scopes, each carrying the platform's own word for what it is, so the product
+-- can say "the Engineering Space" rather than guessing a noun. Existing rows
+-- hold exactly one scope and its kind is recoverable only from the provider —
+-- a one-time historical fact, which is why a provider name appears in SQL here
+-- and nowhere else. The customer re-picks at any time and the guess is
+-- replaced. An empty array means "not scoped yet", the state a fresh workspace
+-- starts in.
+alter table workspaces add column if not exists scopes jsonb;
+update workspaces
+  set scopes = jsonb_build_array(jsonb_build_object(
+        'id', project_key,
+        'kind', case provider when 'clickup' then 'List' else 'project' end,
+        'name', coalesce(project_name, project_key)))
+  where scopes is null and project_key is not null and project_key <> '';
+update workspaces set scopes = '[]'::jsonb where scopes is null;
+alter table workspaces alter column scopes set default '[]';
+alter table workspaces alter column scopes set not null;
 update workspaces
   set connection_params = jsonb_build_object('site', coalesce(site, ''), 'email', coalesce(email, ''))
   where connection_params is null and (site is not null or email is not null);

@@ -42,6 +42,7 @@ function batch(items: WorkItem[], events: WorkItemEvent[]): ImportBatch {
       hasActors: true,
     },
     evidence: [],
+    scopes: [],
     pseudonymizationScope: null,
     items,
     events,

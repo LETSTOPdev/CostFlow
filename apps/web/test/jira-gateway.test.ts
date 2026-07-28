@@ -68,7 +68,11 @@ describe('HttpJiraGateway (mocked Jira)', () => {
     const gateway = new HttpJiraGateway(fetch);
 
     const projects = await gateway.listScopes(CONNECTION);
-    expect(projects).toEqual([{ id: 'KAN', name: 'CostFlow Test' }]);
+    // A Jira project is a flat, directly fetchable root: Jira has no container
+    // above it that anyone monitors.
+    expect(projects).toEqual([
+      { id: 'KAN', name: 'CostFlow Test', kind: 'project', parentId: null, fetchable: true },
+    ]);
 
     const result = await gateway.fetchAll(CONNECTION, 'KAN');
     expect(result.searchPages).toHaveLength(2); // followed the cursor

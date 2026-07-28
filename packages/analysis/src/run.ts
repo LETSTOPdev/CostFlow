@@ -14,7 +14,12 @@ import {
 } from '@costflow/friction';
 import { COST_MODEL_REGISTRY, type CostEstimate, type CostModelEntry } from '@costflow/cost-engine';
 
-export const ANALYSIS_ENGINE_VERSION = '0.4.0';
+// 0.5.0 — the run artifact's batch now records COVERAGE: which origins the
+// analysis was computed over (`ImportBatch.scopes`), because a Monitoring
+// Workspace can span several. The artifact shape changed, so runs written
+// before this cannot be compared against runs written after it, and the version
+// is what makes that refusal automatic rather than a thing anyone must remember.
+export const ANALYSIS_ENGINE_VERSION = '0.5.0';
 
 export interface AnalysisRunInput {
   /** Caller-supplied — purity forbids generating ids inside the engine (D-6). */

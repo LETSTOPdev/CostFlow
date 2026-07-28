@@ -1,5 +1,6 @@
 import { formatWholeMoney } from '@costflow/cost-engine';
 import { isTerminal } from '@costflow/domain';
+import type { BatchScope } from '@costflow/domain';
 import type { AgingTraceTerm, OverdueTraceTerm, QueueWaitTraceTerm } from '@costflow/analysis';
 import type { RankedFriction, ReportModel } from './report';
 
@@ -74,6 +75,17 @@ export function renderMarkdown(model: ReportModel): string {
   lines.push(
     `- Capability profile: event history ${capLabel(cap.hasEventHistory)} · last-updated dates ${capLabel(cap.hasLastUpdated)} · due dates ${capLabel(cap.hasDueDates)} · actors ${capLabel(cap.hasActors)}`,
   );
+  // What the totals were computed over. A reader looking at one number for a
+  // whole department has to be able to see which parts of it are in there,
+  // without opening run.json — and an origin that contributed nothing is worth
+  // seeing precisely because it is the surprising one.
+  const scopes = run.batch.scopes as readonly BatchScope[] | undefined;
+  if (scopes !== undefined && scopes.length > 0) {
+    lines.push(
+      `- Covered ${scopes.length} ${scopes.length === 1 ? 'source' : 'sources'}: ` +
+        scopes.map((s) => `${esc(s.label)} (${s.itemCount})`).join(', '),
+    );
+  }
   const inFlight = run.batch.items.filter((item) => !isTerminal(item.stage));
   if (inFlight.length > 0) {
     const withDue = inFlight.filter((item) => item.dueAt !== null).length;

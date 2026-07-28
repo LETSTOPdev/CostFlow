@@ -1,5 +1,6 @@
 import type {
   ActorRef,
+  BatchScope,
   CapabilityProfile,
   ImportDiagnostic,
   PseudonymizationContext,
@@ -156,6 +157,27 @@ export function buildCapability(
     hasLastUpdated: mapped.lastUpdated && items.some((i) => i.lastUpdatedAt !== null),
     hasActors: mapped.actors && items.some((i) => i.actor.kind !== 'missing'),
   };
+}
+
+/**
+ * The origin a transform is reading, when the caller knows it.
+ *
+ * A transform is handed raw pages and cannot tell which List or project they
+ * came from, so coverage is an INPUT rather than something derived. Optional
+ * because it genuinely does not always exist: a CSV import has no provider
+ * scope, and `[]` says exactly that.
+ */
+export interface TransformScope {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** Coverage for a single-origin transform. See `BatchScope` in the domain. */
+export function coverageFor(
+  scope: TransformScope | undefined,
+  itemCount: number,
+): readonly BatchScope[] {
+  return scope ? [{ id: scope.id, label: scope.label, itemCount }] : [];
 }
 
 /** Stage resolution with the standard dropped-row diagnostic semantics. */

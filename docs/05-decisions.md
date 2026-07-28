@@ -283,3 +283,55 @@ large one. A trigger keeps the analysis without forcing the work.
 
 **Consequences.** `reference/20-oi1-retrospective.md` is a register, not a
 backlog. Do not action an item because it is listed.
+
+---
+
+## D16 — A workspace selects containers; a run records what it covered
+
+**Decision.** A Monitoring Workspace's scope **selection** may name a container
+(a ClickUp Space or Folder) as well as a leaf. What that selection covers is
+resolved fresh on every run, and the set of origins actually fetched is recorded
+on the immutable artifact as `ImportBatch.scopes`. Comparison treats a change in
+that set as blocking.
+
+**Reason.** Managers reason in Spaces, not in the twenty Lists that happen to
+sit inside one today. But a container is a moving target: adding a List widens
+what is measured without changing anything the customer did. Freezing the
+expansion at selection time would quietly stop analysing new work; expanding it
+without recording the result would let a total grow and read as a trend. Storing
+the selection and recording the coverage is the only combination that is both
+current and honest.
+
+**Tradeoffs.** Two concepts where there was one, and a run that fetches N
+origins takes N times as long. A selection cap (`COSTFLOW_MAX_SCOPES`, default
+25) bounds the fan-out; the item ceiling is now a total across the selection
+rather than per origin, because the analysis holds every item in one heap.
+
+**Consequences.** `BatchScope` carries no provider *kind* — that vocabulary
+lives in the connector layer (D13). The comparison verdict gained a seventh
+aspect. An artifact written before this field has coverage *absent*, which means
+unknown rather than empty, and comparing a known set against an unknown one
+blocks: an old run cannot vouch for its own scope.
+
+---
+
+## D17 — Merged capability is the intersection
+
+**Decision.** When several origins merge into one analysis, the capability
+profile is the AND across all of them, and the loss is explained by a
+`partial-coverage` evidence note naming the origins responsible.
+
+**Reason.** If one List has status history and another does not, a union would
+let the queue-wait detector run across the whole workspace while only ever
+seeing half of it — a confident number for a population it did not observe. The
+intersection makes the detector skip, and a skip with a reason is something the
+report already knows how to render.
+
+**Tradeoffs.** One badly configured List can switch off a detector for an entire
+department. That is the intended behaviour and the note says which List to fix,
+which is more actionable than a silently understated figure.
+
+**Consequences.** Turning on the Total Time in Status ClickApp for a single
+missing List can restore wait analysis for the whole workspace. Refusing beats
+half-measuring, the same posture as report mode declining to price
+vendor-suggested assumptions.

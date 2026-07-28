@@ -29,7 +29,7 @@ describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', 
       email: 'alice@one.example',
       token: TOKEN,
     });
-    await post(t, alice, '/scope', { project: '0' });
+    await post(t, alice, '/scope', { scope: 'OPS', action: 'import' });
     await post(t, alice, '/mapping/statuses', { s0: 'active', s1: 'review', s2: 'queue' });
     await post(t, alice, '/mapping/actors', { a0: 'Ops', a1: '', a2: 'Legal' });
     await post(t, alice, '/assumptions', {

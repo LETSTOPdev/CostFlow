@@ -108,6 +108,22 @@ export function onboardingRank(state: OnboardingState): number {
   return ONBOARDING_ORDER.indexOf(state);
 }
 
+/**
+ * One entry in a workspace's scope selection.
+ *
+ * `kind` and `name` are the platform's own words, cached at selection time so
+ * the dashboard, the settings page and the admin console can describe a
+ * workspace without a network call — and so they can still describe it when the
+ * platform is unreachable or the token has been revoked. The id is the only
+ * field that carries meaning to the connector; the other two are how a human
+ * recognises what they picked.
+ */
+export interface WorkspaceScope {
+  readonly id: string;
+  readonly kind: string;
+  readonly name: string;
+}
+
 export interface WorkspaceRecord {
   readonly id: string;
   readonly tenantId: string;
@@ -129,9 +145,18 @@ export interface WorkspaceRecord {
    */
   readonly connectionParams: Readonly<Record<string, string>>;
   readonly tokenCiphertext: string;
-  /** Selected import scope (a Jira project key, a ClickUp List id). Stored in the legacy project_key/project_name columns. */
-  readonly scopeId: string | null;
-  readonly scopeName: string | null;
+  /**
+   * What this Monitoring Workspace is configured to analyse: the customer's
+   * SELECTION, which may name containers (a ClickUp Space) as well as leaves (a
+   * List). Empty means the workspace has not been scoped yet, and every gate
+   * that asks "is this configured" treats it that way.
+   *
+   * This is the selection, never the coverage. What a run actually fetched is
+   * resolved from this at run time and recorded on the artifact
+   * (`ImportBatch.scopes`), because a Space that gains a List changes what was
+   * measured without changing what was chosen.
+   */
+  readonly scopes: readonly WorkspaceScope[];
   readonly observedStatuses: readonly string[];
   readonly observedActors: readonly string[];
   /**
@@ -178,8 +203,7 @@ export type WorkspacePatch = Partial<
     | 'name'
     | 'provider'
     | 'connectionParams'
-    | 'scopeId'
-    | 'scopeName'
+    | 'scopes'
     | 'observedStatuses'
     | 'observedActors'
     | 'statusHints'
@@ -332,8 +356,7 @@ export interface AdminWorkspaceRow {
   readonly tenantId: string;
   readonly provider: string;
   readonly connectionParams: Readonly<Record<string, string>>;
-  readonly scopeId: string | null;
-  readonly scopeName: string | null;
+  readonly scopes: readonly WorkspaceScope[];
   readonly onboarding: OnboardingState;
   /** Presence of a stored token — NEVER the token itself. */
   readonly hasToken: boolean;
@@ -653,7 +676,7 @@ export interface AdminMonitoringWorkspaceRow {
   readonly tenantId: string;
   readonly name: string | null;
   readonly provider: string;
-  readonly scopeName: string | null;
+  readonly scopes: readonly WorkspaceScope[];
   readonly onboarding: OnboardingState;
   readonly members: number;
   readonly analyses: number;

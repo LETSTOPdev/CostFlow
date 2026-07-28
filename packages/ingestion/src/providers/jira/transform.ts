@@ -10,10 +10,12 @@ import { parseIsoUtc } from '@costflow/domain';
 import { ImportError } from '../../errors';
 import {
   buildCapability,
+  coverageFor,
   orderAndValidateEvents,
   resolveActorValue,
   stageForStatus,
   type CanonicalEventInput,
+  type TransformScope,
 } from '../../canonical';
 
 /**
@@ -49,6 +51,8 @@ export interface JiraTransformInput {
   /** Raw /rest/api/3/issue/{key}/changelog pages keyed by issue key (J2 top-ups). */
   readonly supplementaryChangelogs?: Readonly<Record<string, readonly string[]>> | undefined;
   readonly mapping: JiraMapping;
+  /** Which project or board these pages came from, when the caller knows it. */
+  readonly scope?: TransformScope | undefined;
   readonly importedAt: IsoDateString;
   readonly pseudonymization?: PseudonymizationContext | undefined;
 }
@@ -87,8 +91,15 @@ function parseJson(text: string, label: string): unknown {
 }
 
 export function transformJira(input: JiraTransformInput): ImportBatch {
-  const { batchId, searchPages, supplementaryChangelogs, mapping, importedAt, pseudonymization } =
-    input;
+  const {
+    batchId,
+    searchPages,
+    supplementaryChangelogs,
+    mapping,
+    scope,
+    importedAt,
+    pseudonymization,
+  } = input;
   if (searchPages.length === 0) {
     throw new ImportError('Jira transform received no search pages.');
   }
@@ -228,6 +239,7 @@ export function transformJira(input: JiraTransformInput): ImportBatch {
     diagnostics,
     capability: buildCapability(items, events, { dueDates: true, lastUpdated: true, actors: true }),
     evidence: [],
+    scopes: coverageFor(scope, items.length),
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

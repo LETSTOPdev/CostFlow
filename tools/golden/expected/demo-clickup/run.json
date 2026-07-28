@@ -1,7 +1,7 @@
 {
   "runId": "golden-demo-clickup",
   "engineVersions": {
-    "analysis": "0.4.0",
+    "analysis": "0.5.0",
     "signals": {
       "f2-aging": "1.0.0",
       "f1-queue-wait": "1.0.0",
@@ -54,6 +54,7 @@
         "detail": "1 of 4 imported item(s) had no status history, so their only event is creation and time spent in individual statuses was not observed."
       }
     ],
+    "scopes": [],
     "pseudonymizationScope": "costflow-golden",
     "items": [
       {

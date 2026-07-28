@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { newId } from '../crypto';
+import { describeSelection } from '../scopes';
 import { buildFunnel, type TenantFunnelRow } from '../funnel';
 import { lastActivityOf, matchesCustomerFilter, scoreCustomer } from '../health';
 import { ONBOARDING_ORDER, UNKNOWN_IDENTITY } from './contract';
@@ -440,8 +441,7 @@ export class PgStore implements Store {
       provider: row['provider'] as string,
       connectionParams: (row['connection_params'] as Record<string, string> | null) ?? legacyParams,
       tokenCiphertext: row['token_ciphertext'] as string,
-      scopeId: (row['project_key'] as string | null) ?? null,
-      scopeName: (row['project_name'] as string | null) ?? null,
+      scopes: (row['scopes'] as WorkspaceRecord['scopes'] | null) ?? [],
       observedStatuses: (row['observed_statuses'] as string[] | null) ?? [],
       observedActors: (row['observed_actors'] as string[] | null) ?? [],
       statusHints: (row['status_hints'] as WorkspaceRecord['statusHints']) ?? null,
@@ -511,8 +511,7 @@ export class PgStore implements Store {
       columns['site'] = patch.connectionParams['site'] ?? null;
       columns['email'] = patch.connectionParams['email'] ?? null;
     }
-    if (patch.scopeId !== undefined) columns['project_key'] = patch.scopeId;
-    if (patch.scopeName !== undefined) columns['project_name'] = patch.scopeName;
+    if (patch.scopes !== undefined) columns['scopes'] = JSON.stringify(patch.scopes);
     if (patch.observedStatuses !== undefined)
       columns['observed_statuses'] = JSON.stringify(patch.observedStatuses);
     if (patch.observedActors !== undefined)
@@ -963,12 +962,12 @@ export class PgStore implements Store {
   async adminListWorkspaces(params: AdminListParams): Promise<AdminPage<AdminWorkspaceRow>> {
     return this.adminPage(
       'workspaces',
-      `id, tenant_id, provider, connection_params, site, email, project_key, project_name,
+      `id, tenant_id, provider, connection_params, site, email, scopes,
        onboarding, created_at, (token_ciphertext <> '') as has_token`,
       this.adminFilters(params, {
         tenantCol: 'tenant_id',
         statusCol: 'onboarding',
-        searchCols: ['provider', "coalesce(project_name,'')", 'id::text'],
+        searchCols: ['provider', "coalesce(scopes::text,'')", 'id::text'],
       }),
       { createdAt: 'created_at', provider: 'provider', onboarding: 'onboarding' },
       'createdAt',
@@ -981,8 +980,7 @@ export class PgStore implements Store {
           site: (row['site'] as string | null) ?? '',
           email: (row['email'] as string | null) ?? '',
         },
-        scopeId: (row['project_key'] as string | null) ?? null,
-        scopeName: (row['project_name'] as string | null) ?? null,
+        scopes: (row['scopes'] as AdminWorkspaceRow['scopes'] | null) ?? [],
         onboarding: row['onboarding'] as AdminWorkspaceRow['onboarding'],
         hasToken: row['has_token'] === true,
         createdAt: toIso(row['created_at']) as string,
@@ -1090,8 +1088,8 @@ export class PgStore implements Store {
         sub: `${row['role'] as string} · ${row['id'] as string}`,
       });
     const workspaces = await this.pool.query(
-      `select id, tenant_id, provider, project_name from workspaces
-       where coalesce(project_name,'') ilike $1 or id::text ilike $1 or coalesce(project_key,'') ilike $1
+      `select id, tenant_id, provider, scopes from workspaces
+       where coalesce(scopes::text,'') ilike $1 or id::text ilike $1
        limit $2`,
       [like, limit],
     );
@@ -1100,7 +1098,9 @@ export class PgStore implements Store {
         kind: 'workspace',
         id: row['id'] as string,
         tenantId: row['tenant_id'] as string,
-        label: (row['project_name'] as string | null) ?? (row['provider'] as string),
+        label:
+          describeSelection((row['scopes'] as WorkspaceRecord['scopes'] | null) ?? []) ??
+          (row['provider'] as string),
         sub: `${row['provider'] as string} · ${row['id'] as string}`,
       });
     return hits.slice(0, limit);
@@ -1433,7 +1433,7 @@ export class PgStore implements Store {
 
   private readonly ACTIVITY_SELECT = `select e.id, e.at, e.type, e.tenant_id, e.user_id, e.workspace_id, e.fields,
            t.name as org_name, u.email as user_email,
-           coalesce(w.name, w.project_name) as workspace_name
+           coalesce(w.name, w.scopes->0->>'name') as workspace_name
       from events e
       left join tenants t on t.id = e.tenant_id
       left join users u on u.id = e.user_id
@@ -1501,7 +1501,7 @@ export class PgStore implements Store {
     if (q !== '') {
       bound.push(`%${q}%`);
       clauses.push(
-        `(coalesce(w.name,'') ilike $${bound.length} or coalesce(w.project_name,'') ilike $${bound.length} or w.provider ilike $${bound.length} or w.id::text ilike $${bound.length})`,
+        `(coalesce(w.name,'') ilike $${bound.length} or coalesce(w.scopes::text,'') ilike $${bound.length} or w.provider ilike $${bound.length} or w.id::text ilike $${bound.length})`,
       );
     }
     const where = clauses.length ? `where ${clauses.join(' and ')}` : '';
@@ -1520,8 +1520,8 @@ export class PgStore implements Store {
     );
     const n = bound.length;
     const res = await this.pool.query(
-      `select w.id, w.tenant_id, coalesce(w.name, w.project_name) as name, w.provider,
-              w.project_name, w.onboarding, w.created_at,
+      `select w.id, w.tenant_id, coalesce(w.name, w.scopes->0->>'name') as name, w.provider,
+              w.scopes, w.onboarding, w.created_at,
               (select count(*) from workspace_members m where m.workspace_id = w.id)::int as members,
               (select count(*) from runs r where r.workspace_id = w.id)::int as analyses,
               (select max(created_at) from runs r where r.workspace_id = w.id) as last_analysis_at,
@@ -1536,7 +1536,7 @@ export class PgStore implements Store {
       tenantId: row['tenant_id'] as string,
       name: (row['name'] as string | null) ?? null,
       provider: row['provider'] as string,
-      scopeName: (row['project_name'] as string | null) ?? null,
+      scopes: (row['scopes'] as WorkspaceRecord['scopes'] | null) ?? [],
       onboarding: row['onboarding'] as OnboardingState,
       members: Number(row['members'] ?? 0),
       analyses: Number(row['analyses'] ?? 0),

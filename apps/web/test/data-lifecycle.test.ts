@@ -20,8 +20,7 @@ async function seedTenantWithRun(
     tokenCiphertext: 'tok',
   });
   await t.store.updateWorkspace(tenantId, workspace.id, {
-    scopeId: 'OPS',
-    scopeName: 'Operations',
+    scopes: [{ id: 'OPS', kind: 'project', name: 'Operations' }],
   });
   const job = await t.store.createJob(tenantId, workspace.id);
   await t.store.updateJob(tenantId, job.id, {

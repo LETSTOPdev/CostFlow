@@ -1,4 +1,5 @@
 import { newId } from '../crypto';
+import { describeSelection } from '../scopes';
 import { buildFunnel, type TenantFunnelRow } from '../funnel';
 import { lastActivityOf, matchesCustomerFilter, scoreCustomer } from '../health';
 import { onboardingRank, UNKNOWN_IDENTITY } from './contract';
@@ -288,8 +289,7 @@ export class MemoryStore implements Store {
       provider: data.provider,
       connectionParams: data.connectionParams,
       tokenCiphertext: data.tokenCiphertext,
-      scopeId: null,
-      scopeName: null,
+      scopes: [],
       observedStatuses: [],
       observedActors: [],
       statusHints: null,
@@ -589,7 +589,7 @@ export class MemoryStore implements Store {
       .filter(
         (w) =>
           q === '' ||
-          (w.scopeName ?? '').toLowerCase().includes(q) ||
+          w.scopes.some((s) => s.name.toLowerCase().includes(q)) ||
           w.provider.toLowerCase().includes(q) ||
           w.id.includes(q),
       )
@@ -598,8 +598,7 @@ export class MemoryStore implements Store {
         tenantId: w.tenantId,
         provider: w.provider,
         connectionParams: w.connectionParams,
-        scopeId: w.scopeId,
-        scopeName: w.scopeName,
+        scopes: w.scopes,
         onboarding: w.onboarding,
         hasToken: w.tokenCiphertext !== '',
         createdAt: w.createdAt,
@@ -706,15 +705,15 @@ export class MemoryStore implements Store {
         });
     for (const w of this.workspaces.values())
       if (
-        (w.scopeName ?? '').toLowerCase().includes(needle) ||
+        w.scopes.some((s) => s.name.toLowerCase().includes(needle)) ||
         w.id.toLowerCase().includes(needle) ||
-        (w.scopeId ?? '').toLowerCase().includes(needle)
+        w.scopes.some((s) => s.id.toLowerCase().includes(needle))
       )
         hits.push({
           kind: 'workspace',
           id: w.id,
           tenantId: w.tenantId,
-          label: w.scopeName ?? w.provider,
+          label: describeSelection(w.scopes) ?? w.provider,
           sub: `${w.provider} · ${w.id}`,
         });
     return hits.slice(0, limit);
@@ -944,7 +943,7 @@ export class MemoryStore implements Store {
       userId: event.userId,
       userEmail: event.userId ? (this.users.get(event.userId)?.email ?? null) : null,
       workspaceId: event.workspaceId,
-      workspaceName: workspace ? (workspace.name ?? workspace.scopeName) : null,
+      workspaceName: workspace ? (workspace.name ?? describeSelection(workspace.scopes)) : null,
       fields: event.fields,
     };
   }
@@ -987,9 +986,9 @@ export class MemoryStore implements Store {
         return {
           id: w.id,
           tenantId: w.tenantId,
-          name: w.name ?? w.scopeName,
+          name: w.name ?? describeSelection(w.scopes),
           provider: w.provider,
-          scopeName: w.scopeName,
+          scopes: w.scopes,
           onboarding: w.onboarding,
           members: [...this.workspaceMembers.values()].filter((m) => m.workspaceId === w.id).length,
           analyses: runs.length,

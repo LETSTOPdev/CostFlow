@@ -6,6 +6,8 @@ export type { WorkItemEvent } from './events';
 export type { CapabilityProfile, CapabilityKey } from './capability';
 export type { EvidenceNote, EvidenceSubject, EvidenceWeakness } from './evidence';
 export { EVIDENCE_SUBJECTS, EVIDENCE_WEAKNESSES } from './evidence';
+export type { BatchScope } from './scope';
+export { sortScopes } from './scope';
 export type { ImportBatch, ImportDiagnostic } from './import-batch';
 export type {
   AssumptionSet,

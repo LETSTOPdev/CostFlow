@@ -206,6 +206,9 @@ export function importCsv(input: CsvImportInput): ImportBatch {
       actors: mapping.columns.actor !== undefined,
     }),
     evidence: [],
+    // A file is one undifferentiated body of work: there is no provider scope
+    // to record, and saying so is a fact rather than a gap.
+    scopes: [],
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

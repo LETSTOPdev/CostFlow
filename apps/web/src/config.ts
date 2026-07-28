@@ -18,8 +18,10 @@ export interface AppConfig {
   readonly trustProxy: boolean;
   /** Emails allowed to view the founder analytics page (COSTFLOW_ADMIN_EMAILS). */
   readonly adminEmails: string[];
-  /** Max work items imported per scope, any provider (COSTFLOW_MAX_ISSUES); undefined → server default. */
+  /** Max work items imported across the whole selection (COSTFLOW_MAX_ISSUES); undefined → server default. */
   readonly maxIssues: number | undefined;
+  /** Max scopes one workspace may select (COSTFLOW_MAX_SCOPES); undefined → server default. */
+  readonly maxScopes: number | undefined;
 }
 
 export type Env = Record<string, string | undefined>;
@@ -112,9 +114,12 @@ export function loadConfig(env: Env): AppConfig {
     .split(',')
     .map((email) => email.trim().toLowerCase())
     .filter((email) => email !== '');
-  const rawMax = env['COSTFLOW_MAX_ISSUES'];
-  const parsedMax = rawMax !== undefined && /^\d+$/.test(rawMax) ? Number(rawMax) : undefined;
-  const maxIssues = parsedMax !== undefined && parsedMax > 0 ? parsedMax : undefined;
+  const positiveInt = (raw: string | undefined): number | undefined => {
+    const parsed = raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : undefined;
+    return parsed !== undefined && parsed > 0 ? parsed : undefined;
+  };
+  const maxIssues = positiveInt(env['COSTFLOW_MAX_ISSUES']);
+  const maxScopes = positiveInt(env['COSTFLOW_MAX_SCOPES']);
 
   return {
     port: Number(env['PORT'] ?? 3000),
@@ -126,5 +131,6 @@ export function loadConfig(env: Env): AppConfig {
     trustProxy,
     adminEmails,
     maxIssues,
+    maxScopes,
   };
 }

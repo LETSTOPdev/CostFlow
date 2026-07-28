@@ -24,7 +24,7 @@ async function toAssumptions(
     provider: 'clickup',
     token: 'pk_1234567_SECRETSECRETSECRET',
   });
-  await post(t, cookie, '/scope', { scope: '0' });
+  await post(t, cookie, '/scope', { scope: '901', action: 'import' });
   await post(t, cookie, '/mapping/statuses', {
     s0: 'queue',
     s1: 'done',
@@ -94,7 +94,7 @@ describe('the rate card leads with people', () => {
       provider: 'clickup',
       token: 'pk_1234567_SECRETSECRETSECRET',
     });
-    await post(t, cookie, '/scope', { scope: '0' });
+    await post(t, cookie, '/scope', { scope: '901', action: 'import' });
     await post(t, cookie, '/mapping/statuses', {
       s0: 'queue',
       s1: 'done',

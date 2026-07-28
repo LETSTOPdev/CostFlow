@@ -3,8 +3,9 @@
 Future work only. **When a milestone completes, delete it from this file** and
 update `02-current-state.md` instead.
 
-Multi-scope monitoring (P2) is the active milestone. P0 is blocked on the
-operator and blocks nothing else.
+No milestone is active. P0 is blocked on the operator and blocks nothing else;
+P1 is waiting on real customer usage, which the founder made a precondition for
+building anything further on the intelligence layer.
 
 ---
 
@@ -44,29 +45,7 @@ design discussion.
 
 ---
 
-## P2 — Multi-scope monitoring (next milestone)
-
-### A monitoring workspace spans several scopes
-
-**Goal.** A workspace analyses several spaces, folders, lists or projects as one
-connected body of work, instead of a single isolated scope.
-
-**Reason.** Managers reason across an organisation. Engineering, Legal, Design
-and QA in one analysis is what makes a cross-team bottleneck visible at all; a
-single list can only ever show friction inside itself. This is foundational for
-organisational intelligence rather than a convenience.
-
-**Dependencies.** A schema change (`scopeId` is one nullable column today),
-fetching several scopes per run, and merging them into one `ImportBatch` while
-keeping item ids unique. Bulk selection in the UI (Select All, Deselect All)
-lands here too — it is meaningless against a single-scope model, which is why
-the search half shipped first and the bulk half did not.
-
-**Status.** Design starting. Treat as foundational.
-
----
-
-## P3 — Admin console extensions
+## P2 — Admin console extensions
 
 The console and customer database already exist, so these are extensions rather
 than builds. Candidates, roughly by business value:
@@ -114,7 +93,7 @@ first.
 
 ---
 
-## P4 — Monitoring Workspaces continued
+## P3 — Monitoring Workspaces continued
 
 Design in `reference/19-monitoring-workspaces.md`. MW1 shipped; MW2 onward
 remain.
@@ -167,7 +146,7 @@ thresholds, and change attribution.
 
 ---
 
-## P5 — Operational Intelligence continued
+## P4 — Operational Intelligence continued
 
 ### OI2 — simulation
 

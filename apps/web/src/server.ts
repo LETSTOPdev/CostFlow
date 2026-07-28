@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
+import { describeSelection, hasSelection, selectionNames, sortSelection } from './scopes';
 import { marked } from 'marked';
 import type { AssumptionSet, Provenance, RangeSpec, StageKind } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
@@ -52,7 +53,13 @@ import {
 import { renderDashboard } from './dashboard-view';
 import { parseRun, renderReportBody, runSummary } from './report-view';
 import { executeJob } from './jobs';
-import { GatewayError, type ConnectFieldSpec, type Connector } from './connectors/types';
+import {
+  GatewayError,
+  resolveSelection,
+  type ConnectFieldSpec,
+  type Connector,
+  type ScopeRef,
+} from './connectors/types';
 import type { ConnectorRegistry } from './connectors/registry';
 import { registerSecurity } from './security';
 import {
@@ -152,6 +159,14 @@ export interface ServerDeps {
    * real projects; override via COSTFLOW_MAX_ISSUES.
    */
   readonly maxIssues?: number;
+  /**
+   * Ceiling on how many scopes one Monitoring Workspace may select. A run
+   * fetches every selected origin serially, so the selection size is the run's
+   * wall-clock multiplier and its rate-limit exposure — a hundred Lists behind
+   * one 100-req/min token is an import that never finishes. Default 25, which
+   * comfortably covers a department; override via COSTFLOW_MAX_SCOPES.
+   */
+  readonly maxScopes?: number;
 }
 
 // Committed snapshot of the demo-jira golden run.json, shipped in the image
@@ -542,6 +557,15 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }
     if (onboardingRank(workspace.onboarding) < onboardingRank(minimum)) {
       void reply.redirect('/');
+      return null;
+    }
+    // A workspace whose onboarding claims a scope was chosen but which holds no
+    // selection is not configured, whatever the state column says. That is the
+    // shape a row takes if it was written by the previous single-scope build
+    // during a rolling deploy, and the honest response is to ask again rather
+    // than to walk the customer into a mapping step with nothing behind it.
+    if (onboardingRank(minimum) > onboardingRank('connected') && !hasSelection(workspace.scopes)) {
+      void reply.redirect('/scope');
       return null;
     }
     return workspace;
@@ -1273,7 +1297,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       { key: 'name', label: 'Workspace', render: (r) => esc(r.name ?? '(unnamed)') },
       { key: '', label: 'Org', render: (r) => adTenantCell(r.tenantId) },
       { key: 'provider', label: 'Integration', render: (r) => adminBadge(r.provider) },
-      { key: '', label: 'Scope', render: (r) => esc(r.scopeName ?? '—') },
+      { key: '', label: 'Scope', render: (r) => esc(describeSelection(r.scopes) ?? '—') },
       { key: '', label: 'Stage', render: (r) => adminBadge(r.onboarding) },
       { key: '', label: 'Members', align: 'right', render: (r) => String(r.members) },
       { key: 'analyses', label: 'Analyses', align: 'right', render: (r) => String(r.analyses) },
@@ -1358,6 +1382,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       ['Trust proxy', deps.trustProxy === true ? 'yes' : 'no'],
       ['Admin allowlist', `${(deps.adminEmails ?? []).length} email(s)`],
       ['Max issues / import', esc(String(deps.maxIssues ?? 'unbounded'))],
+      ['Max scopes / workspace', esc(String(deps.maxScopes ?? 25))],
       ['Await jobs (sync)', deps.awaitJobs === true ? 'yes' : 'no'],
     ];
     const body = `
@@ -1467,7 +1492,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     ];
     const wsCols: AdminColumn<AdminWorkspaceRow>[] = [
       { key: '', label: 'Provider', render: (r) => adminBadge(r.provider) },
-      { key: '', label: 'Scope', render: (r) => esc(r.scopeName ?? r.scopeId ?? '—') },
+      { key: '', label: 'Scope', render: (r) => esc(describeSelection(r.scopes) ?? '—') },
       { key: '', label: 'Connection', render: (r) => esc(r.connectionParams['site'] ?? '—') },
       { key: '', label: 'Stage', render: (r) => adminBadge(r.onboarding) },
       {
@@ -1542,7 +1567,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const pageData = await store.adminListWorkspaces(p);
     const cols: AdminColumn<AdminWorkspaceRow>[] = [
       { key: 'provider', label: 'Provider', render: (r) => adminBadge(r.provider) },
-      { key: '', label: 'Scope', render: (r) => esc(r.scopeName ?? r.scopeId ?? '—') },
+      { key: '', label: 'Scope', render: (r) => esc(describeSelection(r.scopes) ?? '—') },
       { key: '', label: 'Connection', render: (r) => esc(r.connectionParams['site'] ?? '—') },
       { key: 'onboarding', label: 'Stage', render: (r) => adminBadge(r.onboarding) },
       {
@@ -1892,8 +1917,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         session,
         'Dashboard',
         renderDashboard({
-          scopeName: workspace.scopeName,
-          scopeId: workspace.scopeId,
+          scopes: workspace.scopes,
           connectionText: connector.describeConnection(workspace.connectionParams),
           providerName: connector.descriptor.name,
           scopeNounSingular: connector.descriptor.scopeNoun.singular,
@@ -2097,8 +2121,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         provider,
         connectionParams: parsed.params,
         tokenCiphertext,
-        scopeId: null,
-        scopeName: null,
+        scopes: [],
         observedStatuses: [],
         observedActors: [],
         statusHints: null,
@@ -2124,6 +2147,192 @@ Sitemap: https://app.fbx1.com/sitemap.xml
 
   // ---------- step 2: scope selection ----------
 
+  /**
+   * A Monitoring Workspace analyses a SET of scopes, and the customer picks
+   * that set here — at any level of the platform's own hierarchy, so choosing
+   * "the Engineering Space" is one click rather than twenty.
+   *
+   * Multi-select with no client JavaScript, because there is none anywhere in
+   * this product and the CSP forbids adding any. That constraint decides the
+   * whole shape of this step:
+   *
+   *   The selection lives in the URL (`?sel=a,b,c`), not in browser memory. So
+   *   it survives searching, refreshing, the back button and a shared link, and
+   *   the server can render the exact same page from the URL alone.
+   *
+   *   Every button is a submit on ONE form, distinguished by its `action`
+   *   value. Search, select-all and clear recompute the selection server-side
+   *   and 303 back to a GET, so the URL always reflects what is on screen and
+   *   a refresh never re-posts.
+   *
+   *   A scope that is selected but filtered off screen rides along as a hidden
+   *   input. Without that, searching would silently discard what the customer
+   *   had already picked — the same class of bug as the pre-search radio index,
+   *   and just as invisible.
+   */
+  const MAX_SCOPES = deps.maxScopes ?? 25;
+
+  /** Ancestor names, outermost first. Empty for a root. */
+  const scopePath = (scope: ScopeRef, byId: ReadonlyMap<string, ScopeRef>): string[] => {
+    const parts: string[] = [];
+    let cursor = scope.parentId === null ? undefined : byId.get(scope.parentId);
+    // Bounded: a malformed hierarchy with a cycle must not hang the request.
+    for (let depth = 0; cursor !== undefined && depth < 12; depth += 1) {
+      parts.unshift(cursor.name);
+      cursor = cursor.parentId === null ? undefined : byId.get(cursor.parentId);
+    }
+    return parts;
+  };
+
+  /** Full path plus name — what the customer reads, and what search matches. */
+  const scopeLabel = (scope: ScopeRef, byId: ReadonlyMap<string, ScopeRef>): string =>
+    [...scopePath(scope, byId), scope.name].join(' / ');
+
+  const scopeUrl = (q: string, selected: readonly string[]): string => {
+    const params = new URLSearchParams();
+    if (q !== '') params.set('q', q);
+    params.set('sel', [...new Set(selected)].join(','));
+    return `/scope?${params.toString()}`;
+  };
+
+  /** Repeated form field → id list. Absent, single and repeated all arrive here. */
+  const submittedIds = (value: unknown): string[] => {
+    const raw = value === undefined ? [] : Array.isArray(value) ? value : [value];
+    return [...new Set(raw.map((v) => String(v).trim()).filter((v) => v !== ''))];
+  };
+
+  const renderScopeStep = (
+    session: Session,
+    workspace: WorkspaceRecord,
+    catalogue: readonly ScopeRef[],
+    q: string,
+    selected: readonly string[],
+    error: string | null,
+  ): string => {
+    const d = connectorOf(workspace).descriptor;
+    const byId = new Map(catalogue.map((s) => [s.id, s]));
+    const labelled = catalogue
+      .map((scope) => ({
+        scope,
+        label: scopeLabel(scope, byId),
+        depth: scopePath(scope, byId).length,
+      }))
+      .sort((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+
+    const needle = q.toLowerCase();
+    // Matching on the FULL PATH, not just the name: searching a Space finds the
+    // Lists inside it, which is what someone typing a team name means.
+    const matches =
+      needle === ''
+        ? labelled
+        : labelled.filter(
+            (e) =>
+              e.label.toLowerCase().includes(needle) || e.scope.id.toLowerCase().includes(needle),
+          );
+    const leaves = catalogue.filter((s) => s.fetchable).length;
+    const containers = catalogue.length - leaves;
+    const matchIds = new Set(matches.map((e) => e.scope.id));
+    const selectedSet = new Set(selected);
+    const offScreen = labelled.filter(
+      (e) => selectedSet.has(e.scope.id) && !matchIds.has(e.scope.id),
+    );
+
+    const row = (entry: (typeof labelled)[number]): string => {
+      const { scope, depth } = entry;
+      const shown =
+        depth === 0
+          ? esc(scope.name)
+          : `<span class="note">${esc(scopePath(scope, byId).join(' / '))} / </span>${esc(scope.name)}`;
+      return `<label class="pick" style="padding-left:${0.6 + depth * 1.1}rem">
+                <input type="checkbox" name="scope" value="${esc(scope.id)}" ${selectedSet.has(scope.id) ? 'checked' : ''}>
+                <span><span style="flex:1">${shown} <span class="note">${esc(scope.kind)}${scope.fetchable ? '' : ' · everything inside it'}</span></span></span>
+              </label>`;
+    };
+
+    const hidden = offScreen
+      .map((e) => `<input type="hidden" name="scope" value="${esc(e.scope.id)}">`)
+      .join('');
+
+    const summary =
+      selected.length === 0
+        ? `<p class="note" style="margin:.2rem 0 0">Nothing selected yet.</p>`
+        : `<p class="note" style="margin:.2rem 0 0"><strong>${selected.length}</strong> selected: ${esc(
+            labelled
+              .filter((e) => selectedSet.has(e.scope.id))
+              .map((e) => e.label)
+              .join(', '),
+          )}</p>`;
+
+    if (catalogue.length === 0) {
+      return `${stepsNav('scope')}
+         <p class="eyebrow">Step 2: Scope</p>
+         <h1 style="margin-top:.6rem">Choose what to analyse</h1>
+         <div class="empty" style="max-width:38rem">
+           <h3>No ${esc(d.scopeNoun.plural)} found</h3>
+           <p>This account can't see any ${esc(d.name)} ${esc(d.scopeNoun.plural)}. Check that the API token belongs to a user with access, then reconnect.</p>
+           <a class="btn" href="/connect">Back to connection</a>
+         </div>`;
+    }
+
+    return `${stepsNav('scope')}
+       <p class="eyebrow">Step 2: Scope</p>
+       <h1 style="margin-top:.6rem">Choose what to analyse</h1>
+       <p class="lead">Pick every ${esc(d.name)} ${esc(d.scopeNoun.singular)} this workspace should cover. Choosing a container includes everything inside it, including anything added later. You can change this at any time.</p>
+       ${error ? `<div class="error" role="alert">${error}</div>` : ''}
+       <form method="post" action="/scope" class="panel" style="max-width:44rem;margin-top:1.4rem">
+         ${csrfField(session)}
+         ${hidden}
+         ${
+           // A search box over four items is clutter; over forty it is the only
+           // way through. The threshold keeps the small case clean.
+           catalogue.length > 5
+             ? `<label style="margin:0">Search
+                  <input name="q" value="${esc(q)}" placeholder="Name or id" style="margin-left:.5rem">
+                </label>
+                <button type="submit" name="action" value="search" style="margin-left:.4rem">Search</button>
+                ${q === '' ? '' : `<button type="submit" name="action" value="clear-search" class="btn-ghost" style="margin-left:.4rem">Clear search</button>`}`
+             : ''
+         }
+         <p class="note" style="margin:.6rem 0 .2rem">${
+           q === ''
+             ? // Counting everything as a List would be wrong: most of what is
+               // listed on a ClickUp workspace are Spaces and Folders. Say what
+               // is actually there.
+               `${leaves} ${esc(leaves === 1 ? d.scopeNoun.singular : d.scopeNoun.plural)} available${
+                 containers === 0
+                   ? ''
+                   : `, in ${containers} container${containers === 1 ? '' : 's'} you can select instead`
+               }.`
+             : `${matches.length} of ${catalogue.length} match “${esc(q)}”.`
+         }</p>
+         ${summary}
+         ${
+           matches.length > 1
+             ? `<p style="margin:.8rem 0 .4rem">
+                  <button type="submit" name="action" value="all" class="btn-ghost">Select all shown</button>
+                  <button type="submit" name="action" value="none" class="btn-ghost" style="margin-left:.4rem">Clear selection</button>
+                </p>`
+             : ''
+         }
+         ${
+           matches.length === 0
+             ? `<p class="note">Nothing matches “${esc(q)}”. Anything you had already selected is still selected.</p>`
+             : matches.map(row).join('')
+         }
+         <button type="submit" name="action" value="import" style="margin-top:.8rem">Analyse ${selected.length === 0 ? `the selected ${esc(d.scopeNoun.plural)}` : `these ${selected.length}`}</button>
+       </form>`;
+  };
+
+  /**
+   * Errors the step can be redirected back with. Kept as a closed map rather
+   * than free text in the URL so nothing a visitor types reaches the page.
+   */
+  const SCOPE_ERRORS: Record<string, string> = {
+    empty: 'Choose at least one scope to analyse.',
+    'too-many': `A workspace can cover at most ${MAX_SCOPES} scopes. Narrow the selection, or email <a href="mailto:support@fbx1.com">support@fbx1.com</a> if you need more.`,
+    gone: 'Some of what you selected is no longer visible to this connection. The list below is current.',
+  };
+
   app.get('/scope', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
@@ -2131,82 +2340,38 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     if (!workspace) return;
     const connector = connectorOf(workspace);
     const d = connector.descriptor;
-    let scopes;
+    let catalogue: ScopeRef[];
     try {
-      scopes = await connector.gateway.listScopes(credentialsOf(workspace));
+      catalogue = await connector.gateway.listScopes(credentialsOf(workspace));
     } catch (error) {
       const f = gatewayFailure(error);
       logLine({ level: 'warn', msg: 'connector-list-scopes-failed', provider: d.id, ...f });
       return reply.type('text/html').send(page(session, 'Choose scope', importErrorHtml(f)));
     }
-    // Search is a GET round trip, not a client-side filter: there is no client
-    // JavaScript anywhere in this product and the CSP forbids adding any.
-    const q = ((request.query as { q?: string }).q ?? '').trim();
-    const needle = q.toLowerCase();
-    const matches =
-      needle === ''
-        ? scopes
-        : scopes.filter(
-            (s) => s.name.toLowerCase().includes(needle) || s.id.toLowerCase().includes(needle),
-          );
-
-    const searchForm = `<form method="get" action="/scope" class="panel" style="max-width:40rem;margin-top:1.2rem;padding:.9rem 1rem">
-         <label style="margin:0">Search ${esc(d.scopeNoun.plural)}
-           <input name="q" value="${esc(q)}" placeholder="Name or id" style="margin-left:.5rem">
-         </label>
-         <button type="submit" style="margin-left:.4rem">Search</button>
-         ${q === '' ? '' : `<a class="note" href="/scope" style="margin-left:.6rem">Clear</a>`}
-         <p class="note" style="margin:.5rem 0 0">${
-           q === ''
-             ? `${scopes.length} ${esc(scopes.length === 1 ? d.scopeNoun.singular : d.scopeNoun.plural)} available.`
-             : `${matches.length} of ${scopes.length} match “${esc(q)}”.`
-         }</p>
-       </form>`;
-
-    return reply.type('text/html').send(
-      page(
-        session,
-        'Choose scope',
-        `${stepsNav('scope')}
-         <p class="eyebrow">Step 2: Scope</p>
-         <h1 style="margin-top:.6rem">Choose the ${esc(d.scopeNoun.singular)} to import</h1>
-         <p class="lead">Pick the ${esc(d.name)} ${esc(d.scopeNoun.singular)} you want CostFlow to analyze. You can reconnect and switch it later.</p>
-         ${
-           scopes.length === 0
-             ? `<div class="empty" style="max-width:38rem">
-                  <h3>No ${esc(d.scopeNoun.plural)} found</h3>
-                  <p>This account can't see any ${esc(d.name)} ${esc(d.scopeNoun.plural)}. Check that the API token belongs to a user with access, then reconnect.</p>
-                  <a class="btn" href="/connect">Back to connection</a>
-                </div>`
-             : `${scopes.length > 5 ? searchForm : ''}
-               ${
-                 matches.length === 0
-                   ? `<div class="empty" style="max-width:38rem">
-                        <h3>Nothing matches “${esc(q)}”</h3>
-                        <p>No ${esc(d.scopeNoun.singular)} name or id contains that text.</p>
-                        <a class="btn" href="/scope">Show all ${esc(d.scopeNoun.plural)}</a>
-                      </div>`
-                   : `<form method="post" action="/scope" class="panel" style="max-width:40rem;margin-top:1.5rem">${csrfField(session)}
-                 ${matches
-                   .map(
-                     (s) =>
-                       // The submitted value is the scope ID, never a list
-                       // position: filtering changes positions, and an index
-                       // resolved against the unfiltered list would silently
-                       // import the wrong ${esc(d.scopeNoun.singular)}.
-                       `<label class="pick"><input type="radio" name="scope" value="${esc(s.id)}" ${
-                         workspace.scopeId === s.id || (!workspace.scopeId && matches.length === 1)
-                           ? 'checked'
-                           : ''
-                       } required><span><span style="flex:1">${esc(s.name)} <span class="note">${esc(s.id)}</span></span></span></label>`,
-                   )
-                   .join('')}
-                 <button type="submit" style="margin-top:.5rem">Import this ${esc(d.scopeNoun.singular)}</button>
-               </form>`
-               }`
-         }`,
-      ),
-    );
+    const query = request.query as { q?: string; sel?: string; error?: string };
+    const q = (query.q ?? '').trim();
+    // `sel` absent means "first visit": start from what is already stored, so
+    // revisiting the step shows the current selection rather than a blank slate.
+    const selected =
+      query.sel === undefined
+        ? workspace.scopes.map((s) => s.id)
+        : submittedIds(query.sel.split(','));
+    return reply
+      .type('text/html')
+      .send(
+        page(
+          session,
+          'Choose scope',
+          renderScopeStep(
+            session,
+            workspace,
+            catalogue,
+            q,
+            selected,
+            SCOPE_ERRORS[query.error ?? ''] ?? null,
+          ),
+        ),
+      );
   });
 
   app.post('/scope', async (request, reply) => {
@@ -2218,9 +2383,9 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const connector = connectorOf(workspace);
     const d = connector.descriptor;
     const credentials = credentialsOf(workspace);
-    let scopes;
+    let catalogue: ScopeRef[];
     try {
-      scopes = await connector.gateway.listScopes(credentials);
+      catalogue = await connector.gateway.listScopes(credentials);
     } catch (error) {
       const f = gatewayFailure(error);
       logLine({ level: 'warn', msg: 'connector-list-scopes-failed', provider: d.id, ...f });
@@ -2229,55 +2394,82 @@ Sitemap: https://app.fbx1.com/sitemap.xml
         .type('text/html')
         .send(page(session, 'Choose scope', importErrorHtml(f)));
     }
-    const body = request.body as { scope?: string; project?: string };
-    // "project" is the pre-ADR-0005 field name; accepted so an in-flight form
-    // submitted across a deploy still lands.
-    const submitted = body.scope ?? body.project ?? '';
-    // Scope ID is the current form value. A bare integer is the pre-search form
-    // value (a position in the unfiltered list) and is still accepted so a form
-    // rendered before this deploy resolves correctly rather than importing
-    // whatever now happens to sit at that position.
-    const scope =
-      scopes.find((s) => s.id === submitted) ??
-      (/^\d+$/.test(submitted) ? scopes[Number(submitted)] : undefined);
-    if (!scope) {
-      return reply
-        .code(400)
-        .type('text/html')
-        .send(
-          page(
-            session,
-            'Choose scope',
-            `<div class="error" role="alert">That selection is no longer valid. The ${esc(d.scopeNoun.singular)} list may have changed.</div>
-             <p><a class="btn btn-ghost" href="/scope">Back to selection</a></p>`,
-          ),
-        );
+
+    const body = request.body as { scope?: unknown; q?: string; action?: string };
+    const submitted = submittedIds(body.scope);
+    const known = new Set(catalogue.map((s) => s.id));
+    const selected = submitted.filter((id) => known.has(id));
+    const q = (body.q ?? '').trim();
+    const action = body.action ?? 'import';
+
+    // Everything except `import` recomputes the selection and hands it back as
+    // a GET, so the URL is always the whole state and a refresh is safe.
+    if (action !== 'import') {
+      const byId = new Map(catalogue.map((s) => [s.id, s]));
+      const needle = q.toLowerCase();
+      const shown =
+        needle === ''
+          ? catalogue
+          : catalogue.filter(
+              (s) =>
+                scopeLabel(s, byId).toLowerCase().includes(needle) ||
+                s.id.toLowerCase().includes(needle),
+            );
+      const next =
+        action === 'all'
+          ? [...selected, ...shown.map((s) => s.id)]
+          : action === 'none'
+            ? []
+            : selected;
+      return reply.redirect(scopeUrl(action === 'clear-search' ? '' : q, next), 303);
     }
+
+    if (selected.length === 0) {
+      return reply.redirect(`${scopeUrl(q, selected)}&error=empty`, 303);
+    }
+    if (selected.length > MAX_SCOPES) {
+      return reply.redirect(`${scopeUrl(q, selected)}&error=too-many`, 303);
+    }
+    if (selected.length !== submitted.length) {
+      // Something selected has disappeared from the platform since the page was
+      // rendered. Importing the remainder would quietly analyse less than the
+      // customer asked for.
+      return reply.redirect(`${scopeUrl(q, selected)}&error=gone`, 303);
+    }
+
+    const chosen = catalogue.filter((s) => selected.includes(s.id));
+    const targets = resolveSelection(catalogue, selected);
+    if (targets.length === 0) {
+      return reply.redirect(`${scopeUrl(q, selected)}&error=empty`, 303);
+    }
+
+    // Observe every origin the selection resolves to. The status and actor
+    // vocabulary the next two steps map is the UNION across all of them: a
+    // status that appears in only one List still has to be mapped, or the
+    // analysis refuses to run when history passes through it.
     const maxIssues = deps.maxIssues ?? 50_000;
-    let observed;
+    const statuses = new Set<string>();
+    const actors = new Set<string>();
+    const hints = new Map<string, StageKind | null>();
+    let itemCount = 0;
+    // Which origin was being read when it went wrong. With one scope this was
+    // obvious; with nine it is the only thing the customer needs to know.
+    let reading: ScopeRef | null = null;
     try {
-      const raw = await connector.gateway.fetchAll(credentials, scope.id);
-      observed = connector.observe(raw);
-      // Reliability guard: count before the memory-heavy analysis.
-      if (observed.itemCount > maxIssues) {
-        logLine({
-          level: 'warn',
-          msg: 'import-too-large',
-          provider: d.id,
-          itemCount: observed.itemCount,
-          maxIssues,
-        });
-        return reply
-          .code(400)
-          .type('text/html')
-          .send(
-            page(
-              session,
-              'Choose scope',
-              `<div class="error" role="alert">This ${esc(d.scopeNoun.singular)} has <strong>${observed.itemCount.toLocaleString('en-US')}</strong> ${esc(d.itemNoun)}, which is above the current per-${esc(d.scopeNoun.singular)} limit of <strong>${maxIssues.toLocaleString('en-US')}</strong>. Narrow the scope and reconnect, or email <a href="mailto:support@fbx1.com">support@fbx1.com</a> to enable a larger import.</div>
-               <p><a class="btn btn-ghost" href="/scope">Back to selection</a></p>`,
-            ),
-          );
+      for (const target of targets) {
+        reading = target;
+        const raw = await connector.gateway.fetchAll(credentials, target.id);
+        const observed = connector.observe(raw);
+        itemCount += observed.itemCount;
+        for (const status of observed.statuses) statuses.add(status);
+        for (const actor of observed.actors) actors.add(actor);
+        for (const [status, kind] of Object.entries(observed.statusHints)) {
+          // Two origins can suggest different stages for the same status name.
+          // A hint is only a form default, but a default that contradicts
+          // another origin is worse than none, so a conflict drops it and the
+          // customer decides.
+          hints.set(status, hints.has(status) && hints.get(status) !== kind ? null : kind);
+        }
       }
     } catch (error) {
       const f = gatewayFailure(error);
@@ -2285,21 +2477,63 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       return reply
         .code(400)
         .type('text/html')
-        .send(page(session, 'Choose scope', importErrorHtml(f)));
+        .send(
+          page(
+            session,
+            'Choose scope',
+            `${importErrorHtml(f)}${
+              reading === null
+                ? ''
+                : `<p class="note">This happened while reading <strong>${esc(reading.name)}</strong>. Remove it from the selection, or check that the connected account can see it.</p>`
+            }
+             <p><a class="btn btn-ghost" href="${esc(scopeUrl(q, selected))}">Back to selection</a></p>`,
+          ),
+        );
+    }
+
+    // Reliability guard: the ceiling is the TOTAL across the selection, because
+    // the analysis holds every item from every origin in one heap.
+    if (itemCount > maxIssues) {
+      logLine({
+        level: 'warn',
+        msg: 'import-too-large',
+        provider: d.id,
+        itemCount,
+        maxIssues,
+        scopes: targets.length,
+      });
+      return reply
+        .code(400)
+        .type('text/html')
+        .send(
+          page(
+            session,
+            'Choose scope',
+            `<div class="error" role="alert">This selection covers <strong>${itemCount.toLocaleString('en-US')}</strong> ${esc(d.itemNoun)} across ${targets.length} ${esc(targets.length === 1 ? d.scopeNoun.singular : d.scopeNoun.plural)}, which is above the current limit of <strong>${maxIssues.toLocaleString('en-US')}</strong>. Select fewer, or email <a href="mailto:support@fbx1.com">support@fbx1.com</a> to enable a larger import.</div>
+             <p><a class="btn btn-ghost" href="${esc(scopeUrl(q, selected))}">Back to selection</a></p>`,
+          ),
+        );
+    }
+
+    const statusHints: Record<string, StageKind> = {};
+    for (const [status, kind] of [...hints.entries()].sort(([a], [b]) => (a < b ? -1 : 1))) {
+      if (kind !== null) statusHints[status] = kind;
     }
     await store.updateWorkspace(session.tenantId, workspace.id, {
-      scopeId: scope.id,
-      scopeName: scope.name,
-      observedStatuses: observed.statuses,
-      observedActors: observed.actors,
-      statusHints: observed.statusHints,
+      scopes: sortSelection(chosen.map((s) => ({ id: s.id, kind: s.kind, name: s.name }))),
+      observedStatuses: [...statuses].sort(),
+      observedActors: [...actors].sort(),
+      statusHints,
       onboarding:
         onboardingRank(workspace.onboarding) > onboardingRank('scope-selected')
           ? workspace.onboarding
           : 'scope-selected',
     });
-    track('tm-web-scope-selected', at(session, workspace.id), { provider: d.id });
-    return reply.redirect('/mapping/statuses');
+    track('tm-web-scope-selected', at(session, workspace.id), {
+      provider: d.id,
+      scopes: chosen.length,
+    });
+    return reply.redirect('/mapping/statuses', 303);
   });
 
   // ---------- step 3: status mapping ----------
@@ -3161,7 +3395,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       .map(
         (w) =>
           `<div class="danger">
-             <h3>${esc(w.name ?? w.scopeName ?? 'Unconfigured workspace')} (${esc(w.scopeId ?? w.provider)})</h3>
+             <h3>${esc(w.name ?? describeSelection(w.scopes) ?? 'Unconfigured workspace')} (${esc(w.provider)})</h3>
              <p class="note">${esc(connectors.get(w.provider)?.describeConnection(w.connectionParams) ?? w.provider)}. Deleting removes this workspace and every run and job derived from it. This cannot be undone.</p>
              <form method="post" action="/workspaces/${esc(w.id)}/delete">${csrfField(session)}
                <label>Type <strong>${DELETE_WORKSPACE_PHRASE}</strong> to confirm <input name="confirm" autocomplete="off" required></label>
@@ -3198,7 +3432,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       ? `<h2 style="margin-top:.4rem">Workspace configuration</h2>
          <div class="grid grid-3" style="margin:0 0 2.2rem">
            ${configCard('Connection', esc(cfgConnector?.describeConnection(cfg.connectionParams) ?? cfg.provider), '/connect', 'Manage')}
-           ${configCard('Scope', cfg.scopeName ? `${esc(cfg.scopeName)}${cfg.scopeId ? ` (${esc(cfg.scopeId)})` : ''}` : 'Not selected yet', '/scope', 'Change')}
+           ${configCard('Scope', cfg.scopes.length > 0 ? esc(selectionNames(cfg.scopes).join(', ')) : 'Not selected yet', '/scope', 'Change')}
            ${configCard('Statuses', cfg.statusMap ? `${Object.keys(cfg.statusMap).length} statuses mapped to stages` : 'Not mapped yet', '/mapping/statuses', 'Review')}
            ${configCard('Roles', cfg.actorRoleMap ? `${Object.keys(cfg.actorRoleMap).length} people mapped to roles` : 'Not mapped yet', '/mapping/actors', 'Review')}
            ${configCard('Assumptions', cfg.assumptions ? `Currency ${esc(cfg.assumptions.currency)}, version ${esc(cfg.assumptions.version)}` : 'Not set yet', '/assumptions', 'Review')}
@@ -3483,7 +3717,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
             : `<form method="post" action="/workspaces/${esc(w.id)}/members" class="inline" style="margin-top:.9rem">${csrfField(session)}
                  <select name="userId">${addable.map((u) => `<option value="${esc(u.id)}">${esc(u.email)}</option>`).join('')}</select>
                  <button type="submit">Grant access</button></form>`;
-        return `<div class="ws"><h4>${esc(w.scopeName ?? 'Unconfigured workspace')} (${esc(w.scopeId ?? w.provider)})</h4>${memberList}${addForm}</div>`;
+        return `<div class="ws"><h4>${esc(w.name ?? describeSelection(w.scopes) ?? 'Unconfigured workspace')} (${esc(w.provider)})</h4>${memberList}${addForm}</div>`;
       })
       .join('');
 

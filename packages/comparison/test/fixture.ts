@@ -105,6 +105,7 @@ export function run(over: RunOver = {}): AnalysisRun {
       hasActors: true,
     },
     evidence: over.evidence ?? [],
+    scopes: [],
     pseudonymizationScope: null,
     items: over.items ?? [item('i1', 'Open', 'queue')],
     events: [],

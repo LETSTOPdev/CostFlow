@@ -2,6 +2,9 @@ export type { MappingTemplate } from './mapping-template';
 export type { CsvImportInput } from './providers/csv/provider';
 export { importCsv, CSV_PROVIDER } from './providers/csv/provider';
 export { ImportError } from './errors';
+export type { TransformScope } from './canonical';
+export type { MergeBatchesInput } from './merge';
+export { mergeBatches } from './merge';
 export type { ProviderDescriptor } from './spi';
 export {
   PROVIDER_DESCRIPTORS,

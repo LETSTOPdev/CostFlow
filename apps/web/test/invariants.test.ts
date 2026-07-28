@@ -206,8 +206,7 @@ describe('INVARIANT: provider-aware copy (never name a platform the customer is 
       tokenCiphertext: 'tok',
     });
     await t.store.updateWorkspace(tenantId, ws.id, {
-      scopeId: 'scope-1',
-      scopeName: 'Engineering',
+      scopes: [{ id: 'scope-1', kind: 'project', name: 'Engineering' }],
       onboarding: 'ready',
     });
     const res = await t.app.inject({ method: 'GET', url: '/dashboard', headers: { cookie } });

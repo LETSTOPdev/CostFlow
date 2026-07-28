@@ -148,14 +148,13 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
         tokenCiphertext: 'tok',
       });
       const updated = await store.updateWorkspace(tenant.id, workspace.id, {
-        scopeId: 'OPS',
-        scopeName: 'Operations',
+        scopes: [{ id: 'OPS', kind: 'project', name: 'Operations' }],
         observedStatuses: ['A', 'B'],
         statusMap: { A: 'queue', B: 'done' },
         onboarding: 'statuses-mapped',
       });
       expect(updated).toMatchObject({
-        scopeId: 'OPS',
+        scopes: [{ id: 'OPS', kind: 'project', name: 'Operations' }],
         observedStatuses: ['A', 'B'],
         statusMap: { A: 'queue', B: 'done' },
         onboarding: 'statuses-mapped',
