@@ -237,12 +237,21 @@ const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
       placeholder: 'pk_1234567890',
     },
   ],
-  helpHtml: `<summary>How to get your ClickUp API token (~60 seconds)</summary>
+  // Verified against the live ClickUp UI, July 2026. ClickUp's own developer
+  // docs still say "Settings → Apps", which is the old path — following it leads
+  // nowhere. The Regenerate warning matters: it asks for the account password
+  // and invalidates the previous token, silently breaking any other integration
+  // that was using it. The old copy pointed at Generate first, which is exactly
+  // the wrong default.
+  helpHtml: `<summary>How to get your ClickUp API token (about a minute)</summary>
            <ol class="note">
-             <li>In ClickUp, click your avatar → <strong>Settings</strong> → <strong>Apps</strong>.</li>
-             <li>Under <strong>API Token</strong>, click <strong>Generate</strong> (or copy the existing token starting with <code>pk_</code>).</li>
-             <li>Paste it above. For status-history analysis, ask a Workspace admin to enable the <strong>Total Time in Status</strong> ClickApp.</li>
-           </ol>`,
+             <li>In ClickUp, click your <strong>avatar</strong> in the top right, then <strong>Settings</strong>.</li>
+             <li>In the left sidebar, under <strong>Integrations &amp; ClickApps</strong>, open <strong>ClickUp API</strong>.</li>
+             <li>Under <strong>API Token</strong>, click <strong>Copy</strong>. The token starts with <code>pk_</code>.</li>
+             <li>Paste it above.</li>
+           </ol>
+           <p class="note"><strong>Only use Regenerate if you have no token yet.</strong> Regenerating asks for your ClickUp password and invalidates the current token, which will break any other tool already using it.</p>
+           <p class="note">For wait-time analysis, ask a Workspace admin to turn on the <strong>Total Time in Status</strong> ClickApp. Without it CostFlow can still price overdue and stale work, but not time spent waiting in a stage.</p>`,
   pickerBlurb: 'ClickUp Lists: tasks, statuses, assignees, due dates, and time-in-status history.',
   // Time-in-Status DOES yield ordered transitions. Each status entry carries
   // `total_time.since`, the instant the task entered that status, so the CU1

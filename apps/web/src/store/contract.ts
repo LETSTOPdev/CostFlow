@@ -143,8 +143,33 @@ export interface WorkspaceRecord {
   readonly statusMap: Readonly<Record<string, StageKind>> | null;
   readonly actorRoleMap: Readonly<Record<string, string>> | null;
   readonly assumptions: AssumptionSet | null;
+  /**
+   * How the customer entered their rates (see schema.sql). Configuration, not
+   * an analysis input: the AssumptionSet still carries hourly rates only, and
+   * the engine reads nothing from here. Null means rates were entered hourly,
+   * which is the default and the pre-existing behaviour.
+   */
+  readonly rateInput: RateInput | null;
   readonly onboarding: OnboardingState;
   readonly createdAt: string;
+}
+
+/**
+ * Rate entry mode. Most managers know a monthly salary and not an hourly rate,
+ * so the assumptions step accepts either and derives the hourly figure with
+ * exact decimal arithmetic.
+ *
+ * The derived rate is what the engine prices on. This record exists so the
+ * derivation can be shown again on every visit — a number whose origin the
+ * customer cannot see is a number they cannot check, which is the whole
+ * explainability posture applied to an input rather than an output.
+ */
+export interface RateInput {
+  readonly mode: 'hourly' | 'monthly';
+  /** Working hours per month used for the division. Whole hours. */
+  readonly hoursPerMonth: number;
+  /** Monthly salary per role, as entered. Decimal strings, never floats. */
+  readonly monthlyByRole: Readonly<Record<string, string>>;
 }
 
 export type WorkspacePatch = Partial<
@@ -161,6 +186,7 @@ export type WorkspacePatch = Partial<
     | 'statusMap'
     | 'actorRoleMap'
     | 'assumptions'
+    | 'rateInput'
     | 'onboarding'
     | 'tokenCiphertext'
   >

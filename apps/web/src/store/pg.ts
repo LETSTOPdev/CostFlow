@@ -448,6 +448,7 @@ export class PgStore implements Store {
       statusMap: (row['status_map'] as WorkspaceRecord['statusMap']) ?? null,
       actorRoleMap: (row['actor_role_map'] as WorkspaceRecord['actorRoleMap']) ?? null,
       assumptions: (row['assumptions'] as WorkspaceRecord['assumptions']) ?? null,
+      rateInput: (row['rate_input'] as WorkspaceRecord['rateInput']) ?? null,
       onboarding: row['onboarding'] as WorkspaceRecord['onboarding'],
       createdAt: toIso(row['created_at']) as string,
     };
@@ -522,6 +523,7 @@ export class PgStore implements Store {
     if (patch.actorRoleMap !== undefined)
       columns['actor_role_map'] = JSON.stringify(patch.actorRoleMap);
     if (patch.assumptions !== undefined) columns['assumptions'] = JSON.stringify(patch.assumptions);
+    if (patch.rateInput !== undefined) columns['rate_input'] = JSON.stringify(patch.rateInput);
     if (patch.onboarding !== undefined) columns['onboarding'] = patch.onboarding;
     if (patch.tokenCiphertext !== undefined) columns['token_ciphertext'] = patch.tokenCiphertext;
     const names = Object.keys(columns);

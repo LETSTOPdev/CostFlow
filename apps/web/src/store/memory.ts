@@ -295,6 +295,7 @@ export class MemoryStore implements Store {
       statusHints: null,
       statusMap: null,
       actorRoleMap: null,
+      rateInput: null,
       assumptions: null,
       onboarding: 'connected',
       createdAt: this.now(),

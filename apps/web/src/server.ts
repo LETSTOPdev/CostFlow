@@ -7,6 +7,7 @@ import fastifyFormbody from '@fastify/formbody';
 import { marked } from 'marked';
 import type { AssumptionSet, Provenance, RangeSpec, StageKind } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
+import { dec, decToString } from '@costflow/cost-engine';
 import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assumptions';
 import { findIndividualAttribution } from './attribution';
 import {
@@ -2138,6 +2139,30 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       logLine({ level: 'warn', msg: 'connector-list-scopes-failed', provider: d.id, ...f });
       return reply.type('text/html').send(page(session, 'Choose scope', importErrorHtml(f)));
     }
+    // Search is a GET round trip, not a client-side filter: there is no client
+    // JavaScript anywhere in this product and the CSP forbids adding any.
+    const q = ((request.query as { q?: string }).q ?? '').trim();
+    const needle = q.toLowerCase();
+    const matches =
+      needle === ''
+        ? scopes
+        : scopes.filter(
+            (s) => s.name.toLowerCase().includes(needle) || s.id.toLowerCase().includes(needle),
+          );
+
+    const searchForm = `<form method="get" action="/scope" class="panel" style="max-width:40rem;margin-top:1.2rem;padding:.9rem 1rem">
+         <label style="margin:0">Search ${esc(d.scopeNoun.plural)}
+           <input name="q" value="${esc(q)}" placeholder="Name or id" style="margin-left:.5rem">
+         </label>
+         <button type="submit" style="margin-left:.4rem">Search</button>
+         ${q === '' ? '' : `<a class="note" href="/scope" style="margin-left:.6rem">Clear</a>`}
+         <p class="note" style="margin:.5rem 0 0">${
+           q === ''
+             ? `${scopes.length} ${esc(scopes.length === 1 ? d.scopeNoun.singular : d.scopeNoun.plural)} available.`
+             : `${matches.length} of ${scopes.length} match “${esc(q)}”.`
+         }</p>
+       </form>`;
+
     return reply.type('text/html').send(
       page(
         session,
@@ -2153,19 +2178,32 @@ Sitemap: https://app.fbx1.com/sitemap.xml
                   <p>This account can't see any ${esc(d.name)} ${esc(d.scopeNoun.plural)}. Check that the API token belongs to a user with access, then reconnect.</p>
                   <a class="btn" href="/connect">Back to connection</a>
                 </div>`
-             : `<form method="post" action="/scope" class="panel" style="max-width:40rem;margin-top:1.5rem">${csrfField(session)}
-                 ${scopes
+             : `${scopes.length > 5 ? searchForm : ''}
+               ${
+                 matches.length === 0
+                   ? `<div class="empty" style="max-width:38rem">
+                        <h3>Nothing matches “${esc(q)}”</h3>
+                        <p>No ${esc(d.scopeNoun.singular)} name or id contains that text.</p>
+                        <a class="btn" href="/scope">Show all ${esc(d.scopeNoun.plural)}</a>
+                      </div>`
+                   : `<form method="post" action="/scope" class="panel" style="max-width:40rem;margin-top:1.5rem">${csrfField(session)}
+                 ${matches
                    .map(
-                     (s, index) =>
-                       `<label class="pick"><input type="radio" name="scope" value="${index}" ${
-                         workspace.scopeId === s.id || (!workspace.scopeId && scopes.length === 1)
+                     (s) =>
+                       // The submitted value is the scope ID, never a list
+                       // position: filtering changes positions, and an index
+                       // resolved against the unfiltered list would silently
+                       // import the wrong ${esc(d.scopeNoun.singular)}.
+                       `<label class="pick"><input type="radio" name="scope" value="${esc(s.id)}" ${
+                         workspace.scopeId === s.id || (!workspace.scopeId && matches.length === 1)
                            ? 'checked'
                            : ''
-                       } required><span><span style="flex:1">${esc(s.name)} (${esc(s.id)})</span></span></label>`,
+                       } required><span><span style="flex:1">${esc(s.name)} <span class="note">${esc(s.id)}</span></span></span></label>`,
                    )
                    .join('')}
                  <button type="submit" style="margin-top:.5rem">Import this ${esc(d.scopeNoun.singular)}</button>
                </form>`
+               }`
          }`,
       ),
     );
@@ -2194,8 +2232,14 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const body = request.body as { scope?: string; project?: string };
     // "project" is the pre-ADR-0005 field name; accepted so an in-flight form
     // submitted across a deploy still lands.
-    const index = Number(body.scope ?? body.project);
-    const scope = scopes[index];
+    const submitted = body.scope ?? body.project ?? '';
+    // Scope ID is the current form value. A bare integer is the pre-search form
+    // value (a position in the unfiltered list) and is still accepted so a form
+    // rendered before this deploy resolves correctly rather than importing
+    // whatever now happens to sit at that position.
+    const scope =
+      scopes.find((s) => s.id === submitted) ??
+      (/^\d+$/.test(submitted) ? scopes[Number(submitted)] : undefined);
     if (!scope) {
       return reply
         .code(400)
@@ -2437,19 +2481,81 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       ? `<label><input type="checkbox" name="accept_${name}"> Accept this value</label>`
       : '';
 
+  /**
+   * Who is actually being priced by a rate-card row.
+   *
+   * Managers think about people, not role labels, so the person is the primary
+   * label and the role is secondary. This is DISPLAY ONLY: the rate stays keyed
+   * on `roleRef`, because `rateSource` ("rates.<roleRef>") is rendered into the
+   * report's formula trace, and a person's name reaching that key would trip the
+   * attribution guard and withhold the entire report.
+   *
+   * The actor values shown here are the customer's own data, shown back to the
+   * customer during configuration — the same thing the actor-mapping step
+   * already does. Nothing here reaches an analysis artifact.
+   */
+  const peopleInRole = (workspace: WorkspaceRecord, roleRef: string): string[] =>
+    Object.entries(workspace.actorRoleMap ?? {})
+      .filter(([, role]) => role === roleRef)
+      .map(([actor]) => actor)
+      .sort();
+
+  const rateRowLabel = (workspace: WorkspaceRecord, roleRef: string): string => {
+    const people = peopleInRole(workspace, roleRef);
+    if (people.length === 0) return `<strong>${esc(roleRef)}</strong>`;
+    const shown = people.slice(0, 3).map(esc).join(', ');
+    const rest = people.length - Math.min(people.length, 3);
+    return `<strong>${shown}${rest > 0 ? ` and ${rest} more` : ''}</strong>
+            <br><span class="note">${esc(roleRef)}${people.length > 1 ? ` · ${people.length} people` : ''}</span>`;
+  };
+
+  /**
+   * Hours per month, when the customer prices from a monthly salary. The
+   * fallback is the common full-time convention (40 h/week × 52 ÷ 12 ≈ 173.33,
+   * rounded to 176 = 22 working days × 8h) and is only ever a starting value the
+   * customer edits — never a number used without being shown.
+   */
+  const DEFAULT_HOURS_PER_MONTH = 176;
+
+  /**
+   * Monthly salary → hourly rate, in exact decimal through the engine's Money
+   * type. Never a float: a rate that cannot reproduce itself undermines every
+   * figure computed from it.
+   *
+   * Rounded to 4 decimal places. Full precision would store 34 digits for a
+   * figure like 8000/176, which is unreadable and implies precision the input
+   * does not have; 4dp keeps the annual drift far below the width of the ranges
+   * it feeds.
+   */
+  const hourlyFromMonthly = (monthly: string, hoursPerMonth: number): string | null => {
+    if (!/^\d+(\.\d+)?$/.test(monthly.trim()) || hoursPerMonth <= 0) return null;
+    return decToString(dec(monthly.trim()).div(dec(hoursPerMonth)).toDecimalPlaces(4));
+  };
+
   app.get('/assumptions', async (request, reply) => {
     const session = requireSession(request, reply);
     if (!session) return;
     const workspace = await requireStep(session, reply, 'actors-mapped');
     if (!workspace) return;
     const current = baselineAssumptions(workspace);
+    // Mode is a GET parameter rather than a toggle, because there is no client
+    // JavaScript: switching is a round trip that re-renders the inputs. The
+    // saved mode is the default so a returning customer sees what they entered.
+    const query = request.query as { mode?: string };
+    const saved = workspace.rateInput;
+    const monthlyMode =
+      query.mode === 'monthly' || (query.mode === undefined && saved?.mode === 'monthly');
+    const hoursPerMonth = saved?.hoursPerMonth ?? DEFAULT_HOURS_PER_MONTH;
+    const savedMonthly = saved?.monthlyByRole ?? {};
     const row = (
       label: string,
       provenance: Provenance,
       controls: string,
       acceptName: string,
+      /** Rate rows build their own label markup (person + role); others are plain text. */
+      labelIsHtml = false,
     ): string =>
-      `<tr><td>${esc(label)}</td><td>${controls}</td>
+      `<tr><td>${labelIsHtml ? label : esc(label)}</td><td>${controls}</td>
        <td class="note">${esc(PROVENANCE_LABEL[provenance])}<br>${acceptBox(acceptName, provenance)}</td></tr>`;
     return reply.type('text/html').send(
       page(
@@ -2462,16 +2568,52 @@ Sitemap: https://app.fbx1.com/sitemap.xml
          Anything left unconfirmed stays unpriced in your reports. Currency: ${esc(current.currency)}.</p>
          <form method="post" action="/assumptions" class="panel" style="margin-top:1.5rem">${csrfField(session)}
            <div class="info"><label style="margin:0"><input type="checkbox" name="accept_all"> <strong>Accept all suggested values</strong>, the fastest path to a fully priced report. You can change any value now or refine later.</label></div>
-           <div class="table-wrap"><table><tr><th>Assumption</th><th>Value</th><th>Status</th></tr>
+           <input type="hidden" name="rateMode" value="${monthlyMode ? 'monthly' : 'hourly'}">
+           <p style="margin:1.2rem 0 .4rem"><strong>How do you want to enter pay?</strong></p>
+           <p class="note" style="margin:0 0 .6rem">
+             ${
+               monthlyMode
+                 ? `Entering monthly salaries. <a href="/assumptions?mode=hourly">Switch to hourly rates</a>.`
+                 : `Entering hourly rates. <a href="/assumptions?mode=monthly">Switch to monthly salaries</a> if that is what you know.`
+             }
+           </p>
+           ${
+             monthlyMode
+               ? `<p style="margin:0 0 .8rem">Working hours per month:
+                    <input name="hoursPerMonth" size="5" inputmode="numeric" pattern="\\d+" title="Whole hours" value="${hoursPerMonth}">
+                    <span class="note">Used to divide each salary into an hourly rate. 176 is 22 working days at 8 hours.</span></p>`
+               : ''
+           }
+           <div class="table-wrap"><table><tr><th>${monthlyMode ? 'Person' : 'Assumption'}</th><th>Value</th><th>Status</th></tr>
            ${current.rates
-             .map((rate, index) =>
-               row(
-                 `Hourly rate for ${rate.roleRef}`,
+             .map((rate, index) => {
+               const label = monthlyMode
+                 ? rateRowLabel(workspace, rate.roleRef)
+                 : `${rateRowLabel(workspace, rate.roleRef)}`;
+               if (!monthlyMode) {
+                 return row(
+                   label,
+                   rate.provenance,
+                   `<input name="rate${index}" size="8" ${decimalAttrs} value="${esc(rate.hourlyRate)}"> ${esc(current.currency)}/h`,
+                   `rate${index}`,
+                   true,
+                 );
+               }
+               const monthly = savedMonthly[rate.roleRef] ?? '';
+               const derived = monthly === '' ? null : hourlyFromMonthly(monthly, hoursPerMonth);
+               return row(
+                 label,
                  rate.provenance,
-                 `<input name="rate${index}" size="8" ${decimalAttrs} value="${esc(rate.hourlyRate)}"> ${esc(current.currency)}/h`,
+                 `<input name="monthly${index}" size="10" ${decimalAttrs} value="${esc(monthly)}" placeholder="8000"> ${esc(current.currency)}/month
+                  <div class="note" style="margin-top:.25rem">${
+                    derived === null
+                      ? `Enter a monthly salary to derive the hourly rate.`
+                      : `${esc(monthly)} ÷ ${hoursPerMonth} h = <strong>${esc(derived)} ${esc(current.currency)}/h</strong>`
+                  }</div>`,
                  `rate${index}`,
-               ),
-             )
+                 true,
+               );
+             })
              .join('')}
            ${row(
              'Default hourly rate (unmapped people, roles without a rate)',
@@ -2572,12 +2714,47 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       };
     };
 
+    /**
+     * Monthly mode derives each hourly rate by exact decimal division; hourly
+     * mode reads the rate directly. Either way the AssumptionSet the engine
+     * prices on contains hourly rates and nothing else — the salary and the
+     * hours divisor are workspace configuration, kept so the derivation can be
+     * shown again rather than becoming a number with no visible origin.
+     *
+     * A salary the customer typed is customer-customized by definition, so
+     * entering one moves provenance off vendor-suggested exactly as editing an
+     * hourly rate does.
+     */
+    const monthlyMode = body['rateMode'] === 'monthly';
+    const hoursRaw = (body['hoursPerMonth'] ?? '').trim();
+    const hoursPerMonth = /^\d+$/.test(hoursRaw) ? Number(hoursRaw) : DEFAULT_HOURS_PER_MONTH;
+    if (monthlyMode && hoursPerMonth <= 0) invalid.push('hoursPerMonth');
+    const monthlyByRole: Record<string, string> = {};
+
     const rates = previous.rates.map((rate, index) => {
-      const { value, changed } = scalar(`rate${index}`, rate.hourlyRate);
+      if (!monthlyMode) {
+        const { value, changed } = scalar(`rate${index}`, rate.hourlyRate);
+        return {
+          roleRef: rate.roleRef,
+          hourlyRate: value,
+          provenance: nextProvenance(rate.provenance, changed, accepted(`rate${index}`)),
+        };
+      }
+      const monthlyRaw = (body[`monthly${index}`] ?? '').trim();
+      const derived = hoursPerMonth > 0 ? hourlyFromMonthly(monthlyRaw, hoursPerMonth) : null;
+      if (derived === null) {
+        invalid.push(`monthly${index}`);
+        return rate;
+      }
+      monthlyByRole[rate.roleRef] = monthlyRaw;
       return {
         roleRef: rate.roleRef,
-        hourlyRate: value,
-        provenance: nextProvenance(rate.provenance, changed, accepted(`rate${index}`)),
+        hourlyRate: derived,
+        provenance: nextProvenance(
+          rate.provenance,
+          derived !== rate.hourlyRate,
+          accepted(`rate${index}`),
+        ),
       };
     });
     const defaultRateInput = scalar('defaultRate', previous.defaultRate.hourlyRate);
@@ -2668,6 +2845,9 @@ Sitemap: https://app.fbx1.com/sitemap.xml
 
     await store.updateWorkspace(session.tenantId, workspace.id, {
       assumptions: next,
+      // Configuration, not an analysis input. Null in hourly mode so a customer
+      // who switches back does not keep a stale salary record around.
+      rateInput: monthlyMode ? { mode: 'monthly', hoursPerMonth, monthlyByRole } : null,
       onboarding:
         onboardingRank(workspace.onboarding) > onboardingRank('assumptions-set')
           ? workspace.onboarding

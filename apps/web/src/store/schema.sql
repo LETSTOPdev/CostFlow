@@ -274,6 +274,21 @@ insert into subscriptions (tenant_id, created_at, updated_at)
 -- what turns "a Jira connection" into "Engineering".
 alter table workspaces add column if not exists name text;
 
+-- How the customer arrived at their hourly rates. Most managers know a monthly
+-- salary, not an hourly rate, so the assumptions step accepts either and derives
+-- the hourly figure.
+--
+-- This is workspace CONFIGURATION, deliberately not part of the AssumptionSet:
+-- the engine prices on hourly rates and nothing else, so widening the frozen
+-- domain to carry a salary would change every stored artifact for a value no
+-- detector or cost model reads. Keeping it here means the derivation can be
+-- shown again on every visit — a rate the customer cannot see the origin of is
+-- a rate they cannot check.
+--
+-- jsonb rather than three columns because the shape will grow (annual salaries,
+-- per-region hours, employer on-costs) and none of those should be a migration.
+alter table workspaces add column if not exists rate_input jsonb;
+
 -- ---------------------------------------------------------------------------
 -- Historical backfill of the activity spine.
 --
