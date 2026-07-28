@@ -81,6 +81,21 @@ limit, change batching cadence, add a stage SLA, reassign routing, remove a gate
 for an item class, escalate on age. Adding a primitive is an amendment to this
 ADR, not a call site.
 
+**Amended during OI1 implementation, +2 primitives:**
+
+- `review-queue` (Low, process-change). Doc 07's set is drawn from
+  *simulatable* interventions, each bound to a data transform (§3.2). A
+  concentration finding on snapshot-only evidence has no transform, and its
+  honest action is triage rather than a process change. Without this primitive
+  the diagnostic that works on every platform would have had no verb.
+- `assign-ownership` (Low, process-change). D4's finding is that items have no
+  owner. None of doc 07's eight primitives says "give these items an owner";
+  `reassign-routing` is about where work goes, not whether anyone holds it.
+
+Both are structural, both act on a stage, and neither is simulatable yet, which
+is recorded here so that OI2's simulation work knows it inherits two primitives
+without transforms rather than discovering it.
+
 Deliberately closed, in explicit contrast to `EventType` (P4.5), which is
 deliberately open so new analytics never require a migration. The opposite is
 correct here: a closed set is what makes interventions simulatable (doc 07 §3.2

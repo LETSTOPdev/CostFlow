@@ -10,7 +10,8 @@
  * Pure packages (everything under packages/) may not import node builtins;
  * apps/ is the only effectful edge.
  */
-const PURE = '^packages/(domain|ingestion|friction|cost-engine|analysis|reporting|telemetry)/';
+const PURE =
+  '^packages/(domain|ingestion|friction|cost-engine|analysis|reporting|telemetry|diagnostics)/';
 
 module.exports = {
   forbidden: [
@@ -56,6 +57,17 @@ module.exports = {
       severity: 'error',
       from: { path: '^packages/telemetry/src/' },
       to: { path: '^(packages/(?!domain/|analysis/|telemetry/)|apps/)' },
+    },
+    {
+      name: 'diagnostics-only-domain-analysis-costengine',
+      comment:
+        'ADR-0006: the diagnostic layer reasons in evidence capabilities only. It reads the ' +
+        'immutable run artifact and nothing else — no store, no connector, no app. It may ' +
+        'import cost-engine so confidence composition is never reimplemented outside the ' +
+        'engine (same rationale as D-10 for reporting).',
+      severity: 'error',
+      from: { path: '^packages/diagnostics/' },
+      to: { path: '^(packages/(?!domain/|analysis/|cost-engine/|diagnostics/)|apps/)' },
     },
     {
       name: 'nothing-imports-telemetry-except-apps',

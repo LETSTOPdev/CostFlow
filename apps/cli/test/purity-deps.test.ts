@@ -18,6 +18,7 @@ const ALLOWED_EXTERNAL: Record<string, string[]> = {
   analysis: [],
   reporting: [],
   telemetry: [],
+  diagnostics: [],
 };
 
 describe('pure packages carry no unreviewed external dependencies (R-15)', () => {

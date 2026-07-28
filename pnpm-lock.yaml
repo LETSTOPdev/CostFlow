@@ -127,6 +127,18 @@ importers:
         specifier: ^10.4.3
         version: 10.6.0
 
+  packages/diagnostics:
+    dependencies:
+      '@costflow/analysis':
+        specifier: workspace:*
+        version: link:../analysis
+      '@costflow/cost-engine':
+        specifier: workspace:*
+        version: link:../cost-engine
+      '@costflow/domain':
+        specifier: workspace:*
+        version: link:../domain
+
   packages/domain: {}
 
   packages/friction:
