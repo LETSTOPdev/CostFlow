@@ -164,3 +164,27 @@ codebase. Documented in `reference/16-operations.md` and
 `reference/17-launch-operations.md`.
 
 **Status.** Open. Requires operator action.
+
+---
+
+## R10 — A scope named exactly after a person withholds the report
+
+**Description.** Scope labels are now rendered inside the report body: in the
+executive summary, on every ranked friction, and on every recommendation card.
+The ADR-0002 attribution guard matches observed actor values as exact substrings
+of the rendered bytes and fails closed with HTTP 500. A customer whose ClickUp
+List is named exactly as one of their observed actor values — a List called
+"Dan Ops" in a workspace where "Dan Ops" is an assignee — would trip it.
+
+**Impact.** Low likelihood, high blast radius when it happens: the whole report
+is withheld and the customer sees an error with no obvious cause. The surface
+widened with per-origin attribution; before that, scope names appeared only in
+the page foot and settings.
+
+**Mitigation.** None applied. The guard is deliberately strict and fail-closed,
+and loosening it to accommodate a naming coincidence would weaken the one
+mechanism that guarantees no individual is ever named in a report. Renaming the
+List resolves it.
+
+**Status.** Open, accepted. Revisit if a real customer hits it — the fix would
+be a clearer error on this specific collision, never a weaker guard.
