@@ -76,8 +76,9 @@ describe('OI1 — the operational layer on the report', () => {
     const res = await get(t, cookie, '/reports/r-flow');
     const act = res.body.indexOf('Highest-leverage action');
     const detail = res.body.indexOf('Supporting detail');
-    const totals = res.body.indexOf('What this analysis covers');
-    const ranked = res.body.indexOf('Ranked frictions');
+    const totals = res.body.indexOf('<h2>What this analysis covers</h2>');
+    // The heading, not the hero's pointer at it.
+    const ranked = res.body.indexOf('<h2>Ranked frictions</h2>');
     expect(act).toBeGreaterThan(-1);
     // The action leads; the money and the working follow it.
     expect(act).toBeLessThan(detail);
@@ -416,5 +417,56 @@ describe('the section that answers "what do I do next"', () => {
     const res = await get(t, cookie, '/reports/r-flow');
     expect(res.body).toContain('different order from');
     expect(res.body).toContain('not always the same one');
+  });
+});
+
+/**
+ * "Why should the CEO trust this recommendation?" — the second ritual question
+ * (`docs/09-ai-context.md` §3). The answer has to be on the screen where the
+ * claim is made, not inferable from a drill-down several sections away.
+ *
+ * Both anchors below lived on the recommendation card and were lost when the
+ * hero took over the headline in D22. Losing the second one is the serious
+ * case: it presents a curated playbook match as a computed conclusion, which is
+ * the exact boundary doc 07 §2.1 exists to hold.
+ */
+describe('why the recommendation can be believed', () => {
+  it('explains the confidence letter instead of leaving it to be inferred', async () => {
+    const t = await makeApp();
+    const email = 'trust@example.com';
+    const cookie = await signIn(t, email);
+    await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
+
+    const res = await get(t, cookie, '/reports/r-flow');
+    // The hero carries the meaning, not just the grade.
+    expect(res.body).toMatch(
+      /Confidence [ABC] \((demonstrated pattern|supported hypothesis|consistent with)\)/,
+    );
+  });
+
+  it('keeps measurement and recommendation separable on the hero', async () => {
+    const t = await makeApp();
+    const email = 'sep@example.com';
+    const cookie = await signIn(t, email);
+    await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
+
+    const res = await get(t, cookie, '/reports/r-flow');
+    expect(res.body).toContain('measured from your data');
+    expect(res.body).toContain('not a conclusion derived from it');
+    // And the figure on the hero says where its basis lives.
+    expect(res.body).toContain('opens into its own formula');
+  });
+
+  it('carries the same anchors into the printable export', async () => {
+    const t = await makeApp();
+    const email = 'trustprint@example.com';
+    const cookie = await signIn(t, email);
+    await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
+
+    const res = await get(t, cookie, '/reports/r-flow/print');
+    expect(res.body).toContain('not a conclusion derived from it');
+    expect(res.body).toMatch(
+      /Confidence [ABC] \((demonstrated pattern|supported hypothesis|consistent with)\)/,
+    );
   });
 });

@@ -14,7 +14,13 @@ import { isCustomerOwned } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import { compareRuns, type ChangeDirection } from '@costflow/comparison';
 import { esc } from './html';
-import { buildActionCards, renderDiagnostics, type DiagnosticsView } from './oi-view';
+import {
+  buildActionCards,
+  renderDiagnostics,
+  CONFIDENCE_NOTE,
+  INTERVENTION_PROVENANCE,
+  type DiagnosticsView,
+} from './oi-view';
 
 /**
  * P5 structured reporting view. Renders the IMMUTABLE run.json artifact as an
@@ -36,6 +42,14 @@ const PROVENANCE_LABELS: Record<string, string> = {
   'customer-measured': 'measured by customer',
 };
 const provLabel = (p: string): string => PROVENANCE_LABELS[p] ?? p;
+
+/**
+ * Why the figure on the hero can be believed. Asserting a number with no
+ * visible basis asks for trust rather than earning it, and the drill-down that
+ * justifies it is several sections away — so the hero says it exists.
+ */
+const TRACE_NOTE =
+  'Every figure here opens into its own formula, inputs and assumptions under <em>Ranked frictions</em> below.';
 
 const DETAIL_LABEL =
   'margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.72rem;font-weight:640;color:var(--faint)';
@@ -587,11 +601,12 @@ export function renderReportBody(
       ${finding ? `<p class="act-why">${esc(finding.statement)}</p>` : ''}
       ${evidenceChips(
         stake,
-        `<span class="chip">Confidence ${esc(topAction.bestTier)}</span>
+        `<span class="chip">Confidence ${esc(topAction.bestTier)} (${esc((CONFIDENCE_NOTE[topAction.bestTier] ?? '').toLowerCase())})</span>
          <span class="chip">Operational impact: ${topAction.topShare}% concentrated</span>
          <span class="chip">Complexity ${esc(topAction.complexity)}</span>`,
       )}
-      <p class="note" style="margin:.7rem 0 0">Chosen as the finding this analysis has the strongest evidence for, not the largest figure. Implementation complexity is reported beside it and never changes that order. The cost above is what is already being spent here — it is the reason to act, not the recommendation itself.</p>
+      <p class="note" style="margin:.7rem 0 0">${INTERVENTION_PROVENANCE}</p>
+      <p class="note" style="margin:.35rem 0 0">Chosen as the finding this analysis has the strongest evidence for, not the largest figure. Implementation complexity is reported beside it and never changes that order. ${TRACE_NOTE}</p>
     </section>`;
   } else if (largest !== undefined) {
     const stake = stakeAt(
@@ -604,8 +619,11 @@ export function renderReportBody(
       <p class="act">${frictionInsight(largest.instance.frictionType, largest.instance.location.stage.name, agingDays)}</p>
       <p class="note" style="margin:0 0 .55rem">${whereText(largest.instance.location.originScopeId, largest.instance.location.stage.name)}</p>
       <p class="act-why">${humanizeMagnitude(largest.instance.magnitude.value, largest.instance.magnitude.unit)}</p>
-      ${evidenceChips(stake, `<span class="chip">Confidence ${esc(largest.estimate.confidence.tier)}</span>`)}
-      <p class="note" style="margin:.7rem 0 0">No pattern in this analysis cleared the evidence threshold, so this is the largest <strong>measured</strong> cost rather than a fitted recommendation. A workspace with more history behind each stage gives the diagnostics enough to name an intervention as well.</p>
+      ${evidenceChips(
+        stake,
+        `<span class="chip">Confidence ${esc(largest.estimate.confidence.tier)} (${esc((CONFIDENCE_NOTE[largest.estimate.confidence.tier] ?? '').toLowerCase())})</span>`,
+      )}
+      <p class="note" style="margin:.7rem 0 0">${TRACE_NOTE} No pattern in this analysis cleared the evidence threshold, so this is the largest <strong>measured</strong> cost rather than a fitted recommendation. A workspace with more history behind each stage gives the diagnostics enough to name an intervention as well.</p>
     </section>`;
   } else if (model.unpriced.length > 0) {
     /**
@@ -630,7 +648,7 @@ export function renderReportBody(
     </section>`;
   } else {
     headline = 'Nothing crossed your thresholds';
-    hero = `<div class="info">No friction crossed your thresholds in this analysis, and nothing was left unpriced. That is a genuinely healthy sign for the work covered. If you expected findings, your aging and queue thresholds may be set conservatively — lower them and run again to surface smaller effects.</div>`;
+    hero = `<div class="info">No friction crossed your thresholds in this analysis, and nothing was left unpriced. That is a genuinely healthy sign for the work covered. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`;
   }
 
   // Always rendered when diagnostics exist: even with no finding it carries

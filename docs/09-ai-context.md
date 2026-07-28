@@ -137,6 +137,18 @@ Then, of every screen, ask the question that outranks all the others:
 the work; the fix is downstream of it. An observation you cannot articulate is
 one you do not understand yet.
 
+Then, immediately, the second question:
+
+> **"Why should the CEO trust this recommendation?"**
+
+**If the answer is not obvious from the screen itself, improve the screen before
+improving the engine.** Every recommendation earns the reader's trust before it
+asks for action, and the executive should never have to INFER why CostFlow
+reached its conclusion. A correct recommendation nobody believes is worth
+nothing, and belief is a property of the screen, not of the arithmetic behind
+it. "It is traceable if you open the drill-down" is not an answer — the basis
+has to be legible where the claim is made.
+
 **Fix the highest-impact observations before extending the engine.**
 
 Two standards to hold. **The product should be easier to understand than it is

@@ -77,7 +77,10 @@ not to make it — and the product screenshot mirrors the real report's order:
 action, evidence, then the ranked list. The stage vocabulary shown before signup
 matches the six kinds the product actually uses.
 
-**Report structure.** The report is an executive briefing: it leads with the
+**Report structure.** Every recommendation states its basis where it is made:
+the confidence tier and what it means, that the finding is measured while the
+intervention is selected, and where the figures open into their formulas (D24).
+The report is an executive briefing: it leads with the
 single highest-leverage action, with the cost at stake beneath it as the
 evidence that acting is worth it, and the total across the analysis in the
 supporting detail (D22). The recommendation says it was chosen for strongest

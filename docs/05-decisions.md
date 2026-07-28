@@ -505,3 +505,32 @@ instruction for making it actionable.
 customer saw on the assumptions step, read from the artifact's own provenance
 rather than parsed out of the engine's skip-reason prose. The dashboard carries
 the same split. `isCustomerOwned` is the single test for both.
+
+---
+
+## D24 — A recommendation carries its basis where it is made
+
+**Decision.** Wherever CostFlow recommends an action, the same screen states the
+confidence tier **and what that tier means**, that the finding is measured while
+the intervention is selected, and where the figures open into their formulas.
+Not in a drill-down, not in an appendix: beside the claim.
+
+**Reason.** The second ritual question (`09-ai-context.md` §3): *why should the
+CEO trust this recommendation?* If the answer is not obvious from the screen,
+the screen is improved before the engine. A correct recommendation nobody
+believes is worth nothing, and belief is a property of the screen rather than of
+the arithmetic behind it.
+
+Both anchors existed on the recommendation card and were lost when the hero took
+over the headline in D22. The second loss is the serious one: presenting a
+curated playbook match with no provenance line lets it borrow the authority of
+the measurement above it, which is the exact boundary doc 07 §2.1 holds.
+
+**Consequences.** `CONFIDENCE_NOTE` and `INTERVENTION_PROVENANCE` are exported
+from the diagnostics view and used by both the hero and the cards, so the two
+can never drift apart again. Applies equally to the printable export.
+
+**Noted while fixing it.** Em-dash density in product copy had roughly tripled
+in `report-view.ts` during this session, against the standing copywriting bar.
+The hero copy was corrected; the rest is pre-existing and not worth a churn pass
+on its own. Watch it when touching copy.

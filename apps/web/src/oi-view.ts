@@ -111,7 +111,12 @@ export function buildActionCards(findings: readonly DiagnosticFinding[]): Action
   );
 }
 
-const CONFIDENCE_NOTE: Record<string, string> = {
+/**
+ * What a confidence letter MEANS, in words. The letter alone makes the reader
+ * infer, and the executive should never have to infer why CostFlow reached its
+ * conclusion.
+ */
+export const CONFIDENCE_NOTE: Record<string, string> = {
   A: 'Demonstrated pattern',
   B: 'Supported hypothesis',
   C: 'Consistent with',
@@ -131,6 +136,16 @@ const SUBHEAD =
  * objectively the right answer. Presenting them as one block would let the
  * second borrow the authority of the first.
  */
+/**
+ * The epistemic boundary, stated wherever a recommendation appears (doc 07
+ * §2.1, a founder-set UX rule). CostFlow MEASURES that the pattern exists; it
+ * does not derive that this intervention is objectively right. Presenting them
+ * as one block lets the second borrow the authority of the first — so the line
+ * travels with the recommendation, including onto the report hero.
+ */
+export const INTERVENTION_PROVENANCE =
+  'Selected from the Operational Intelligence playbook for this pattern. The finding above is measured from your data; the intervention is a curated recommendation matched to it, not a conclusion derived from it.';
+
 const renderCard = (card: ActionCard, originLabels: Readonly<Record<string, string>>): string => {
   const lead = card.findings[0];
   if (!lead) return '';
@@ -171,7 +186,7 @@ const renderCard = (card: ActionCard, originLabels: Readonly<Record<string, stri
     <div class="meta" style="margin:0 0 .35rem">
       <span class="chip">Implementation complexity: ${esc(card.complexity)} (${esc(card.effortClass)})</span>
     </div>
-    <p class="note" style="margin:0">Selected from the Operational Intelligence playbook for this pattern. The finding above is measured from your data; the intervention is a curated recommendation matched to it, not a conclusion derived from it.</p>
+    <p class="note" style="margin:0">${INTERVENTION_PROVENANCE}</p>
   </article>`;
 };
 
