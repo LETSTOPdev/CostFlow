@@ -244,6 +244,19 @@ const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
              <li>Paste it above. For status-history analysis, ask a Workspace admin to enable the <strong>Total Time in Status</strong> ClickApp.</li>
            </ol>`,
   pickerBlurb: 'ClickUp Lists: tasks, statuses, assignees, due dates, and time-in-status history.',
+  // Time-in-Status returns AGGREGATE durations per status, and only when the
+  // ClickApp is enabled — so it is status history, gated, and it is not
+  // transition history: there is no public ordered-transition endpoint, so the
+  // entry time of a stage cannot be reconstructed (partner run cu01, MC-5).
+  // Synthesizing transitions from aggregates is explicitly refused.
+  provides: {
+    canProvide: ['stage-snapshots', 'status-history', 'due-dates'],
+    planGated: ['status-history'],
+    planGateHint: {
+      'status-history':
+        'Ask a Workspace admin to enable the Total Time in Status ClickApp, then re-import.',
+    },
+  },
 };
 
 /**

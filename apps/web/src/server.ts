@@ -107,6 +107,13 @@ import { conversionPct, dropOffPct, formatDuration } from './funnel';
 import { CUSTOMER_SCAN_CAP } from './store/pg';
 import { type TelemetrySink } from './telemetry-web';
 import { shouldTouchLastSeen, storeEventRecorder, tracker, type EventContext } from './events';
+import {
+  detectConcentration,
+  detectMissingOwnership,
+  detectSerialGatekeeping,
+} from '@costflow/diagnostics';
+import { assessEvidence } from './evidence';
+import { renderDiagnostics, type DiagnosticsView } from './oi-view';
 
 /**
  * The web application shell (doc 09 P4.1): server-rendered onboarding wizard
@@ -2837,6 +2844,42 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     return previous ? parseRun(previous.runJson) : null;
   };
 
+  /**
+   * OI1 (ADR-0006). The diagnostics layer is connector-blind, so this is where
+   * a platform's limits become evidence capabilities: the connector declares
+   * what it can expose, the artifact says what this import actually carried,
+   * and `assessEvidence` reconciles the two into a profile plus a customer
+   * -facing explanation for anything missing.
+   *
+   * Computed from the stored artifact at render time, so no pure package
+   * changes and no golden regenerates.
+   */
+  const diagnosticsFor = (run: AnalysisRun, workspace: WorkspaceRecord | null): DiagnosticsView => {
+    const descriptor = workspace ? connectors.get(workspace.provider)?.descriptor : undefined;
+    // No connector (legacy or CSV-era workspace): claim nothing on its behalf.
+    // The artifact still says what it contained, so snapshot-only diagnostics
+    // run and the rest report honestly as unavailable.
+    const provides = descriptor?.provides ?? {
+      canProvide: [],
+      planGated: [],
+      planGateHint: {},
+    };
+    const assessment = assessEvidence(
+      { name: descriptor?.name ?? 'This connection', provides },
+      run.batch,
+    );
+    const results = [
+      detectConcentration(run, assessment.profile),
+      detectMissingOwnership(run, assessment.profile),
+      detectSerialGatekeeping(run, assessment.profile),
+    ];
+    return {
+      findings: results.flatMap((r) => r.findings),
+      unavailable: results.flatMap((r) => (r.unavailable ? [r.unavailable] : [])),
+      assessment,
+    };
+  };
+
   // Primary: the structured, explorable report view (P5) built from run.json.
   app.get('/reports/:runId', async (request, reply) => {
     const session = requireSession(request, reply);
@@ -2851,7 +2894,12 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     try {
       const run = parseRun(loaded.record.runJson);
       const previous = await previousRunFor(session, loaded.record);
-      body = renderReportBody(run, { runId: loaded.record.id, previous, printLinks: true });
+      // The OI section is appended BEFORE the attribution guard runs below, so
+      // it is covered by the same choke point as everything else on this
+      // surface (ADR-0002 scope clause, restated in ADR-0006).
+      body =
+        renderReportBody(run, { runId: loaded.record.id, previous, printLinks: true }) +
+        renderDiagnostics(diagnosticsFor(run, loaded.workspace));
       title = `Report ${run.runId}`;
     } catch {
       logLine({ level: 'warn', msg: 'report-render-fallback', surface: 'report' });

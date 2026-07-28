@@ -11,6 +11,7 @@
   "dependencies": {
     "@costflow/analysis": "workspace:*",
     "@costflow/cost-engine": "workspace:*",
+    "@costflow/diagnostics": "workspace:*",
     "@costflow/domain": "workspace:*",
     "@costflow/ingestion": "workspace:*",
     "@costflow/reporting": "workspace:*",

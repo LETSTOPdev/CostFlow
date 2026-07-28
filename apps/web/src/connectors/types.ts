@@ -4,6 +4,7 @@ import type {
   PseudonymizationContext,
   StageKind,
 } from '@costflow/domain';
+import type { ConnectorEvidence } from '../evidence';
 
 /**
  * Web connector contract (ADR-0005). A connector is the product-layer face of
@@ -105,6 +106,13 @@ export interface ConnectorDescriptor {
   readonly helpHtml: string;
   /** Short marketing blurb for the provider picker card. */
   readonly pickerBlurb: string;
+  /**
+   * What evidence this platform can expose (ADR-0006). The diagnostics layer
+   * never learns a provider name; this declaration is how a platform's limits
+   * reach it, translated in `evidence.ts`. Adding a connector means adding this,
+   * never a branch in packages/diagnostics.
+   */
+  readonly provides: ConnectorEvidence;
 }
 
 export interface ObservedWorkspace {

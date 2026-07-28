@@ -197,6 +197,14 @@ const JIRA_DESCRIPTOR: ConnectorDescriptor = {
              <li>Paste it above along with your Jira site URL and the email for that Atlassian account.</li>
            </ol>`,
   pickerBlurb: 'Jira Cloud projects: issues, statuses, assignees, and full workflow history.',
+  // The changelog gives ordered, timestamped status transitions for every
+  // issue, on every plan tier — which is why the wait-based diagnostics work
+  // here and not everywhere.
+  provides: {
+    canProvide: ['stage-snapshots', 'status-history', 'transition-history', 'due-dates'],
+    planGated: [],
+    planGateHint: {},
+  },
 };
 
 /**
