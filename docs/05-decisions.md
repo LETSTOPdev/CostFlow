@@ -387,3 +387,28 @@ non-null, so imports without scope structure keep exactly the ids they had. The
 origin id travels through the engine; the customer-facing LABEL is resolved at
 the render edge from the batch, which keeps customer content out of the pure
 layers. Attribution is still structural, so ADR-0002 is untouched.
+
+---
+
+## D20 — The top of the report always answers, even when nothing can be recommended
+
+**Decision.** When no diagnostic clears its evidence gate but the run priced
+real friction, "Where to act first" names the largest **measured** cost and says
+explicitly that it is arithmetic rather than a fitted recommendation. It is only
+silent when nothing was priced at all.
+
+**Reason.** A small workspace routinely produces real priced friction and no
+pattern strong enough to recommend against. That is a correct result, but
+rendering it as "no operational findings" at the very top of the report — above
+thousands of dollars of ranked cost — is the worst available reading of it, and
+undoes the point of promoting that section (D18). Found by walking the product
+as a first-time customer, not by reading the code.
+
+**Tradeoffs.** The section now carries two kinds of statement. The wording does
+the separating: a fitted intervention is offered only when a diagnostic earned
+it, and the fallback says which of the two the reader is looking at.
+
+**Consequences.** No threshold moved and no diagnostic was relaxed — ADR-0006 §7
+suppression is untouched, and the fallback shows figures the report already
+renders further down. The public sample surfaces keep their own empty state,
+which explains the evidence threshold and links to a full-size demonstration.

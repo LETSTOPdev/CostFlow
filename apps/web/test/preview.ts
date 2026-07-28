@@ -28,11 +28,36 @@ import { buildClickUpConnector } from '../src/connectors/clickup';
 import { buildConnectorRegistry } from '../src/connectors/registry';
 import { buildServer } from '../src/server';
 import { MemoryStore } from '../src/store/memory';
-import { CREDENTIAL_KEY, SESSION_KEY, StubClickUpGateway, StubJiraGateway } from './helpers';
+import {
+  CLICKUP_FIXTURE_HISTORY,
+  CLICKUP_FIXTURE_PAGE,
+  CLICKUP_SECOND_LIST_PAGE,
+  CREDENTIAL_KEY,
+  SESSION_KEY,
+  StubClickUpGateway,
+  StubJiraGateway,
+} from './helpers';
+import type { ConnectorCredentials } from '../src/connectors/types';
 
 const PORT = Number(process.env['PORT'] ?? 3901);
 
 const clickup = new StubClickUpGateway();
+// The shared stub serves data for two Lists and rejects the rest, which is a
+// deliberate test behaviour. A walkthrough needs every List to work, or
+// selecting a Space dead-ends at the first one with no fixture.
+clickup.fetchAll = async (_credentials: ConnectorCredentials, scopeId: string) => {
+  clickup.fetched.push(scopeId);
+  // Alternate the two fixtures so origins differ from each other, and so one of
+  // them carries no status history — the mixed-capability case is what a real
+  // multi-team workspace looks like.
+  return Number(scopeId) % 2 === 1
+    ? {
+        provider: 'clickup',
+        taskPages: [CLICKUP_FIXTURE_PAGE],
+        timeInStatusPages: [CLICKUP_FIXTURE_HISTORY],
+      }
+    : { provider: 'clickup', taskPages: [CLICKUP_SECOND_LIST_PAGE], timeInStatusPages: [] };
+};
 // Wider than the stub's default, so the scope step has enough to exercise
 // search, select-all, and friction attributed across several teams.
 clickup.lists = [

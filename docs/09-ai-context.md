@@ -95,6 +95,29 @@ and the product was wrong.
 support it, not the other way around.** When the two disagree about what to
 build next, the experience wins and the architecture changes.
 
+### The milestone loop
+
+Founder directive, 2026-07-28: act as Product & Technical Lead. Do not wait for
+every UX issue to be named. Each milestone runs:
+
+1. `pnpm preview`, and walk the funnel as a first-time customer.
+2. Write down every point of friction, confusion or missing value.
+3. Rank by customer impact, not engineering elegance.
+4. Investigate the implementation before proposing anything.
+5. Implement the highest-impact items that need no product-policy decision.
+6. Stop and present trade-offs ONLY for a genuine product decision, or when
+   there are several valid architectural directions.
+7. Otherwise continue through implementation, testing, deployment and
+   documentation without interrupting.
+
+The question to optimise against, every time:
+
+> **"If an executive opened CostFlow for the first time today, what would
+> prevent them from immediately understanding its value?"**
+
+The goal is that every screen makes an executive think *this tells me exactly
+what I need to do next*.
+
 ### How to actually see it
 
 ```

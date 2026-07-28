@@ -462,3 +462,138 @@ describe('the dashboard names the team when there is more than one', () => {
     expect(dash.body).not.toContain('in Engineering');
   });
 });
+
+/**
+ * Obstacles found by walking the product as a first-time customer
+ * (`docs/09-ai-context.md` §3). Each of these was invisible from the
+ * architecture and visible within seconds of using the thing.
+ */
+describe('what a first-time executive is prevented from understanding', () => {
+  /** Onboard, run, and hand back the artifact and the rendered report. */
+  async function firstReport(t: TestApp, email: string, scope: string) {
+    const cookie = await clickupWorkspace(t, email);
+    await post(t, cookie, '/scope', { scope, action: 'import' });
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const workspace = (await t.store.listWorkspaces(tenantId))[0]!;
+    await post(
+      t,
+      cookie,
+      '/mapping/statuses',
+      Object.fromEntries(
+        workspace.observedStatuses.map((st, i) => [
+          `s${i}`,
+          st === 'complete' || st === 'done' ? 'done' : st === 'review' ? 'review' : 'queue',
+        ]),
+      ),
+    );
+    await post(
+      t,
+      cookie,
+      '/mapping/actors',
+      Object.fromEntries(workspace.observedActors.map((_, i) => [`a${i}`, 'Ops'])),
+    );
+    await post(t, cookie, '/assumptions', {
+      defaultRate: '50',
+      agingThresholdDays: '1',
+      accept_agingThresholdDays: 'on',
+      attention_low: '0.15',
+      attention_expected: '0.3',
+      attention_high: '0.6',
+      accept_attention: 'on',
+      queueWait_low: '0.1',
+      queueWait_expected: '0.2',
+      queueWait_high: '0.4',
+      accept_queueWait: 'on',
+      overdue_low: '0.1',
+      overdue_expected: '0.2',
+      overdue_high: '0.4',
+      accept_overdue: 'on',
+      rate0: '50',
+      // Report mode refuses to price a vendor suggestion, and submitting the
+      // suggested value unchanged leaves it vendor-suggested. Accepting is what
+      // makes it the customer's own — which is the whole provenance gate.
+      accept_rate0: 'on',
+      accept_defaultRate: 'on',
+    });
+    await post(t, cookie, '/runs', {});
+    const runs = await t.store.listRuns(tenantId);
+    const run = JSON.parse(runs[0]!.runJson) as AnalysisRun;
+    const report = await get(t, cookie, `/reports/${run.runId}`);
+    return { cookie, run, runJson: runs[0]!.runJson, report };
+  }
+
+  /**
+   * The worst one found. A small workspace routinely prices real money and
+   * produces no pattern strong enough to recommend against, so "No operational
+   * findings" sat at the very top of the report with thousands of dollars
+   * ranked below it — the opposite of what promoting that section was for.
+   */
+  it('never leaves the top section empty while money is priced', async () => {
+    const t = makeApp();
+    const { run, report } = await firstReport(t, 'firstrun@acme.example', '790');
+    expect(run.estimates.length).toBeGreaterThan(0);
+
+    expect(report.body).toContain('cleared the evidence threshold');
+    // The section still answers "what should I look at", from measured data.
+    expect(report.body).toContain('largest <strong>measured</strong> cost');
+    // And is explicit that this is arithmetic, not a fitted recommendation.
+    expect(report.body).toContain('not a fitted recommendation');
+    // The suppression itself is untouched: no intervention is offered.
+    expect(report.body).not.toContain('Suggested intervention');
+  });
+
+  /**
+   * 1,388 hours ÷ 24 is 57.83333333333333333333333333333333, and that is what
+   * the evidence table printed. Every golden happens to have a whole number of
+   * wait days, so the suite never saw it and every real customer would have —
+   * which is why this test manufactures the fraction rather than hoping a
+   * fixture produces one.
+   */
+  it('prints a duration a person can read', async () => {
+    const t = makeApp();
+    const email = 'digits@acme.example';
+    const cookie = await signIn(t, email);
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const workspace = await t.store.createWorkspace(tenantId, {
+      provider: 'jira',
+      connectionParams: { site: 'https://acme.atlassian.net', email },
+      tokenCiphertext: 'tok',
+    });
+    await t.store.updateWorkspace(tenantId, workspace.id, { onboarding: 'ready' });
+    const golden = readFileSync(join(ROOT, 'tools/golden/expected/demo-flow/run.json'), 'utf8');
+    const fractional = golden.replace(/"waitDays": "\d+"/, '"waitDays": "57.83333333333333333"');
+    expect(fractional).not.toBe(golden); // the substitution actually happened
+    await t.store.createRun({
+      id: 'r-digits',
+      tenantId,
+      workspaceId: workspace.id,
+      createdAt: '2026-07-20T00:00:00Z',
+      runJson: fractional,
+      reportMd: '# report',
+      telemetryJsonl: '',
+    });
+
+    const report = await get(t, cookie, '/reports/r-digits');
+    expect(report.statusCode).toBe(200);
+    // The reader sees one decimal.
+    expect(report.body).toContain('57.8');
+    expect(report.body).not.toContain('57.83333333333333333');
+  });
+
+  /**
+   * Step 3 asked an executive to classify their statuses into six bare words.
+   * Mapping "In progress" to queue instead of active turns work into measured
+   * waiting, and the resulting report looks entirely plausible.
+   */
+  it('explains what each stage kind changes, where the choice is made', async () => {
+    const t = makeApp();
+    const cookie = await clickupWorkspace(t, 'legend@acme.example');
+    await post(t, cookie, '/scope', { scope: '901', action: 'import' });
+    const page = await get(t, cookie, '/mapping/statuses');
+    expect(page.body).toContain('What do these six mean');
+    // The consequence, not a restatement of the word.
+    expect(page.body).toContain('priced as <strong>waiting</strong>');
+    // The one nobody would guess: blocked time is not counted as wait.
+    expect(page.body).toContain('map it to <em>queue</em> instead');
+  });
+});

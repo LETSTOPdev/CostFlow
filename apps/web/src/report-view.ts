@@ -60,6 +60,22 @@ const displayText = (s: string): string =>
     .replace(/(\d)\s?–\s?(\d)/g, '$1 to $2')
     .replace(/\s+—\s+(\p{L})/gu, (_, c: string) => `. ${c.toUpperCase()}`);
 
+/**
+ * A duration a person can read. The engine's decimal strings carry full
+ * precision because the trace has to reproduce the arithmetic exactly; a
+ * 1,388-hour wait divided by 24 is 57.83333333333333333333333333333333, and
+ * printing that in an executive's evidence table is how a report loses its
+ * reader. One decimal, trailing zero trimmed, so a whole number of days still
+ * reads as a whole number.
+ *
+ * Display only: the artifact and the formula keep every digit.
+ */
+const days = (value: string): string => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return esc(value);
+  return esc(String(Math.round(n * 10) / 10));
+};
+
 const rangeText = (spec: RangeSpec, currency: string): string =>
   `${money(spec.low, currency)} to ${money(spec.high, currency)} (expected ~${money(spec.expected, currency)})`;
 
@@ -139,13 +155,13 @@ function renderTerms(
   const rows = shown
     .map((term) => {
       if (term.kind === 'aging-attention') {
-        return `<tr><td>${item(term.workItemId)}</td><td>${term.excessDays}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
+        return `<tr><td>${item(term.workItemId)}</td><td>${days(String(term.excessDays))}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
       }
       if (term.kind === 'overdue-attention') {
-        return `<tr><td>${item(term.workItemId)}</td><td>${term.overdueDays}</td><td>${esc(term.dueAt)}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
+        return `<tr><td>${item(term.workItemId)}</td><td>${days(String(term.overdueDays))}</td><td>${esc(term.dueAt)}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
       }
       // queue-wait-attention
-      return `<tr><td>${item(term.workItemId)}</td><td>${esc(term.waitDays)}</td><td>${term.visits}</td><td>${term.openAtAnalysisTime ? 'yes' : 'no'}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
+      return `<tr><td>${item(term.workItemId)}</td><td>${days(term.waitDays)}</td><td>${term.visits}</td><td>${term.openAtAnalysisTime ? 'yes' : 'no'}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
     })
     .join('');
 
@@ -432,8 +448,34 @@ export function renderReportBody(
   // wrong place for it: it is what a reader consults after deciding to trust
   // the report, not before deciding to read it.
   const methodology = `<p class="note">Every figure is an <strong>estimate shown as a range</strong>, computed from your own work items and the rates you confirmed, and traceable to its formula (open “How this number was computed”). <strong>Confidence A/B/C</strong> reflects how much we observed versus inferred. Where a required input isn't confirmed, we leave the item <strong>unpriced</strong> rather than guess. <span title="Reference for support">Ref <code>${esc(run.runId)}</code></span></p>`;
+  /**
+   * What the top of the report says when no diagnostic cleared its evidence
+   * gate. A small workspace routinely produces real priced friction and no
+   * pattern strong enough to recommend against — and telling an executive
+   * "nothing to recommend" directly above thousands of dollars is the worst
+   * possible reading of a correct result.
+   *
+   * This names the largest MEASURED cost and says so. The diagnostic stays
+   * suppressed, nothing is fitted, no number is invented: every figure here is
+   * already rendered further down the same page.
+   */
+  const largest = model.ranked[0];
+  const largestMeasured =
+    largest === undefined
+      ? undefined
+      : `<p style="margin:0 0 .5rem">No pattern in this run cleared the evidence threshold, so CostFlow is not recommending a specific intervention. The largest <strong>measured</strong> cost is:</p>
+         <p style="margin:0 0 .3rem"><strong>${money(largest.estimate.cost.expected, currency)}</strong> — ${esc(frictionLabel(largest.instance.frictionType).toLowerCase())} in stage “${esc(largest.instance.location.stage.name)}”${
+           originLabel(largest.instance.location.originScopeId) === null
+             ? ''
+             : `, ${esc(originLabel(largest.instance.location.originScopeId) as string)}`
+         }.</p>
+         <p style="margin:0 0 .5rem">${frictionInsight(largest.instance.frictionType, largest.instance.location.stage.name, agingDays)}</p>
+         <p class="note" style="margin:0">This is arithmetic over your own work items, not a fitted recommendation. A workspace with more history behind each stage gives the diagnostics enough evidence to name an intervention as well.</p>`;
   const recommendations = options.diagnostics
-    ? renderDiagnostics(options.diagnostics, options.demo === true ? { demo: true } : {})
+    ? renderDiagnostics(options.diagnostics, {
+        ...(options.demo === true ? { demo: true } : {}),
+        ...(largestMeasured === undefined ? {} : { largestMeasured }),
+      })
     : '';
   const detailDivider = `<hr style="margin:2.2rem 0 1.4rem">
      <p class="note" style="${DETAIL_LABEL}">Supporting detail</p>

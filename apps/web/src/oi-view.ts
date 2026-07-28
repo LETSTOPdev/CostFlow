@@ -206,6 +206,20 @@ const renderUnavailable = (
 
 export interface DiagnosticsOptions {
   /**
+   * What to say when no diagnostic cleared its evidence gate but the run priced
+   * real money. Supplied by the report, which is the layer that knows the
+   * ranked frictions.
+   *
+   * Without it this section says "no findings" at the top of a report with
+   * thousands of dollars ranked below it — the single worst thing the primary
+   * artifact can tell an executive, and the exact opposite of what promoting
+   * the section to the top was for. The fallback does NOT relax the evidence
+   * gate: the diagnostic stays suppressed and no intervention is fitted. It
+   * names the largest MEASURED cost, which is arithmetic the report is already
+   * showing further down, and says which of the two it is.
+   */
+  readonly largestMeasured?: string;
+  /**
    * True on `/demo` and `/try/report`. The recommendations are the strongest
    * thing the product does, so they belong on a public surface — but a
    * recommendation is a claim about someone's organisation, and a visitor must
@@ -223,13 +237,15 @@ export function renderDiagnostics(view: DiagnosticsView, options: DiagnosticsOpt
     : '';
   const body =
     cards.length === 0
-      ? options.demo
-        ? // The static sample is small, and CostFlow refuses to recommend on thin
-          // evidence. Saying so demonstrates a real differentiator rather than
-          // leaving a prospect on a shrug — and points them at the surface that
-          // does show the capability at full size.
-          `<p class="note" style="margin:0">This sample is smaller than the evidence threshold CostFlow requires before it will recommend anything, so it recommends nothing. That refusal is the product working: a confident-sounding action drawn from a handful of items is exactly what costs an executive their trust. <a href="/try">See the recommendations on a full-size organisation →</a></p>`
-        : `<p class="note" style="margin:0">No operational findings above the declared thresholds for this run. That is a result, not an omission: the evidence did not support a recommendation.</p>`
+      ? options.largestMeasured !== undefined && !options.demo
+        ? options.largestMeasured
+        : options.demo
+          ? // The static sample is small, and CostFlow refuses to recommend on thin
+            // evidence. Saying so demonstrates a real differentiator rather than
+            // leaving a prospect on a shrug — and points them at the surface that
+            // does show the capability at full size.
+            `<p class="note" style="margin:0">This sample is smaller than the evidence threshold CostFlow requires before it will recommend anything, so it recommends nothing. That refusal is the product working: a confident-sounding action drawn from a handful of items is exactly what costs an executive their trust. <a href="/try">See the recommendations on a full-size organisation →</a></p>`
+          : `<p class="note" style="margin:0">No operational findings above the declared thresholds for this run. That is a result, not an omission: the evidence did not support a recommendation.</p>`
       : `<p class="note" style="margin:0 0 .6rem">Ordered by strength of evidence first, then by how concentrated each finding is. This is not a recommended sequence and not an ordering by cost. Implementation complexity is a property of the action itself and never changes this order — weighing the two is your call.</p>
          ${cards.map((c) => renderCard(c, view.originLabels)).join('')}`;
   return `<section>

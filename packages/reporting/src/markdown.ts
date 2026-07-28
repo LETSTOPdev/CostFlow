@@ -11,6 +11,17 @@ import type { RankedFriction, ReportModel } from './report';
  * or inject content into the flagship artifact. Traces and run artifacts keep
  * raw truth; only display escapes.
  */
+/**
+ * A duration a person can read. See the same helper in the web report view: the
+ * engine keeps full decimal precision so the trace reproduces exactly, but
+ * "57.83333333333333333333333333333333" in an evidence table is not a number,
+ * it is a wall. Display only.
+ */
+const days = (value: string | number): string => {
+  const n = Number(value);
+  return Number.isFinite(n) ? String(Math.round(n * 10) / 10) : String(value);
+};
+
 const PROVENANCE_LABELS: Record<string, string> = {
   'vendor-suggested': '**vendor-suggested (unconfirmed)**',
   'customer-accepted': 'accepted by customer',
@@ -228,7 +239,7 @@ function renderDrilldown(
       const t: OverdueTraceTerm = term;
       const evidence = r.instance.evidence.find((e) => e.workItemId === t.workItemId);
       lines.push(
-        `| ${esc(t.workItemId)} "${esc(evidence?.title ?? '')}" | ${t.overdueDays} | ${esc(t.dueAt)} | ${t.attentionHoursPerDay.low}–${t.attentionHoursPerDay.high} | ${t.hourlyRate}/h (${esc(t.rateSource)}) | ${range(t.subtotal)} |`,
+        `| ${esc(t.workItemId)} "${esc(evidence?.title ?? '')}" | ${days(t.overdueDays)} | ${esc(t.dueAt)} | ${t.attentionHoursPerDay.low}–${t.attentionHoursPerDay.high} | ${t.hourlyRate}/h (${esc(t.rateSource)}) | ${range(t.subtotal)} |`,
       );
     }
   } else if (r.instance.frictionType === 'aging') {
@@ -239,7 +250,7 @@ function renderDrilldown(
       const t: AgingTraceTerm = term;
       const evidence = r.instance.evidence.find((e) => e.workItemId === t.workItemId);
       lines.push(
-        `| ${esc(t.workItemId)} "${esc(evidence?.title ?? '')}" | ${t.excessDays} | ${t.attentionHoursPerDay.low}–${t.attentionHoursPerDay.high} | ${t.hourlyRate}/h (${esc(t.rateSource)}) | ${range(t.subtotal)} |`,
+        `| ${esc(t.workItemId)} "${esc(evidence?.title ?? '')}" | ${days(t.excessDays)} | ${t.attentionHoursPerDay.low}–${t.attentionHoursPerDay.high} | ${t.hourlyRate}/h (${esc(t.rateSource)}) | ${range(t.subtotal)} |`,
       );
     }
   } else {
@@ -252,7 +263,7 @@ function renderDrilldown(
       const t: QueueWaitTraceTerm = term;
       const evidence = r.instance.evidence.find((e) => e.workItemId === t.workItemId);
       lines.push(
-        `| ${esc(t.workItemId)} "${esc(evidence?.title ?? '')}" | ${t.waitDays} | ${t.visits} | ${t.openAtAnalysisTime ? 'yes' : 'no'} | ${t.attentionHoursPerDay.low}–${t.attentionHoursPerDay.high} | ${t.hourlyRate}/h (${esc(t.rateSource)}) | ${range(t.subtotal)} |`,
+        `| ${esc(t.workItemId)} "${esc(evidence?.title ?? '')}" | ${days(t.waitDays)} | ${t.visits} | ${t.openAtAnalysisTime ? 'yes' : 'no'} | ${t.attentionHoursPerDay.low}–${t.attentionHoursPerDay.high} | ${t.hourlyRate}/h (${esc(t.rateSource)}) | ${range(t.subtotal)} |`,
       );
     }
   }

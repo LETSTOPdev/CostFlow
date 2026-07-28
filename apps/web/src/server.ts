@@ -2563,6 +2563,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
          <p class="lead">All ${workspace.observedStatuses.length} observed statuses, current and historical, must be mapped. The analysis refuses to run if history passes through an unmapped status.</p>
          <form method="post" action="/mapping/statuses" class="panel" style="margin-top:1.5rem">${csrfField(session)}
            <div class="info">We've pre-selected suggestions from the ${esc(providerName)} workflow. Review each one, adjust anything that's off, and save.</div>
+           ${STAGE_KIND_LEGEND}
            <div class="table-wrap"><table><tr><th>Status in ${esc(providerName)}</th><th>Stage kind</th></tr>
            ${workspace.observedStatuses
              .map((status, index) => {
@@ -2585,6 +2586,38 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       ),
     );
   });
+
+  /**
+   * What the six stage kinds actually MEAN, stated as consequences.
+   *
+   * This is the first screen where CostFlow asks the customer to understand its
+   * model rather than their own, and until now it asked with six bare words and
+   * no definitions anywhere on the page. The choice is not cosmetic: it decides
+   * which detector sees each status, so mapping "In progress" to queue instead of
+   * active turns work into measured waiting, and the resulting report looks
+   * entirely plausible while being wrong. A customer who cannot tell has no way
+   * to discover the mistake.
+   *
+   * Every claim below is checked against the engine rather than described from
+   * memory: queue-wait prices `queue` and `review` only
+   * (QUEUE_WAIT_ELIGIBLE_KINDS), and `done`/`abandoned` are terminal
+   * (TERMINAL_STAGE_KINDS) so aging and overdue skip them. The `blocked` line is
+   * the one a customer most needs and would never guess.
+   */
+  const STAGE_KIND_LEGEND = `<details style="margin:.9rem 0 0">
+    <summary>What do these six mean, and what does each one change?</summary>
+    <p class="note" style="margin:.5rem 0 .6rem">Your status names stay exactly as they are. The stage kind tells CostFlow how to treat time spent in that status.</p>
+    <div class="table-wrap"><table>
+      <tr><th>Stage kind</th><th>Use it when</th><th>What it changes</th></tr>
+      <tr><td><strong>queue</strong></td><td>Nobody has picked the work up yet.</td><td>Time here is priced as <strong>waiting</strong>.</td></tr>
+      <tr><td><strong>review</strong></td><td>Waiting on someone to approve, check or sign off.</td><td>Also priced as <strong>waiting</strong>. Separate from queue so approval bottlenecks are visible on their own.</td></tr>
+      <tr><td><strong>active</strong></td><td>Someone is working on it right now.</td><td>Not priced as waiting — this is the work itself. Still counted for stale and overdue items.</td></tr>
+      <tr><td><strong>blocked</strong></td><td>Stopped by something outside the team's control.</td><td><strong>Not</strong> priced as waiting today. If you want time in this status counted as wait, map it to <em>queue</em> instead.</td></tr>
+      <tr><td><strong>done</strong></td><td>Finished.</td><td>Excluded from stale and overdue entirely.</td></tr>
+      <tr><td><strong>abandoned</strong></td><td>Dropped without finishing.</td><td>Excluded, the same as done.</td></tr>
+    </table></div>
+    <p class="note" style="margin:.6rem 0 0">You can change any of this later and re-run; nothing is written back to your tracker.</p>
+  </details>`;
 
   app.post('/mapping/statuses', async (request, reply) => {
     const session = requireSession(request, reply);
