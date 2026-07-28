@@ -60,11 +60,11 @@ const productMockup = `
         </div>
       </aside>
       <div class="lp-main">
-        <div class="lp-report-eyebrow">Friction report</div>
+        <div class="lp-report-eyebrow">Executive briefing</div>
         <div class="lp-report-hero">
-          <div class="lp-rh-label">Total priced friction</div>
-          <div class="lp-rh-big">$2,229</div>
-          <div class="lp-rh-range">1,114 to 4,458 expected range</div>
+          <div class="lp-rh-label">Highest-leverage action</div>
+          <div class="lp-rh-act">Add a second approver to “In Review”.</div>
+          <div class="lp-rh-range">$1,062 priced here · $2,229 across the analysis · confidence A · complexity low</div>
           <div class="lp-chips">
             <span>5 priced</span><span>0 unpriced</span><span>USD</span><span>Jul 20</span>
           </div>
@@ -77,10 +77,10 @@ const productMockup = `
             <path d="M0 34 L28 30 L56 32 L84 20 L112 24 L140 12 L168 15 L200 6 L200 44 L0 44 Z" fill="url(#lpSpark)"/>
           </svg>
         </div>
-        <div class="lp-fr-label">Where to act first</div>
+        <div class="lp-fr-label">The evidence</div>
         <div class="lp-rec">
-          <p class="lp-rec-head">Approvals in “In Review” are the constraint.</p>
-          <p class="lp-rec-sub">One reviewer holds 71% of the wait. Add a second approver — complexity: low.</p>
+          <p class="lp-rec-head">“In Review” holds 71% of all waiting time.</p>
+          <p class="lp-rec-sub">Across 18 items and 1,536 item-hours. No single item accounts for more than 9%, so the pattern is systemic.</p>
         </div>
         <div class="lp-fr-label">Ranked frictions</div>
         <div class="lp-fr-list">
@@ -116,8 +116,8 @@ const hero = `
   ${perspectiveGrid()}
   <div class="container lp-hero-inner">
     <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Try the live demo for free during beta. No signup required. →</a>
-    <h1 class="lp-h1">See what delays in Jira or ClickUp <br><span class="lp-grad">are costing you in dollars.</span></h1>
-    <p class="lp-sub">Connect Jira or ClickUp and get a priced, ranked report that says what to fix first.
+    <h1 class="lp-h1">Know the one thing to fix <br><span class="lp-grad">in your delivery process this week.</span></h1>
+    <p class="lp-sub">Connect Jira or ClickUp and get a two-minute briefing: the highest-leverage change, and what it is costing you not to make it.
       Every figure traces back to its formula.</p>
     <div class="lp-cta">
       <a class="btn btn-lg" href="/signup">Get started free</a>
@@ -167,7 +167,7 @@ const how = `
         </div>
         <div class="lp-step-num">03</div>
         <h3>Get your report</h3>
-        <p>What to act on first, then every priced friction behind it — cost ranges, confidence tiers, and a formula drill-down for each figure.</p>
+        <p>One recommended action, the cost that justifies it, then every priced friction behind it — with a formula drill-down for each figure.</p>
       </div>
     </div>
   </div>
@@ -289,7 +289,7 @@ function landingJsonLd(): string {
         operatingSystem: 'Web',
         url: 'https://app.fbx1.com/',
         description:
-          'Connect Jira or ClickUp and CostFlow turns delays, queues, and overdue work into a priced report that says what to fix first. Every figure traces back to its formula.',
+          'Connect Jira or ClickUp and CostFlow tells you the highest-leverage change to make in your delivery process, and what it is costing you not to make it. Every figure traces back to its formula.',
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         publisher: { '@id': 'https://app.fbx1.com/#org' },
       },
@@ -409,6 +409,7 @@ const LANDING_STYLE = `
    product CostFlow used to be. */
 .lp-rec{padding:.75rem .85rem;border-radius:11px;background:rgba(99,102,241,.14);
   border:1px solid rgba(129,140,248,.32)}
+.lp-rh-act{font-size:1.35rem;font-weight:660;line-height:1.24;letter-spacing:-.02em;color:#fff;margin:.15rem 0 .4rem}
 .lp-rec-head{margin:0;font-size:.86rem;font-weight:660;color:#eef0ff;line-height:1.35}
 .lp-rec-sub{margin:.3rem 0 0;font-size:.76rem;color:#b9bcd6;line-height:1.45}
 .lp-fr{padding:.7rem .85rem;border-radius:11px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)}

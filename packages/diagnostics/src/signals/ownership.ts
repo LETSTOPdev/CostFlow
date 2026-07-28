@@ -1,5 +1,6 @@
 import type { AnalysisRun, FrictionInstance } from '@costflow/analysis';
 import type { StageRef, WorkItem } from '@costflow/domain';
+import { count } from './magnitude';
 import { composeConfidence, type ConfidenceCap } from '@costflow/cost-engine';
 import { checkCapabilities, type DiagnosticSignalMeta, type EvidenceProfile } from '../capability';
 import type { DiagnosticFinding, DiagnosticUnavailable } from '../finding';
@@ -158,7 +159,7 @@ export function detectMissingOwnership(
           `${frictionSharePercent}% of the items carrying friction have no owner, against ` +
           `${baseSharePercent}% across the workspace as a whole — unowned work is ` +
           `${liftPoints} points over-represented among the items going wrong. ` +
-          `Stage "${top.stage.name}" holds the largest group of them (${top.count}).`,
+          `Stage "${top.stage.name}" holds the largest group of them (${count(top.count)}).`,
         confidence: composeConfidence([...inherited, ...caps]),
         intervention: { ...INTERVENTIONS['assign-ownership'], stage: top.stage },
       },

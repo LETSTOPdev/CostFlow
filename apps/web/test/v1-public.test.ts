@@ -294,11 +294,16 @@ describe('what the landing page promises', () => {
   it('promises the decision, not only the measurement', async () => {
     const t = await makeApp();
     const landing = await t.app.inject({ method: 'GET', url: '/' });
-    expect(landing.body).toContain('what to fix first');
-    // And the product screenshot mirrors the real report's order.
-    expect(landing.body).toContain('Where to act first');
-    expect(landing.body.indexOf('Where to act first')).toBeLessThan(
-      landing.body.indexOf('Ranked frictions'),
-    );
+    // The promise is the decision; the money is what justifies it (D22).
+    expect(landing.body).toContain('Know the one thing to fix');
+    expect(landing.body).toContain('the highest-leverage change');
+    // And the product screenshot mirrors the real report's order: action
+    // first, evidence second, ranked list last.
+    const act = landing.body.indexOf('Highest-leverage action');
+    const evidence = landing.body.indexOf('The evidence');
+    const ranked = landing.body.indexOf('Ranked frictions');
+    expect(act).toBeGreaterThan(-1);
+    expect(act).toBeLessThan(evidence);
+    expect(evidence).toBeLessThan(ranked);
   });
 });

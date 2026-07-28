@@ -297,6 +297,12 @@ details > *:not(summary):last-child{margin-bottom:1rem}
 .report-hero{background:var(--grad-soft);border:1px solid color-mix(in srgb,var(--primary) 16%,var(--line));
   border-radius:var(--radius-lg);padding:1.9rem 2rem;margin:1.25rem 0 1.75rem;box-shadow:var(--sh-1)}
 .report-hero .meta{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.9rem}
+/* The recommendation, as the hero of the report. A statement rather than a
+   figure, so it is sized like a headline and not like money — the number is
+   the evidence beneath it now, not the message. */
+.act{font-size:clamp(1.35rem,1.05rem + 1.4vw,2rem);font-weight:660;line-height:1.22;
+  letter-spacing:-.024em;color:var(--ink);margin:.35rem 0 .5rem;text-wrap:balance}
+.act-why{margin:0 0 .2rem;color:var(--ink-2)}
 
 /* Alerts */
 .error{color:var(--neg-ink);background:var(--neg-bg);border:1px solid var(--neg-line);border-radius:12px;padding:.8rem 1.05rem;margin:1rem 0}
@@ -809,6 +815,8 @@ export function printLayout(title: string, body: string): string {
   .friction h3{margin:.1rem 0 .4rem;font-size:1.02rem}
   .report-hero{background:#f7f5ff;border:1px solid var(--line);border-radius:14px;padding:1.3rem 1.5rem;margin:1rem 0 1.4rem}
   .report-hero .meta{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.6rem}
+  .act{font-size:1.45rem;font-weight:660;line-height:1.25;color:var(--ink);margin:.3rem 0 .45rem}
+  .act-why{margin:0 0 .2rem}
   .note{color:var(--muted);font-size:.85rem} .error{color:var(--neg-ink)}
   .tier{display:inline-flex;align-items:center;gap:.3rem;font-size:.72rem;font-weight:620;padding:.16rem .55rem;border-radius:999px;border:1px solid;line-height:1.5}
   .tier::before{content:'';width:.4rem;height:.4rem;border-radius:50%;background:currentColor}

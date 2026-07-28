@@ -40,7 +40,7 @@ export interface DiagnosticsView {
  * ranked SET, never forced into a single culprit and never duplicated into two
  * cards that say the same thing.
  */
-interface ActionCard {
+export interface ActionCard {
   readonly stageName: string;
   readonly stageKind: string;
   readonly originScopeId: string | null;
@@ -191,7 +191,10 @@ const renderCard = (card: ActionCard, originLabels: Readonly<Record<string, stri
  * fuses nothing: complexity still never reorders anything, and the disclaimer
  * below still scopes the ordering of the remainder.
  */
-const startHere = (card: ActionCard, originLabels: Readonly<Record<string, string>>): string => {
+export const startHere = (
+  card: ActionCard,
+  originLabels: Readonly<Record<string, string>>,
+): string => {
   const where =
     card.originScopeId !== null && originLabels[card.originScopeId] !== undefined
       ? `${esc(originLabels[card.originScopeId] as string)}, stage “${esc(card.stageName)}”`
@@ -246,7 +249,8 @@ export interface DiagnosticsOptions {
    * names the largest MEASURED cost, which is arithmetic the report is already
    * showing further down, and says which of the two it is.
    */
-  readonly largestMeasured?: string;
+  /** True when the report hero already rendered the strongest finding. */
+  readonly omitTop?: boolean;
   /**
    * True on `/demo` and `/try/report`. The recommendations are the strongest
    * thing the product does, so they belong on a public surface — but a
@@ -258,29 +262,42 @@ export interface DiagnosticsOptions {
   readonly demo?: boolean;
 }
 
+/**
+ * Everything about the operational layer EXCEPT the headline action.
+ *
+ * Since the report became an executive briefing (D22), the single
+ * highest-leverage action is the hero and this section carries the remainder:
+ * the other findings, and — always — the diagnostics that could not run and
+ * what would unlock them. That last part is product surface, not a gap in it,
+ * so this section renders whenever there is anything to say even when there is
+ * no finding at all.
+ */
 export function renderDiagnostics(view: DiagnosticsView, options: DiagnosticsOptions = {}): string {
   const cards = buildActionCards(view.findings);
+  // The hero already showed the strongest one; repeating it here would read as
+  // two recommendations where the product is making one.
+  const rest = options.omitTop === true ? cards.slice(1) : cards;
+  const unavailable = renderUnavailable(view.unavailable, view.assessment);
   const provenance = options.demo
     ? `<p class="note" style="margin:0 0 .6rem"><strong>Generated from demonstration data.</strong> These recommendations were computed by the real engine from a simulated company, not from any real organisation.</p>`
     : '';
-  const body =
-    cards.length === 0
-      ? options.largestMeasured !== undefined && !options.demo
-        ? options.largestMeasured
+
+  const findings =
+    rest.length === 0
+      ? cards.length > 0
+        ? // The hero carried the only one. Saying "no other findings" is worth
+          // more than silence: it tells the reader the list is complete.
+          `<p class="note" style="margin:0">No other finding cleared the evidence threshold in this analysis.</p>`
         : options.demo
-          ? // The static sample is small, and CostFlow refuses to recommend on thin
-            // evidence. Saying so demonstrates a real differentiator rather than
-            // leaving a prospect on a shrug — and points them at the surface that
-            // does show the capability at full size.
-            `<p class="note" style="margin:0">This sample is smaller than the evidence threshold CostFlow requires before it will recommend anything, so it recommends nothing. That refusal is the product working: a confident-sounding action drawn from a handful of items is exactly what costs an executive their trust. <a href="/try">See the recommendations on a full-size organisation →</a></p>`
-          : `<p class="note" style="margin:0">No operational findings above the declared thresholds for this run. That is a result, not an omission: the evidence did not support a recommendation.</p>`
-      : `${startHere(cards[0] as ActionCard, view.originLabels)}
-         <p class="note" style="margin:0 0 .6rem">Below, findings are ordered by strength of evidence, then by how concentrated each one is — not by cost, and not as a sequence to work through. Implementation complexity is a property of each action and never changes that order; weighing impact against effort is your call.</p>
-         ${cards.map((c) => renderCard(c, view.originLabels)).join('')}`;
+          ? `<p class="note" style="margin:0">This sample is smaller than the evidence threshold CostFlow requires before it will recommend anything, so it recommends nothing. That refusal is the product working: a confident-sounding action drawn from a handful of items is exactly what costs an executive their trust. <a href="/try">See the recommendations on a full-size organisation →</a></p>`
+          : `<p class="note" style="margin:0">No operational findings above the declared thresholds for this analysis. That is a result, not an omission: the evidence did not support a recommendation.</p>`
+      : `<p class="note" style="margin:0 0 .6rem">Ordered by strength of evidence, then by how concentrated each one is — not by cost, and not as a sequence to work through. Implementation complexity is a property of each action and never changes that order; weighing impact against effort is your call.</p>
+         ${rest.map((c) => renderCard(c, view.originLabels)).join('')}`;
+
   return `<section>
-    <h2 style="margin:1.8rem 0 .5rem">Where to act first</h2>
+    <h2 style="margin:1.8rem 0 .5rem">${rest.length === 0 && cards.length > 0 ? 'Other findings' : 'Findings and limits'}</h2>
     ${provenance}
-    ${body}
-    ${renderUnavailable(view.unavailable, view.assessment)}
+    ${findings}
+    ${unavailable}
   </section>`;
 }

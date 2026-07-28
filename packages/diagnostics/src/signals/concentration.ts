@@ -4,7 +4,7 @@ import { composeConfidence, type ConfidenceCap } from '@costflow/cost-engine';
 import { checkCapabilities, type DiagnosticSignalMeta, type EvidenceProfile } from '../capability';
 import type { DiagnosticFinding, DiagnosticUnavailable } from '../finding';
 import { INTERVENTIONS, type InterventionPrimitive } from '../intervention';
-import { itemMagnitudes, unitLabel } from './magnitude';
+import { count, itemMagnitudes, unitLabel } from './magnitude';
 
 /**
  * DC — Friction concentration.
@@ -192,7 +192,7 @@ export function detectConcentration(
       },
       statement:
         `Stage "${top.stage.name}" holds ${sharePercent}% of this workspace's ${unitLabel(unit)} ` +
-        `(${top.total} of ${total}) across ${top.items} item${top.items === 1 ? '' : 's'}, ` +
+        `(${count(top.total)} of ${count(total)}) across ${count(top.items)} item${top.items === 1 ? '' : 's'}, ` +
         `spread over ${buckets.length} stages with friction. ` +
         (outlierSharePercent >= CONCENTRATION_THRESHOLDS.outlierItemSharePercent
           ? `One item accounts for ${outlierSharePercent}% of that, so the concentration is driven by an outlier.`

@@ -59,17 +59,6 @@ interface RunDigest {
 
 const money = (value: string, currency: string): string => esc(formatWholeMoney(value, currency));
 
-/**
- * Hero variant of the same sanctioned money string: when the formatter ends
- * with a 3-letter currency code, demote the code typographically so the
- * number dominates. The text content is byte-identical to formatWholeMoney.
- */
-const heroMoney = (value: string, currency: string): string => {
-  const text = formatWholeMoney(value, currency);
-  const m = /^(.*) ([A-Z]{3})$/.exec(text);
-  return m ? `${esc(m[1] as string)} <span class="cur">${esc(m[2] as string)}</span>` : esc(text);
-};
-
 /** Same deterministic timestamp format the run list uses (ISO-parsed, never TZ-dependent). */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const fmtWhen = (iso: string): string => {
@@ -158,6 +147,20 @@ const runForm = (csrfField: string, label: string, note: string): string =>
 const safetyNote = (providerName: string): string =>
   `Read-only. Never changes anything in ${esc(providerName)}.`;
 
+/**
+ * Which team's queue this is, when saying so distinguishes anything. Shared by
+ * the hero and the insight cards so they never disagree.
+ */
+const whoseIn = (
+  latest: RunDigest,
+  location: { readonly originScopeId: string | null },
+): string => {
+  const scopes = (latest.run.batch.scopes as readonly BatchScope[] | undefined) ?? [];
+  if (scopes.length < 2 || location.originScopeId === null) return '';
+  const label = scopes.find((sc) => sc.id === location.originScopeId)?.label;
+  return label === undefined ? '' : ` in ${esc(label)}`;
+};
+
 // ---------- hero ----------
 
 const heroWithFindings = (
@@ -168,10 +171,22 @@ const heroWithFindings = (
   const { total, currency, ranked, unpricedCount } = latest;
   const selection = describeSelection(input.scopes);
   const scope = selection ? ` for “${esc(selection)}”` : '';
-  const sub = `Range ${money(total.low, currency)} to ${money(total.high, currency)}. ${ranked.length} priced finding${ranked.length === 1 ? '' : 's'}${unpricedCount > 0 ? `, ${unpricedCount} unpriced` : ''}.`;
+  const sub = `${money(total.expected, currency)} of priced friction, ${money(total.low, currency)} to ${money(total.high, currency)}. ${ranked.length} priced finding${ranked.length === 1 ? '' : 's'}${unpricedCount > 0 ? `, ${unpricedCount} unpriced` : ''}.`;
+  /**
+   * The dashboard leads with the same thing the report does: the action. The
+   * total moved from the headline to the line beneath it, where it is the
+   * evidence that the action is worth taking (D22). A returning executive
+   * should get the same answer here as in the report, in the same order — two
+   * surfaces with two different headlines is two products.
+   */
+  const top = ranked[0];
+  const headline =
+    top === undefined
+      ? 'Your latest analysis'
+      : `${frictionSubject(top.instance.frictionType, top.instance.location.stage.name).subject}${whoseIn(latest, top.instance.location)}`;
   return `<section class="dash-hero">
-    <p class="hero-eyebrow">Potential recoverable cost</p>
-    <p class="figure-hero">${heroMoney(total.expected, currency)}</p>
+    <p class="hero-eyebrow">Start here</p>
+    <p class="figure-hero quiet">${headline}</p>
     <p class="hero-sub">${sub}</p>
     <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}${scope}</p>
     ${trendLine(latest, previous)}
@@ -213,18 +228,6 @@ const insightCards = (latest: RunDigest, latestRunId: string): string => {
   const { ranked, total, currency } = latest;
   const top = ranked[0];
   if (!top) return '';
-  /**
-   * Which team's queue this is, when saying so distinguishes anything. A
-   * workspace covering one origin already names it in the page foot, so
-   * repeating it on every card is noise; a workspace covering several cannot
-   * say "the review queue" and mean anything.
-   */
-  const scopes = (latest.run.batch.scopes as readonly BatchScope[] | undefined) ?? [];
-  const whose = (location: { readonly originScopeId: string | null }): string => {
-    if (scopes.length < 2 || location.originScopeId === null) return '';
-    const label = scopes.find((sc) => sc.id === location.originScopeId)?.label;
-    return label === undefined ? '' : ` in ${esc(label)}`;
-  };
   const topStage = top.instance.location.stage.name;
   const topSubject = frictionSubject(top.instance.frictionType, topStage);
   // Share of total: CSS-only presentation float (same sanctioned pattern as
@@ -246,7 +249,7 @@ const insightCards = (latest: RunDigest, latestRunId: string): string => {
   const strongestCard = strongest
     ? `<div class="insight">
         <p class="k">How solid is this</p>
-        <p class="lede">Strongest evidence: ${lowerFirst(frictionSubject(strongest.instance.frictionType, strongest.instance.location.stage.name).subject)}${whose(strongest.instance.location)} at about <strong>${money(strongest.estimate.cost.expected, currency)}</strong>, grade&nbsp;${esc(strongest.estimate.confidence.tier)}.</p>
+        <p class="lede">Strongest evidence: ${lowerFirst(frictionSubject(strongest.instance.frictionType, strongest.instance.location.stage.name).subject)}${whoseIn(latest, strongest.instance.location)} at about <strong>${money(strongest.estimate.cost.expected, currency)}</strong>, grade&nbsp;${esc(strongest.estimate.confidence.tier)}.</p>
         <p class="note">${tierPills(ranked)}</p>
       </div>`
     : '';
@@ -254,7 +257,7 @@ const insightCards = (latest: RunDigest, latestRunId: string): string => {
   return `<div class="dash-cards">
     <div class="insight">
       <p class="k">Where it's going</p>
-      <p class="lede">${topSubject.subject}${whose(top.instance.location)} ${topSubject.verb} costing about <strong>${money(top.estimate.cost.expected, currency)}</strong>.</p>
+      <p class="lede">${topSubject.subject}${whoseIn(latest, top.instance.location)} ${topSubject.verb} costing about <strong>${money(top.estimate.cost.expected, currency)}</strong>.</p>
       ${share}
       <a class="go" href="/reports/${esc(latestRunId)}">See the evidence →</a>
     </div>

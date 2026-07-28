@@ -534,12 +534,14 @@ describe('what a first-time executive is prevented from understanding', () => {
     expect(run.estimates.length).toBeGreaterThan(0);
 
     expect(report.body).toContain('cleared the evidence threshold');
-    // The section still answers "what should I look at", from measured data.
-    expect(report.body).toContain('largest <strong>measured</strong> cost');
+    // The hero still answers "what should I look at", from measured data.
+    expect(report.body).toContain('Largest measured cost');
     // And is explicit that this is arithmetic, not a fitted recommendation.
-    expect(report.body).toContain('not a fitted recommendation');
+    expect(report.body).toContain('rather than a fitted recommendation');
     // The suppression itself is untouched: no intervention is offered.
     expect(report.body).not.toContain('Suggested intervention');
+    // The money is present as evidence, not as the headline.
+    expect(report.body).toContain('priced here');
   });
 
   /**

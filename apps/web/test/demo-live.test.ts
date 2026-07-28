@@ -27,7 +27,9 @@ describe('interactive demo', () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('You just analyzed');
     expect(res.body).toContain('Ranked frictions');
-    expect(res.body).toContain('Total priced friction');
+    // The report leads with the action; the money is evidence beneath it.
+    expect(res.body).toContain('Highest-leverage action');
+    expect(res.body).toContain('of priced friction');
     expect(res.body).toContain('/signup'); // conversion CTA
     // Genuine content, not a stub.
     expect((res.body.match(/class="friction"/g) ?? []).length).toBeGreaterThan(3);

@@ -13,7 +13,7 @@ import type { BatchScope, RangeSpec } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import { compareRuns, type ChangeDirection } from '@costflow/comparison';
 import { esc } from './html';
-import { renderDiagnostics, type DiagnosticsView } from './oi-view';
+import { buildActionCards, renderDiagnostics, type DiagnosticsView } from './oi-view';
 
 /**
  * P5 structured reporting view. Renders the IMMUTABLE run.json artifact as an
@@ -394,11 +394,17 @@ export function renderReportBody(
     scopes === undefined || scopes.length === 0
       ? ''
       : `<span class="chip">Covering ${scopes.map((sc) => esc(sc.label)).join(', ')}</span>`;
-  const summary = `<section class="report-hero">
-    <p class="note" style="margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Total priced friction (expected)</p>
-    <p class="figure big" style="margin:0">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : money(total.expected, currency)}</p>
-    ${model.ranked.length === 0 ? '' : `<p class="note" style="margin:.3rem 0 0">Range ${money(total.low, currency)} to ${money(total.high, currency)}</p>`}
-    <div class="meta">
+  /**
+   * The money, as CONTEXT rather than as the message. It used to be the hero;
+   * it now sits at the head of the supporting detail, where it does the job the
+   * founder assigned it — reinforcing a recommendation the reader has already
+   * been given, rather than replacing it.
+   */
+  const totals = `<section>
+    <h2>What this analysis covers</h2>
+    <p class="figure" style="margin:.2rem 0 0">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : `${money(total.expected, currency)} of priced friction`}</p>
+    ${model.ranked.length === 0 ? '' : `<p class="note" style="margin:.2rem 0 0">Range ${money(total.low, currency)} to ${money(total.high, currency)}, across every finding below.</p>`}
+    <div class="meta" style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.8rem">
       <span class="chip">${model.ranked.length} priced</span>
       <span class="chip">${model.unpriced.length} unpriced</span>
       <span class="chip">Analysis of ${esc(analysisDate)}</span>
@@ -440,10 +446,6 @@ export function renderReportBody(
   const links = options.printLinks
     ? `<p class="note"><a href="/reports/${esc(options.runId)}/print">Printable / export version</a> &nbsp; <a href="/reports/${esc(options.runId)}/raw">Raw markdown</a></p>`
     : '';
-  const lead =
-    model.ranked.length === 0
-      ? ''
-      : `<p class="lead" style="margin-top:.6rem">This is the ongoing cost of workflow friction your team is currently carrying: time lost to waiting, chasing, and stalled work. It's <strong>recoverable</strong>, and the section below says where to start.</p>`;
   // Methodology used to sit between the headline and the number, which is the
   // wrong place for it: it is what a reader consults after deciding to trust
   // the report, not before deciding to read it.
@@ -459,34 +461,113 @@ export function renderReportBody(
    * suppressed, nothing is fitted, no number is invented: every figure here is
    * already rendered further down the same page.
    */
+  /**
+   * THE BRIEFING HERO.
+   *
+   * Founder decision, 2026-07-28: lead with the action, not the money. An
+   * executive opens CostFlow to learn what to do next, so the report answers
+   * that first and uses the estimated cost as the evidence that the answer is
+   * worth acting on. The money did not get smaller; it stopped being the
+   * message.
+   *
+   * The sentence the whole report is written to answer: "Start here. This is
+   * the single highest-leverage operational improvement we found, and here is
+   * the evidence supporting that recommendation."
+   *
+   * Three states, because the honest answer differs:
+   *   a fitted recommendation, when a diagnostic cleared its evidence gate;
+   *   the largest MEASURED cost, when none did but money was priced — named as
+   *     measured, because inventing an intervention here is the one thing the
+   *     product must never do;
+   *   nothing, when nothing was priced, which is a real and good result.
+   */
+  const cards = options.diagnostics ? buildActionCards(options.diagnostics.findings) : [];
+  const topAction = cards[0];
   const largest = model.ranked[0];
-  const largestMeasured =
-    largest === undefined
-      ? undefined
-      : `<p style="margin:0 0 .5rem">No pattern in this run cleared the evidence threshold, so CostFlow is not recommending a specific intervention. The largest <strong>measured</strong> cost is:</p>
-         <p style="margin:0 0 .3rem"><strong>${money(largest.estimate.cost.expected, currency)}</strong> — ${esc(frictionLabel(largest.instance.frictionType).toLowerCase())} in stage “${esc(largest.instance.location.stage.name)}”${
-           originLabel(largest.instance.location.originScopeId) === null
-             ? ''
-             : `, ${esc(originLabel(largest.instance.location.originScopeId) as string)}`
-         }.</p>
-         <p style="margin:0 0 .5rem">${frictionInsight(largest.instance.frictionType, largest.instance.location.stage.name, agingDays)}</p>
-         <p class="note" style="margin:0">This is arithmetic over your own work items, not a fitted recommendation. A workspace with more history behind each stage gives the diagnostics enough evidence to name an intervention as well.</p>`;
+
+  /** What sits at one (origin, stage) — the money that backs THIS action. */
+  const stakeAt = (originScopeId: string | null, stageName: string): RangeSpec => {
+    const here = model.ranked.filter(
+      (rf) =>
+        rf.instance.location.stage.name === stageName &&
+        rf.instance.location.originScopeId === originScopeId,
+    );
+    return totalRange(here);
+  };
+  /**
+   * Where the action applies, as a label directly beneath it. The curated
+   * recommendation says "this stage"; without a referent immediately below, the
+   * reader has to hunt for one.
+   */
+  const whereText = (originScopeId: string | null, stageName: string): string => {
+    const label = originLabel(originScopeId);
+    return label === null
+      ? `Stage “${esc(stageName)}”`
+      : `Stage “${esc(stageName)}” · ${esc(label)}`;
+  };
+  const evidenceChips = (stake: RangeSpec, extra: string): string =>
+    `<div class="meta">
+       ${extra}
+       <span class="chip">${money(stake.expected, currency)} priced here</span>
+       <span class="chip">${money(total.expected, currency)} across the whole analysis</span>
+     </div>`;
+
+  let hero: string;
+  let headline: string;
+  if (topAction !== undefined) {
+    const finding = topAction.findings[0];
+    const stake = stakeAt(topAction.originScopeId, topAction.stageName);
+    headline = 'Start here';
+    hero = `<section class="report-hero">
+      <p class="note" style="margin:0;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Highest-leverage action</p>
+      <p class="act">${esc(topAction.recommendation)}</p>
+      <p class="note" style="margin:0 0 .55rem">${whereText(topAction.originScopeId, topAction.stageName)}</p>
+      ${finding ? `<p class="act-why">${esc(finding.statement)}</p>` : ''}
+      ${evidenceChips(
+        stake,
+        `<span class="chip">Confidence ${esc(topAction.bestTier)}</span>
+         <span class="chip">Operational impact: ${topAction.topShare}% concentrated</span>
+         <span class="chip">Complexity ${esc(topAction.complexity)}</span>`,
+      )}
+      <p class="note" style="margin:.7rem 0 0">Chosen as the finding this analysis has the strongest evidence for, not the largest figure. Implementation complexity is reported beside it and never changes that order. The cost above is what is already being spent here — it is the reason to act, not the recommendation itself.</p>
+    </section>`;
+  } else if (largest !== undefined) {
+    const stake = stakeAt(
+      largest.instance.location.originScopeId,
+      largest.instance.location.stage.name,
+    );
+    headline = 'Start here';
+    hero = `<section class="report-hero">
+      <p class="note" style="margin:0;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Largest measured cost</p>
+      <p class="act">${frictionInsight(largest.instance.frictionType, largest.instance.location.stage.name, agingDays)}</p>
+      <p class="note" style="margin:0 0 .55rem">${whereText(largest.instance.location.originScopeId, largest.instance.location.stage.name)}</p>
+      <p class="act-why">${humanizeMagnitude(largest.instance.magnitude.value, largest.instance.magnitude.unit)}</p>
+      ${evidenceChips(stake, `<span class="chip">Confidence ${esc(largest.estimate.confidence.tier)}</span>`)}
+      <p class="note" style="margin:.7rem 0 0">No pattern in this analysis cleared the evidence threshold, so this is the largest <strong>measured</strong> cost rather than a fitted recommendation. A workspace with more history behind each stage gives the diagnostics enough to name an intervention as well.</p>
+    </section>`;
+  } else {
+    headline = 'Nothing crossed your thresholds';
+    hero = `<div class="info">No priced friction crossed your thresholds in this analysis. That is a genuinely healthy sign for the work covered. If you expected findings, your aging and queue thresholds may be set conservatively — lower them and run again to surface smaller effects.</div>`;
+  }
+
+  // Always rendered when diagnostics exist: even with no finding it carries
+  // what could not be assessed and what would unlock it.
   const recommendations = options.diagnostics
     ? renderDiagnostics(options.diagnostics, {
+        omitTop: topAction !== undefined,
         ...(options.demo === true ? { demo: true } : {}),
-        ...(largestMeasured === undefined ? {} : { largestMeasured }),
       })
     : '';
   const detailDivider = `<hr style="margin:2.2rem 0 1.4rem">
      <p class="note" style="${DETAIL_LABEL}">Supporting detail</p>
      <p class="note" style="margin:0 0 1.2rem">Everything above is the decision. Everything below is the working behind it: each priced friction with its formula, what moved since last time, what could not be priced, and how much of your data the analysis could see.</p>`;
-  return `<p class="eyebrow">Friction report</p>
-    <h1 style="margin-top:.6rem">What friction is costing this team</h1>
-    ${lead}
+  return `<p class="eyebrow">Executive briefing</p>
+    <h1 style="margin-top:.6rem">${headline}</h1>
     ${banner}
-    ${summary}
+    ${hero}
     ${recommendations}
     ${detailDivider}
+    ${totals}
     <section><h2>Ranked frictions</h2>
     ${
       model.ranked.length === 0
@@ -497,7 +578,7 @@ export function renderReportBody(
                 // why. The most expensive finding and the best-evidenced one are
                 // genuinely different questions, and a reader who spots the
                 // difference without an explanation loses confidence in both.
-                'This is a different order from <em>Where to act first</em> above, which leads with the strongest evidence rather than the largest figure. The biggest number and the surest finding are not always the same one.'
+                'This is a different order from the recommendation above, which leads with the strongest evidence rather than the largest figure. The biggest number and the surest finding are not always the same one.'
               : ''
           }</p>`
     }

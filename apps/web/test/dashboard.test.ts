@@ -64,7 +64,7 @@ describe('executive dashboard', () => {
     expect(res.body).not.toContain('Past analyses');
   });
 
-  it('with findings: the hero leads with the exact priced total and an Analyze Again CTA', async () => {
+  it('with findings: the hero leads with the action, and the total is its evidence', async () => {
     const t = makeApp();
     const cookie = await signIn(t, 'ceo@dash.example');
     const { tenantId, workspaceId } = await seedWorkspace(t, 'ceo@dash.example');
@@ -72,8 +72,12 @@ describe('executive dashboard', () => {
 
     const res = await get(t, cookie, '/dashboard');
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Potential recoverable cost');
-    // The hero figure is the report's own total — same formatter, same model.
+    // The action is the headline; the money sits beneath it as the evidence
+    // that the action is worth taking (D22). Same order as the report.
+    expect(res.body).toContain('Start here');
+    expect(res.body).not.toContain('Potential recoverable cost');
+    expect(res.body).toContain('of priced friction');
+    // The total is still the report's own — same formatter, same model.
     const summary = runSummary(RUN_JSON)!;
     expect(summary.priced).toBeGreaterThan(0);
     expect(res.body).toContain(summary.expectedText);

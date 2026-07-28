@@ -52,10 +52,12 @@ describe('OI1 — the operational layer on the report', () => {
     const res = await get(t, cookie, '/reports/r-flow');
     expect(res.statusCode).toBe(200);
 
-    expect(res.body).toContain('Where to act first');
+    expect(res.body).toContain('Highest-leverage action');
+    // Impact and complexity sit side by side on the hero, as separate axes.
     expect(res.body).toContain('Operational impact:');
-    expect(res.body).toContain('Implementation complexity:');
-    // The two are displayed side by side and never combined into one number.
+    expect(res.body).toContain('Complexity ');
+    expect(res.body).toContain('never changes that order');
+    // They are never combined into one number.
     expect(res.body).not.toMatch(/priority score/i);
     expect(res.body).not.toMatch(/ROI/i);
   });
@@ -72,14 +74,15 @@ describe('OI1 — the operational layer on the report', () => {
     await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
 
     const res = await get(t, cookie, '/reports/r-flow');
-    const act = res.body.indexOf('Where to act first');
+    const act = res.body.indexOf('Highest-leverage action');
     const detail = res.body.indexOf('Supporting detail');
+    const totals = res.body.indexOf('What this analysis covers');
     const ranked = res.body.indexOf('Ranked frictions');
-    const coverage = res.body.indexOf('Coverage &amp; confidence');
     expect(act).toBeGreaterThan(-1);
+    // The action leads; the money and the working follow it.
     expect(act).toBeLessThan(detail);
-    expect(detail).toBeLessThan(ranked);
-    expect(ranked).toBeLessThan(coverage);
+    expect(detail).toBeLessThan(totals);
+    expect(totals).toBeLessThan(ranked);
   });
 
   /**
@@ -94,8 +97,8 @@ describe('OI1 — the operational layer on the report', () => {
 
     const res = await get(t, cookie, '/reports/r-flow/print');
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Where to act first');
-    expect(res.body).toContain('Suggested intervention');
+    expect(res.body).toContain('Highest-leverage action');
+    expect(res.body).toContain('priced here');
   });
 
   /**
@@ -110,12 +113,9 @@ describe('OI1 — the operational layer on the report', () => {
     await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
 
     const res = await get(t, cookie, '/reports/r-flow');
-    expect(res.body).toContain('not as a sequence to work through');
+    // The caveat survives, scoped to the ordering of the remaining findings.
     expect(res.body).toContain('never changes that order');
-    // The starting point comes before the caveat about the rest of the list.
-    expect(res.body.indexOf('Start here:')).toBeLessThan(
-      res.body.indexOf('not as a sequence to work through'),
-    );
+    expect(res.body).not.toContain('This is not a recommended sequence');
   });
 
   it('shows the gate it could not assess, naming the capability and the platform reason', async () => {
@@ -322,7 +322,6 @@ describe('recommendations on the public sample surfaces', () => {
     const t = await makeApp();
     const res = await t.app.inject({ method: 'GET', url: '/demo' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Where to act first');
     expect(res.body).toContain('Generated from demonstration data');
   });
 
@@ -330,7 +329,7 @@ describe('recommendations on the public sample surfaces', () => {
     const t = await makeApp();
     const res = await t.app.inject({ method: 'GET', url: '/try/report?seed=42' });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Where to act first');
+    expect(res.body).toContain('Highest-leverage action');
     expect(res.body).toContain('Generated from demonstration data');
     expect(res.body).toContain('not from any real organisation');
   });
@@ -382,8 +381,11 @@ describe('the section that answers "what do I do next"', () => {
     await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
 
     const res = await get(t, cookie, '/reports/r-flow');
-    expect(res.body).toContain('Start here:');
+    // The action is the headline; the money is the evidence beneath it.
+    expect(res.body).toContain('Highest-leverage action');
     expect(res.body).toContain('strongest evidence');
+    expect(res.body).toContain('priced here');
+    expect(res.body).toContain('across the whole analysis');
     // The heading and the body no longer cancel each other out.
     expect(res.body).not.toContain('This is not a recommended sequence');
   });

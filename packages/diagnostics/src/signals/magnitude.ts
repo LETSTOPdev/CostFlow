@@ -28,3 +28,10 @@ const UNIT_LABELS: Readonly<Record<string, string>> = {
 };
 
 export const unitLabel = (unit: string): string => UNIT_LABELS[unit] ?? unit;
+
+/**
+ * Counts in prose an executive reads. "43776 of 51552" is a wall; "43,776 of
+ * 51,552" is a fact. Grouping only — never applied to money, which has its own
+ * formatter in the cost engine, and never to a percentage.
+ */
+export const count = (n: number): string => n.toLocaleString('en-US');

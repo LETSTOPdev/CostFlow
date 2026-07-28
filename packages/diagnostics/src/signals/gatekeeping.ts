@@ -1,5 +1,6 @@
 import type { AnalysisRun, FrictionInstance } from '@costflow/analysis';
 import type { StageRef } from '@costflow/domain';
+import { count } from './magnitude';
 import { composeConfidence, type ConfidenceCap } from '@costflow/cost-engine';
 import { checkCapabilities, type DiagnosticSignalMeta, type EvidenceProfile } from '../capability';
 import type { DiagnosticFinding, DiagnosticUnavailable } from '../finding';
@@ -150,9 +151,9 @@ export function detectSerialGatekeeping(
         },
         statement:
           `The approval stage "${top.stage.name}" accounts for ${waitSharePercent}% of all ` +
-          `observed waiting time (${top.wait} of ${totalWait} item-hours) and sits in the path ` +
+          `observed waiting time (${count(top.wait)} of ${count(totalWait)} item-hours) and sits in the path ` +
           `of ${pathSharePercent}% of the items that waited anywhere ` +
-          `(${top.items} of ${allWaitingItems.size}). ` +
+          `(${count(top.items)} of ${count(allWaitingItems.size)}). ` +
           `Work is queueing behind one gate rather than spreading across ${waits.length} waiting stages.`,
         confidence: composeConfidence([...inherited, ...caps]),
         intervention: { ...INTERVENTIONS['add-stage-sla'], stage: top.stage },

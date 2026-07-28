@@ -441,3 +441,36 @@ see the basis and choose differently.
 reorders anything. The ranked-friction list, which is ordered by cost, now says
 why its order differs from the section above it — two orders on one page is a
 credibility problem unless the page says why.
+
+---
+
+## D22 — The report leads with the action; the money is its evidence
+
+**Decision.** Every surface leads with the single highest-leverage action. The
+estimated financial impact sits beneath it as the reason to act, and the total
+across the analysis moves into the supporting detail. The report is an executive
+briefing, not a financial statement.
+
+The sentence every surface is written to answer: *"Start here. This is the
+single highest-leverage operational improvement we found, and here is the
+evidence supporting that recommendation."*
+
+**Reason.** Founder decision, 2026-07-28, following the North Star. An executive
+opens CostFlow to learn what to do next; the report answered "how much" first
+and made them hunt for the rest. The money did not get smaller — it stopped
+being the message, and attached itself to a specific action instead of floating
+above a dozen of them.
+
+**Tradeoffs.** The headline figure was the credibility hook, and losing its
+primacy risks the report reading as advice rather than measurement. Three things
+hold that line: the cost at stake is stated on the action itself, the total is
+one section below with its full range, and every figure still opens into its
+formula. A recommendation with a priced consequence attached is more persuasive
+than a number with no owner, not less.
+
+**Consequences.** The hero has three states — a fitted recommendation, the
+largest measured cost when no diagnostic cleared its gate, or an explicit
+nothing-priced result. `ADR-0006 §5` is intact: impact and complexity appear as
+separate chips on the hero and are never fused. The dashboard, the printable
+export, `/demo`, `/try/report` and the landing page all carry the same order, so
+a customer meets one product rather than two.

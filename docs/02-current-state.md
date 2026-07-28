@@ -71,15 +71,18 @@ and per-signal diff. The report's trend section is gated on it.
 import batch and carried in the artifact. ClickUp declares its reconstruction
 limits; other providers currently declare none.
 
-**Acquisition.** The landing page, pricing and docs promise what the product is
-best at — a priced report that says what to fix first — and the product
-screenshot mirrors the real report's order. The stage vocabulary shown before
-signup matches the six kinds the product actually uses.
+**Acquisition.** The landing page promises what the product is best at — the
+highest-leverage change to make in your delivery process, and what it is costing
+not to make it — and the product screenshot mirrors the real report's order:
+action, evidence, then the ranked list. The stage vocabulary shown before signup
+matches the six kinds the product actually uses.
 
-**Report structure.** The recommendations section names one place to start and
-says it was chosen for strongest evidence rather than largest figure (D21). The
-ranked list below explains why its cost order differs. The top section never
-says nothing while money is priced:
+**Report structure.** The report is an executive briefing: it leads with the
+single highest-leverage action, with the cost at stake beneath it as the
+evidence that acting is worth it, and the total across the analysis in the
+supporting detail (D22). The recommendation says it was chosen for strongest
+evidence rather than largest figure (D21), and the cost-ordered list below
+explains why its order differs. The hero is never empty while money is priced —
 with no diagnostic above its evidence gate it names the largest measured cost
 and labels it as measured (D20). Durations are formatted for a reader; the
 artifact keeps full decimal precision. The statuses step explains what each of
