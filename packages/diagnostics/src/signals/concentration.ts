@@ -91,6 +91,13 @@ const pct = (part: number, whole: number): number =>
 export function detectConcentration(
   run: AnalysisRun,
   profile: EvidenceProfile,
+  /**
+   * Caps inherited from the artifact's evidence quality (doc 21), supplied by the
+   * app edge. Passing them in rather than reading them keeps this layer blind to
+   * WHY its confidence is capped, exactly as it is blind to why a capability is
+   * missing. It only composes.
+   */
+  inherited: readonly ConfidenceCap[] = [],
 ): { findings: DiagnosticFinding[]; unavailable: DiagnosticUnavailable | null } {
   const check = checkCapabilities(CONCENTRATION_SIGNAL, profile);
   if (!check.canRun) {
@@ -186,7 +193,7 @@ export function detectConcentration(
         (outlierSharePercent >= CONCENTRATION_THRESHOLDS.outlierItemSharePercent
           ? `One item accounts for ${outlierSharePercent}% of that, so the concentration is driven by an outlier.`
           : `No single item accounts for more than ${outlierSharePercent}% of it, so the pattern is systemic rather than outlier-driven.`),
-      confidence: composeConfidence(caps),
+      confidence: composeConfidence([...inherited, ...caps]),
       intervention: { ...intervention, stage: top.stage },
     });
   }

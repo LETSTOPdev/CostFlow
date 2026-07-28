@@ -306,6 +306,7 @@ export function transformMonday(input: MondayTransformInput): ImportBatch {
       lastUpdated: true,
       actors: mapping.peopleColumnId !== undefined,
     }),
+    evidence: [],
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

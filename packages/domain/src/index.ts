@@ -4,6 +4,8 @@ export type { WorkItem, IsoDateString } from './work-item';
 export type { ActorRef, PseudonymizationContext } from './actor';
 export type { WorkItemEvent } from './events';
 export type { CapabilityProfile, CapabilityKey } from './capability';
+export type { EvidenceNote, EvidenceSubject, EvidenceWeakness } from './evidence';
+export { EVIDENCE_SUBJECTS, EVIDENCE_WEAKNESSES } from './evidence';
 export type { ImportBatch, ImportDiagnostic } from './import-batch';
 export type {
   AssumptionSet,

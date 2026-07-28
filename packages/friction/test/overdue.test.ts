@@ -36,6 +36,7 @@ function batch(items: WorkItem[]): ImportBatch {
       hasLastUpdated: false,
       hasActors: true,
     },
+    evidence: [],
     pseudonymizationScope: null,
     items,
     events: [],

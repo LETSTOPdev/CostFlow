@@ -19,12 +19,18 @@
  * Adding a connector means adding a `provides` declaration, never a branch here
  * and never a line in packages/diagnostics.
  */
-import type { CapabilityProfile, ImportBatch } from '@costflow/domain';
+import type {
+  CapabilityProfile,
+  EvidenceNote,
+  EvidenceSubject,
+  ImportBatch,
+} from '@costflow/domain';
 import {
   EVIDENCE_CAPABILITIES,
   type EvidenceCapability,
   type EvidenceProfile,
 } from '@costflow/diagnostics';
+import type { ConfidenceCap } from '@costflow/cost-engine';
 
 export type AbsenceReason = 'platform-cannot' | 'plan-gated' | 'import-lacked' | 'not-built';
 
@@ -155,6 +161,73 @@ export function assessEvidence(
   });
 
   return { profile: have, statuses };
+}
+
+/**
+ * Which evidence subjects a capability's observations come from (doc 21).
+ *
+ * This is what stops a weakness from capping a finding that never touched the
+ * weak evidence. On a workspace with no status history, the event stream is
+ * flagged — but friction concentration is computed from due dates and stages and
+ * does not read events at all, so capping it would be pessimism dressed as
+ * rigour. A diagnostic is exposed only to weaknesses in the subjects its own
+ * declared capabilities draw on.
+ *
+ * `stage-snapshots` maps to both items and actors because the item snapshot is
+ * where current ownership travels; that is deliberately slightly generous, and
+ * generosity here means over-capping rather than under-capping.
+ */
+const SUBJECTS_BY_CAPABILITY: Readonly<Record<EvidenceCapability, readonly EvidenceSubject[]>> = {
+  'stage-snapshots': ['items', 'actors'],
+  'status-history': ['events'],
+  'transition-history': ['events'],
+  'assignment-history': ['actors'],
+  'due-dates': ['commitments'],
+  'dependency-graph': [],
+  'approval-chain': [],
+  'capacity-signals': [],
+};
+
+/**
+ * Every evidence weakness caps at B, never C.
+ *
+ * Grade A is "demonstrated pattern" (doc 07 §1.5) and requires complete
+ * observations; a known weakness means the pattern is supported rather than
+ * demonstrated, which is exactly B. C is reserved for weak or indirect evidence,
+ * never headlines a diagnosis, and would be too harsh for data that is merely
+ * imperfect.
+ */
+const EVIDENCE_CAP_TIER = 'B' as const;
+
+/**
+ * An artifact written before evidence quality was recorded. Deliberately NOT
+ * treated as "no weaknesses": absent is not the same statement as empty, and
+ * defaulting one to the other would retroactively certify every historical run.
+ */
+const UNKNOWN_EVIDENCE_CAP: ConfidenceCap = {
+  tier: EVIDENCE_CAP_TIER,
+  reason:
+    'This analysis predates evidence-quality recording, so how completely its observations were captured is unknown.',
+};
+
+/**
+ * Confidence caps a diagnostic should inherit, given the capabilities it draws
+ * on. `detail` becomes the reason verbatim: one sentence, authored once at the
+ * point the weakness is known, with no second copy to drift.
+ */
+export function inheritedCapsFor(
+  batch: Pick<ImportBatch, 'evidence'>,
+  requires: readonly EvidenceCapability[],
+): ConfidenceCap[] {
+  // Persisted artifacts are parsed with an unchecked cast, so a run written
+  // before this field existed genuinely has no `evidence` at runtime despite
+  // what the type says.
+  const notes = batch.evidence as readonly EvidenceNote[] | undefined;
+  const relevant = new Set(requires.flatMap((c) => SUBJECTS_BY_CAPABILITY[c]));
+  if (notes === undefined) return relevant.size > 0 ? [UNKNOWN_EVIDENCE_CAP] : [];
+  return notes
+    .filter((n) => relevant.has(n.subject))
+    .map((n) => ({ tier: EVIDENCE_CAP_TIER, reason: n.detail }));
 }
 
 /** The statuses a customer can do something about, most actionable first. */

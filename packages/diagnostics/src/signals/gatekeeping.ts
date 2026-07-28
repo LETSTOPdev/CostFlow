@@ -21,11 +21,12 @@ import { INTERVENTIONS } from '../intervention';
  * failure: the app edge turns it into "here is the capability you are missing,
  * and here is what would unlock it".
  *
- * Note the requirement is transition-history and NOT status-history. Aggregate
- * time-in-status (a duration per status, with no ordering and no timestamps)
- * cannot reconstruct when an item entered a stage, so it cannot produce wait at
- * all. The two are separate capabilities precisely because one platform's
- * "we have status history" is not the other's.
+ * Note the requirement is transition-history and NOT status-history. Durations
+ * alone, with no instant attached, cannot say WHEN an item entered a stage and
+ * so cannot produce wait. The two are separate capabilities precisely because
+ * one platform's "we have status history" is not the other's — and a platform
+ * whose residency entries do carry entry instants supplies transition history,
+ * whatever it calls the endpoint.
  */
 export const GATEKEEPING_SIGNAL: DiagnosticSignalMeta = {
   id: 'd3-serial-gatekeeping',
@@ -52,6 +53,13 @@ const pct = (part: number, whole: number): number =>
 export function detectSerialGatekeeping(
   run: AnalysisRun,
   profile: EvidenceProfile,
+  /**
+   * Caps inherited from the artifact's evidence quality (doc 21), supplied by the
+   * app edge. Passing them in rather than reading them keeps this layer blind to
+   * WHY its confidence is capped, exactly as it is blind to why a capability is
+   * missing. It only composes.
+   */
+  inherited: readonly ConfidenceCap[] = [],
 ): { findings: DiagnosticFinding[]; unavailable: DiagnosticUnavailable | null } {
   const check = checkCapabilities(GATEKEEPING_SIGNAL, profile);
   if (!check.canRun) {
@@ -145,7 +153,7 @@ export function detectSerialGatekeeping(
           `of ${pathSharePercent}% of the items that waited anywhere ` +
           `(${top.items} of ${allWaitingItems.size}). ` +
           `Work is queueing behind one gate rather than spreading across ${waits.length} waiting stages.`,
-        confidence: composeConfidence(caps),
+        confidence: composeConfidence([...inherited, ...caps]),
         intervention: { ...INTERVENTIONS['add-stage-sla'], stage: top.stage },
       },
     ],

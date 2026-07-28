@@ -32,6 +32,7 @@ const batch: ImportBatch = {
     hasLastUpdated: false,
     hasActors: false,
   },
+  evidence: [],
   pseudonymizationScope: null,
   items: [],
   events: [],

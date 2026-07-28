@@ -227,6 +227,7 @@ export function transformJira(input: JiraTransformInput): ImportBatch {
     },
     diagnostics,
     capability: buildCapability(items, events, { dueDates: true, lastUpdated: true, actors: true }),
+    evidence: [],
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

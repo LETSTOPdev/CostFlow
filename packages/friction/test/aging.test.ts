@@ -33,6 +33,7 @@ function batch(items: WorkItem[], overrides: Partial<ImportBatch> = {}): ImportB
       hasLastUpdated: true,
       hasActors: true,
     },
+    evidence: [],
     pseudonymizationScope: null,
     items,
     events: [],

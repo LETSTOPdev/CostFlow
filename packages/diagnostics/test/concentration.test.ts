@@ -169,3 +169,38 @@ describe('DC — friction concentration', () => {
     expect(JSON.stringify(f)).not.toContain('actor');
   });
 });
+
+describe('inherited evidence-quality caps (doc 21)', () => {
+  const solid = () =>
+    runWith([overdueAt(stage('Open'), [8, 8, 8, 8, 8, 8, 8, 8]), overdueAt(stage('pending'), [4])]);
+
+  it('grades A when nothing is inherited', () => {
+    expect(detectConcentration(solid(), WITH_SNAPSHOTS).findings[0]!.confidence.tier).toBe('A');
+  });
+
+  /**
+   * The diagnostic never learns WHY it was capped — it composes what it is
+   * handed, exactly as it is blind to why a capability is missing.
+   */
+  it('composes an inherited cap into the finding, binding constraint named', () => {
+    const f = detectConcentration(solid(), WITH_SNAPSHOTS, [
+      { tier: 'B', reason: 'transitions were reconstructed, not observed' },
+    ]).findings[0]!;
+    expect(f.confidence.tier).toBe('B');
+    expect(f.confidence.reasons.join(' ')).toContain('reconstructed, not observed');
+  });
+
+  it('takes the weakest of inherited and own caps, never the average', () => {
+    const outlierDriven = runWith([
+      overdueAt(stage('Open'), [90, 2, 2, 2, 2, 2]),
+      overdueAt(stage('pending'), [5]),
+    ]);
+    const f = detectConcentration(outlierDriven, WITH_SNAPSHOTS, [
+      { tier: 'C', reason: 'inherited weakest' },
+    ]).findings[0]!;
+    expect(f.confidence.tier).toBe('C');
+    // Both constraints survive; the reader sees every reason, weakest first.
+    expect(f.confidence.reasons).toHaveLength(2);
+    expect(f.confidence.reasons[0]).toContain('inherited weakest');
+  });
+});

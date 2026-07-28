@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CapabilityProfile, ImportBatch } from '@costflow/domain';
+import type { CapabilityProfile, EvidenceNote, ImportBatch } from '@costflow/domain';
 import { ROOT } from './helpers';
 import { EVIDENCE_CAPABILITIES } from '@costflow/diagnostics';
-import { NOT_BUILT, actionableGaps, assessEvidence, type ConnectorEvidence } from '../src/evidence';
+import {
+  NOT_BUILT,
+  actionableGaps,
+  assessEvidence,
+  inheritedCapsFor,
+  type ConnectorEvidence,
+} from '../src/evidence';
 import { buildJiraConnector } from '../src/connectors/jira';
 import { buildClickUpConnector } from '../src/connectors/clickup';
 import type { ConnectorGateway } from '../src/connectors/types';
@@ -259,5 +265,62 @@ describe('evidence translation', () => {
       expect(golden.batch.events.some((e) => e.from !== null)).toBe(true);
       expect(golden.detectors.find((d) => d.signalId === 'f1-queue-wait')?.status).toBe('ran');
     });
+  });
+});
+
+describe('evidence-quality caps (doc 21)', () => {
+  const noteOn = (subject: 'events' | 'items' | 'actors' | 'commitments'): EvidenceNote => ({
+    weakness: 'derived-not-observed',
+    subject,
+    detail: `something is weak about ${subject}`,
+  });
+
+  it('passes a weakness through as a B cap, using the note detail verbatim', () => {
+    const caps = inheritedCapsFor({ evidence: [noteOn('events')] }, ['transition-history']);
+    expect(caps).toEqual([{ tier: 'B', reason: 'something is weak about events' }]);
+  });
+
+  /**
+   * The reason subject exists. A workspace whose event stream is weak must not
+   * have its snapshot-only findings downgraded — concentration reads due dates
+   * and stages and never touches events, so capping it would be pessimism
+   * dressed as rigour.
+   */
+  it('does not cap a diagnostic that never reads the weak subject', () => {
+    expect(inheritedCapsFor({ evidence: [noteOn('events')] }, ['stage-snapshots'])).toEqual([]);
+    expect(inheritedCapsFor({ evidence: [noteOn('commitments')] }, ['transition-history'])).toEqual(
+      [],
+    );
+  });
+
+  it('caps a snapshot diagnostic on an item or actor weakness', () => {
+    expect(inheritedCapsFor({ evidence: [noteOn('actors')] }, ['stage-snapshots'])).toHaveLength(1);
+    expect(inheritedCapsFor({ evidence: [noteOn('items')] }, ['stage-snapshots'])).toHaveLength(1);
+  });
+
+  it('carries every relevant weakness, not just the first', () => {
+    const caps = inheritedCapsFor({ evidence: [noteOn('events'), noteOn('events')] }, [
+      'status-history',
+    ]);
+    expect(caps).toHaveLength(2);
+  });
+
+  it('reports nothing to cap when the import declared no weaknesses', () => {
+    expect(inheritedCapsFor({ evidence: [] }, ['transition-history'])).toEqual([]);
+  });
+
+  /**
+   * Absent is not the same statement as empty. An artifact written before this
+   * field existed says nothing about its own quality, and defaulting that to a
+   * clean bill of health would retroactively certify every historical run.
+   */
+  it('treats a pre-existing artifact as unknown quality, never as clean', () => {
+    const legacy = { evidence: undefined } as unknown as Pick<ImportBatch, 'evidence'>;
+    const caps = inheritedCapsFor(legacy, ['transition-history']);
+    expect(caps).toHaveLength(1);
+    expect(caps[0]!.tier).toBe('B');
+    expect(caps[0]!.reason).toContain('predates evidence-quality recording');
+    // …but a diagnostic drawing on no mapped subject is still uncapped.
+    expect(inheritedCapsFor(legacy, ['dependency-graph'])).toEqual([]);
   });
 });

@@ -335,6 +335,7 @@ export function transformAsana(input: AsanaTransformInput): ImportBatch {
       lastUpdated: true,
       actors: true,
     }),
+    evidence: [],
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

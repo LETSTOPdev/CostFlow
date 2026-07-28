@@ -108,11 +108,15 @@ import { CUSTOMER_SCAN_CAP } from './store/pg';
 import { type TelemetrySink } from './telemetry-web';
 import { shouldTouchLastSeen, storeEventRecorder, tracker, type EventContext } from './events';
 import {
+  CONCENTRATION_SIGNAL,
+  GATEKEEPING_SIGNAL,
+  OWNERSHIP_SIGNAL,
   detectConcentration,
   detectMissingOwnership,
   detectSerialGatekeeping,
+  type DiagnosticSignalMeta,
 } from '@costflow/diagnostics';
-import { assessEvidence } from './evidence';
+import { assessEvidence, inheritedCapsFor } from './evidence';
 import { renderDiagnostics, type DiagnosticsView } from './oi-view';
 
 /**
@@ -2868,10 +2872,14 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       { name: descriptor?.name ?? 'This connection', provides },
       run.batch,
     );
+    // Evidence-quality caps (doc 21) are handed to each diagnostic scoped to the
+    // capabilities it actually draws on, so a weakness in the event stream does
+    // not downgrade a finding computed purely from snapshots.
+    const caps = (meta: DiagnosticSignalMeta) => inheritedCapsFor(run.batch, meta.requires);
     const results = [
-      detectConcentration(run, assessment.profile),
-      detectMissingOwnership(run, assessment.profile),
-      detectSerialGatekeeping(run, assessment.profile),
+      detectConcentration(run, assessment.profile, caps(CONCENTRATION_SIGNAL)),
+      detectMissingOwnership(run, assessment.profile, caps(OWNERSHIP_SIGNAL)),
+      detectSerialGatekeeping(run, assessment.profile, caps(GATEKEEPING_SIGNAL)),
     ];
     return {
       findings: results.flatMap((r) => r.findings),

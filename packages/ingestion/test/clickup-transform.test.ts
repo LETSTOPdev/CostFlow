@@ -351,3 +351,57 @@ describe('clickup transform (ADR-0005: CU1–CU5)', () => {
     );
   });
 });
+
+describe('evidence quality (doc 21)', () => {
+  const history = {
+    t1: [
+      { status: 'backlog', since: day(0), orderindex: 0 },
+      { status: 'in progress', since: day(4), orderindex: 1 },
+    ],
+  };
+
+  /**
+   * The platform quirk is the MECHANISM; the problem it produces is that the
+   * transition chain had to be DERIVED rather than read. So it is recorded as
+   * `derived-not-observed`, and the collapse itself lives in `detail`, where it
+   * explains itself to a reader without entering the engine's vocabulary. A
+   * future platform whose quirk produces the same problem writes a different
+   * sentence and adds no member to the vocabulary.
+   */
+  it('records reconstructed transitions as derived, not as a new weakness kind', () => {
+    const batch = run([{ id: 't1', status: 'in progress', created: day(0) }], history);
+    expect(batch.evidence).toEqual([
+      {
+        weakness: 'derived-not-observed',
+        subject: 'events',
+        detail: expect.stringContaining('collapsed by the source platform') as unknown as string,
+      },
+    ]);
+    expect(batch.evidence.map((n) => n.weakness as string)).not.toContain('collapsed-repetition');
+  });
+
+  it('records items whose history was absent as partial coverage of events', () => {
+    const batch = run(
+      [
+        { id: 't1', status: 'in progress', created: day(0) },
+        { id: 't2', status: 'backlog', created: day(0) },
+      ],
+      history,
+    );
+    const partial = batch.evidence.filter((n) => n.weakness === 'partial-coverage');
+    expect(partial).toHaveLength(1);
+    expect(partial[0]!.subject).toBe('events');
+    expect(partial[0]!.detail).toContain('1 of 2 imported item(s) had no status history');
+  });
+
+  it('claims no derivation weakness when there was no residency data to derive from', () => {
+    const batch = run([{ id: 't1', status: 'backlog', created: day(0) }]);
+    expect(batch.evidence.map((n) => n.weakness)).toEqual(['partial-coverage']);
+  });
+
+  it('is deterministic: identical input yields byte-identical notes', () => {
+    const a = run([{ id: 't1', status: 'in progress', created: day(0) }], history);
+    const b = run([{ id: 't1', status: 'in progress', created: day(0) }], history);
+    expect(JSON.stringify(a.evidence)).toBe(JSON.stringify(b.evidence));
+  });
+});

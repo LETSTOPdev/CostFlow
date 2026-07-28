@@ -1,4 +1,5 @@
 import type {
+  EvidenceNote,
   ImportBatch,
   ImportDiagnostic,
   IsoDateString,
@@ -194,6 +195,11 @@ export function transformClickUp(input: ClickUpTransformInput): ImportBatch {
   const seenIds = new Set<string>();
   let order = 0;
   let extraAssignees = 0;
+  // Evidence-quality bookkeeping (doc 21): how many imported items had their
+  // transition chain reconstructed from residency data (CU1) versus none at all
+  // (CU2). Counted here because this is the only place the distinction exists.
+  let itemsWithResidency = 0;
+  let itemsWithoutResidency = 0;
 
   const readEpoch = (
     value: StringOrNumber | null | undefined,
@@ -263,6 +269,8 @@ export function transformClickUp(input: ClickUpTransformInput): ImportBatch {
 
     // CU1/CU2: reconstruct the entry chain from residency data.
     const residency = historyByTask.get(id);
+    if (residency) itemsWithResidency += 1;
+    else itemsWithoutResidency += 1;
     const collected: { status: string; atMs: number; at: string; orderindex: number }[] = [];
     if (residency) {
       const push = (entry: ClickUpStatusEntry | null | undefined): void => {
@@ -319,6 +327,35 @@ export function transformClickUp(input: ClickUpTransformInput): ImportBatch {
 
   const events = orderAndValidateEvents(rawEvents, items, mapping.statusMap);
 
+  /**
+   * Evidence quality (doc 21). Both notes describe the same subject — the event
+   * stream — and both are `derived`/`partial` rather than a new vocabulary
+   * member, because the platform quirk is the MECHANISM, not the problem.
+   *
+   * Ordering is fixed rather than data-dependent, so the artifact stays
+   * byte-deterministic for identical inputs.
+   */
+  const evidence: EvidenceNote[] = [];
+  if (itemsWithResidency > 0) {
+    evidence.push({
+      weakness: 'derived-not-observed',
+      subject: 'events',
+      detail:
+        'Repeated visits to the same status are collapsed by the source platform, so ' +
+        'individual transitions cannot be reconstructed exactly. Total time is conserved; ' +
+        'time can shift between adjacent statuses.',
+    });
+  }
+  if (itemsWithoutResidency > 0) {
+    evidence.push({
+      weakness: 'partial-coverage',
+      subject: 'events',
+      detail:
+        `${itemsWithoutResidency} of ${items.length} imported item(s) had no status history, ` +
+        'so their only event is creation and time spent in individual statuses was not observed.',
+    });
+  }
+
   return {
     id: batchId,
     provider: 'clickup',
@@ -332,6 +369,7 @@ export function transformClickUp(input: ClickUpTransformInput): ImportBatch {
     },
     diagnostics,
     capability: buildCapability(items, events, { dueDates: true, lastUpdated: true, actors: true }),
+    evidence,
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

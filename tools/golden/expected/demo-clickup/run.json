@@ -42,6 +42,18 @@
       "hasLastUpdated": true,
       "hasActors": true
     },
+    "evidence": [
+      {
+        "weakness": "derived-not-observed",
+        "subject": "events",
+        "detail": "Repeated visits to the same status are collapsed by the source platform, so individual transitions cannot be reconstructed exactly. Total time is conserved; time can shift between adjacent statuses."
+      },
+      {
+        "weakness": "partial-coverage",
+        "subject": "events",
+        "detail": "1 of 4 imported item(s) had no status history, so their only event is creation and time spent in individual statuses was not observed."
+      }
+    ],
     "pseudonymizationScope": "costflow-golden",
     "items": [
       {

@@ -52,6 +52,13 @@ const pct = (part: number, whole: number): number =>
 export function detectMissingOwnership(
   run: AnalysisRun,
   profile: EvidenceProfile,
+  /**
+   * Caps inherited from the artifact's evidence quality (doc 21), supplied by the
+   * app edge. Passing them in rather than reading them keeps this layer blind to
+   * WHY its confidence is capped, exactly as it is blind to why a capability is
+   * missing. It only composes.
+   */
+  inherited: readonly ConfidenceCap[] = [],
 ): { findings: DiagnosticFinding[]; unavailable: DiagnosticUnavailable | null } {
   const check = checkCapabilities(OWNERSHIP_SIGNAL, profile);
   if (!check.canRun) {
@@ -145,7 +152,7 @@ export function detectMissingOwnership(
           `${baseSharePercent}% across the workspace as a whole — unowned work is ` +
           `${liftPoints} points over-represented among the items going wrong. ` +
           `Stage "${top.stage.name}" holds the largest group of them (${top.count}).`,
-        confidence: composeConfidence(caps),
+        confidence: composeConfidence([...inherited, ...caps]),
         intervention: { ...INTERVENTIONS['assign-ownership'], stage: top.stage },
       },
     ],

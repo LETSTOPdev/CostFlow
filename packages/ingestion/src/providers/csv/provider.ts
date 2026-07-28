@@ -205,6 +205,7 @@ export function importCsv(input: CsvImportInput): ImportBatch {
       lastUpdated: mapping.columns.lastUpdatedAt !== undefined,
       actors: mapping.columns.actor !== undefined,
     }),
+    evidence: [],
     pseudonymizationScope: pseudonymization?.scopeId ?? null,
     items,
     events,

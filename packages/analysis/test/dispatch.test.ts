@@ -47,6 +47,7 @@ function batch(items: WorkItem[], events: WorkItemEvent[] = []): ImportBatch {
       hasLastUpdated: items.some((i) => i.lastUpdatedAt !== null),
       hasActors: true,
     },
+    evidence: [],
     pseudonymizationScope: null,
     items,
     events,
