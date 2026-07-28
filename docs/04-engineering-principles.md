@@ -244,6 +244,20 @@ leave the machine.
 
 ---
 
+## Proportion
+
+### Extend the engine only for the product outcome it unlocks
+
+The engine is frozen by golden artifacts, and the cost of changing it is real:
+regeneration, a version bump, and every stored run becoming incomparable with
+every new one. That cost is worth paying when a customer sees the difference in
+their next report, and not otherwise.
+
+Founder directive, 2026-07-28. It does not mean stop improving the engine; it
+means a capability is not its own justification. State the product outcome in
+the same breath as the engine change, or do not make the change. The priority
+order this serves is at the head of `03-roadmap.md`.
+
 ## How to work here
 
 Process guidance — how to verify, review, implement, deploy, and maintain these

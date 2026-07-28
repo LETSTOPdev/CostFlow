@@ -24,6 +24,14 @@ plus a set of recommended actions.
 
 Live at **https://app.fbx1.com**, free public beta.
 
+## The goal
+
+**The product an executive cannot imagine running their organisation without** —
+not the most sophisticated friction engine. Founder directive, 2026-07-28. The
+engine is a means; sophistication that never reaches a report is not progress.
+See the priority order at the head of [`03-roadmap.md`](03-roadmap.md), which
+governs what gets built next.
+
 ## Who it is for
 
 The buyer is an executive or operations leader who suspects their delivery

@@ -3,6 +3,28 @@
 Future work only. **When a milestone completes, delete it from this file** and
 update `02-current-state.md` instead.
 
+## The priority order
+
+Founder directive, 2026-07-28: the centre of gravity moves from infrastructure,
+correctness and engine capability to **customer value**. Prefer work a customer
+can immediately see, understand and benefit from, in this order:
+
+1. User experience
+2. Report clarity
+3. Operational decision intelligence
+4. Onboarding
+5. Customer adoption
+6. New engine capabilities
+
+**The test to apply before proposing anything: "will a customer notice this
+within the next report?"** If the answer is no, challenge whether it belongs at
+the front of the queue. This does not stop engine work — it requires that engine
+work be justified by the product outcome it unlocks, not by the capability
+itself.
+
+The items below predate this directive and are ordered by their old logic.
+Re-rank them against the test above before picking one up.
+
 No milestone is active. P0 is blocked on the operator and blocks nothing else;
 P1 is waiting on real customer usage, which the founder made a precondition for
 building anything further on the intelligence layer.
