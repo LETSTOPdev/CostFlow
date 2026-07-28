@@ -443,6 +443,100 @@ function describeStoreContract(name: string, makeStore: () => Promise<Store>): v
         reportsViewed: 1,
       });
     });
+
+    /**
+     * The atomic double-submit guard behind POST /runs. It claims the "one
+     * active job per workspace" slot so a second click, or a refresh re-POST,
+     * lands on the SAME job instead of starting a duplicate fetch and analysis
+     * against the customer's tracker.
+     *
+     * Both adapters must agree, and they claim atomicity by different means —
+     * a partial unique index in Postgres, a synchronous map check in memory —
+     * so this is exactly the kind of method the shared contract exists for.
+     */
+    describe('createJobIfNoneActive (atomic double-submit guard)', () => {
+      const setup = async (store: Store) => {
+        const tenant = (await store.createTenantWithUser('j@x.example', 's')).tenant;
+        const workspace = await store.createWorkspace(tenant.id, {
+          provider: 'jira',
+          connectionParams: { site: 'https://a.example', email: 'j@x.example' },
+          tokenCiphertext: 'tok',
+        });
+        return { tenantId: tenant.id, workspaceId: workspace.id };
+      };
+
+      it('creates on the first call and reports it as created', async () => {
+        const store = await makeStore();
+        const { tenantId, workspaceId } = await setup(store);
+        const first = await store.createJobIfNoneActive(tenantId, workspaceId);
+        expect(first.created).toBe(true);
+        expect(first.job.status).toBe('queued');
+        expect(first.job.workspaceId).toBe(workspaceId);
+      });
+
+      it('returns the SAME job, uncreated, while one is queued', async () => {
+        const store = await makeStore();
+        const { tenantId, workspaceId } = await setup(store);
+        const first = await store.createJobIfNoneActive(tenantId, workspaceId);
+        const second = await store.createJobIfNoneActive(tenantId, workspaceId);
+        expect(second.created).toBe(false);
+        expect(second.job.id).toBe(first.job.id);
+        expect((await store.listJobsForWorkspace(tenantId, workspaceId)).length).toBe(1);
+      });
+
+      it('holds the slot while the job is running, not only while queued', async () => {
+        const store = await makeStore();
+        const { tenantId, workspaceId } = await setup(store);
+        const first = await store.createJobIfNoneActive(tenantId, workspaceId);
+        await store.updateJob(tenantId, first.job.id, { status: 'running' });
+        const second = await store.createJobIfNoneActive(tenantId, workspaceId);
+        expect(second.created).toBe(false);
+        expect(second.job.id).toBe(first.job.id);
+      });
+
+      it('releases the slot once the job reaches a terminal status', async () => {
+        const store = await makeStore();
+        const { tenantId, workspaceId } = await setup(store);
+        const first = await store.createJobIfNoneActive(tenantId, workspaceId);
+        await store.updateJob(tenantId, first.job.id, { status: 'succeeded' });
+        const second = await store.createJobIfNoneActive(tenantId, workspaceId);
+        expect(second.created).toBe(true);
+        expect(second.job.id).not.toBe(first.job.id);
+        expect((await store.listJobsForWorkspace(tenantId, workspaceId)).length).toBe(2);
+      });
+
+      it('releases the slot when the job fails, not only when it succeeds', async () => {
+        const store = await makeStore();
+        const { tenantId, workspaceId } = await setup(store);
+        const first = await store.createJobIfNoneActive(tenantId, workspaceId);
+        await store.updateJob(tenantId, first.job.id, { status: 'failed' });
+        expect((await store.createJobIfNoneActive(tenantId, workspaceId)).created).toBe(true);
+      });
+
+      /** The slot is per workspace: a busy workspace must not block a quiet one. */
+      it('keys the claim on the workspace, so a second workspace is unaffected', async () => {
+        const store = await makeStore();
+        const { tenantId, workspaceId } = await setup(store);
+        const other = await store.createWorkspace(tenantId, {
+          provider: 'jira',
+          connectionParams: { site: 'https://b.example', email: 'j@x.example' },
+          tokenCiphertext: 'tok',
+        });
+        await store.createJobIfNoneActive(tenantId, workspaceId);
+        const second = await store.createJobIfNoneActive(tenantId, other.id);
+        expect(second.created).toBe(true);
+        expect((await store.listJobsForWorkspace(tenantId, other.id)).length).toBe(1);
+      });
+
+      it('never hands back a job belonging to another tenant', async () => {
+        const store = await makeStore();
+        const { tenantId, workspaceId } = await setup(store);
+        const intruder = (await store.createTenantWithUser('k@x.example', 's2')).tenant;
+        const mine = await store.createJobIfNoneActive(tenantId, workspaceId);
+        expect(await store.getJob(intruder.id, mine.job.id)).toBeNull();
+        expect((await store.listJobsForWorkspace(intruder.id, workspaceId)).length).toBe(0);
+      });
+    });
   });
 }
 

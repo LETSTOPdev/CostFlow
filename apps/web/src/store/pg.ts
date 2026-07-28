@@ -564,24 +564,38 @@ export class PgStore implements Store {
     tenantId: string,
     workspaceId: string,
   ): Promise<{ job: JobRecord; created: boolean }> {
-    const id = newId();
-    const createdAt = this.now();
-    try {
-      await this.pool.query(
-        `insert into jobs (id, tenant_id, workspace_id, status, created_at)
-         values ($1, $2, $3, 'queued', $4)`,
-        [id, tenantId, workspaceId, createdAt],
-      );
-      return { job: (await this.getJob(tenantId, id)) as JobRecord, created: true };
-    } catch (error) {
-      // 23505 = unique_violation on jobs_one_active_per_workspace: another
-      // request already holds the active-job slot for this workspace.
-      if ((error as { code?: string }).code !== '23505') throw error;
-      const active = (await this.listJobsForWorkspace(tenantId, workspaceId)).find(
-        (j) => j.status === 'queued' || j.status === 'running',
-      );
-      return { job: active as JobRecord, created: false };
+    // Bounded retry, because losing the slot and then finding it empty is
+    // PROGRESS, not contention: it means the holder finished in the window
+    // between our insert conflicting and our recovery read. Returning nothing
+    // there would hand the caller `undefined` typed as a JobRecord, and
+    // POST /runs dereferences `job.id` immediately — a 500 in precisely the
+    // concurrent case this guard exists to survive. Verified against real
+    // PostgreSQL before this loop existed.
+    //
+    // Three attempts is far beyond anything a real workload produces; the
+    // bound exists only so pathological churn cannot spin forever.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const id = newId();
+      const createdAt = this.now();
+      try {
+        await this.pool.query(
+          `insert into jobs (id, tenant_id, workspace_id, status, created_at)
+           values ($1, $2, $3, 'queued', $4)`,
+          [id, tenantId, workspaceId, createdAt],
+        );
+        return { job: (await this.getJob(tenantId, id)) as JobRecord, created: true };
+      } catch (error) {
+        // 23505 = unique_violation on jobs_one_active_per_workspace: another
+        // request already holds the active-job slot for this workspace.
+        if ((error as { code?: string }).code !== '23505') throw error;
+        const active = (await this.listJobsForWorkspace(tenantId, workspaceId)).find(
+          (j) => j.status === 'queued' || j.status === 'running',
+        );
+        if (active) return { job: active, created: false };
+        // Slot released while we were looking; go round and claim it.
+      }
     }
+    throw new Error('Could not claim the analysis slot for this workspace.');
   }
 
   async getJob(tenantId: string, jobId: string): Promise<JobRecord | null> {
