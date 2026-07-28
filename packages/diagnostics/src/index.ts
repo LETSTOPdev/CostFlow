@@ -29,6 +29,7 @@ export {
   CONCENTRATION_SIGNAL,
   CONCENTRATION_THRESHOLDS,
   detectConcentration,
+  interventionForUnit,
 } from './signals/concentration';
 
 export {

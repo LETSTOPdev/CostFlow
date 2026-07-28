@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CapabilityProfile, ImportBatch } from '@costflow/domain';
 import { EVIDENCE_CAPABILITIES } from '@costflow/diagnostics';
-import { actionableGaps, assessEvidence, type ConnectorEvidence } from '../src/evidence';
+import { NOT_BUILT, actionableGaps, assessEvidence, type ConnectorEvidence } from '../src/evidence';
 import { buildJiraConnector } from '../src/connectors/jira';
 import { buildClickUpConnector } from '../src/connectors/clickup';
 import type { ConnectorGateway } from '../src/connectors/types';
@@ -42,6 +42,36 @@ const statusOf = (a: ReturnType<typeof assessEvidence>, c: string) =>
   a.statuses.find((s) => s.capability === c)!;
 
 describe('evidence translation', () => {
+  /**
+   * `NOT_BUILT` and the derivation in `realized()` are two lists that must
+   * agree. If someone teaches the derivation to detect assignment history but
+   * forgets to remove it from NOT_BUILT, the customer is told "CostFlow does not
+   * read this yet" about something it now reads — a wrong message with no test
+   * to catch it. This asserts the two cannot drift apart, from the richest
+   * possible import.
+   */
+  it('never claims a capability is unbuilt while also deriving it as present', () => {
+    const richest = assessEvidence(
+      { name: 'Test', provides: ANY_PLATFORM },
+      batch({
+        items: someItems,
+        events: someEvents,
+        capability: capability({
+          hasEventHistory: true,
+          hasDueDates: true,
+          hasLastUpdated: true,
+          hasActors: true,
+        }),
+      }),
+    );
+    for (const capability of NOT_BUILT) {
+      expect(
+        richest.profile[capability],
+        `${capability} is listed NOT_BUILT but derives true`,
+      ).toBe(false);
+    }
+  });
+
   it('answers every capability in the vocabulary, with no gaps', () => {
     const a = assessEvidence({ name: 'Test', provides: ANY_PLATFORM }, batch());
     expect(a.statuses.map((s) => s.capability).sort()).toEqual([...EVIDENCE_CAPABILITIES].sort());

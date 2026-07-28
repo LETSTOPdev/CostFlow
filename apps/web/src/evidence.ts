@@ -100,7 +100,7 @@ function realized(batch: Pick<ImportBatch, 'items' | 'events' | 'capability'>): 
  * is the difference between "your platform is deficient" and "we do not read
  * this yet".
  */
-const NOT_BUILT: readonly EvidenceCapability[] = [
+export const NOT_BUILT: readonly EvidenceCapability[] = [
   'assignment-history',
   'dependency-graph',
   'approval-chain',

@@ -61,6 +61,23 @@ const INTERVENTION_BY_UNIT: Readonly<Record<string, InterventionPrimitive>> = {
   'item-days-beyond-threshold': 'review-queue',
 };
 
+/**
+ * Fails closed: an unmapped unit yields NO intervention, and the caller drops
+ * the finding rather than attaching a default.
+ *
+ * A silent fallback would turn a renamed or newly added magnitude unit into
+ * confident but wrong advice, which is the worst failure this layer can have —
+ * a recommendation the evidence does not support is more damaging than no
+ * recommendation. Skipping rather than throwing is deliberate: with two
+ * replicas, a rolling deploy guarantees the older one reads artifacts written
+ * by the newer engine, so an unknown unit is an expected transient, not a bug.
+ *
+ * Exhaustiveness is enforced at build time instead, by a test that walks the
+ * golden artifacts and asserts every unit the engine actually emits is mapped.
+ */
+export const interventionForUnit = (unit: string): InterventionPrimitive | null =>
+  INTERVENTION_BY_UNIT[unit] ?? null;
+
 interface StageBucket {
   readonly stage: StageRef;
   total: number;
@@ -142,7 +159,10 @@ export function detectConcentration(
       });
     }
 
-    const intervention = INTERVENTIONS[INTERVENTION_BY_UNIT[unit] ?? 'review-queue'];
+    // No mapped intervention means no advice we can stand behind for this unit.
+    const primitive = interventionForUnit(unit);
+    if (primitive === null) continue;
+    const intervention = INTERVENTIONS[primitive];
     findings.push({
       signalId: CONCENTRATION_SIGNAL.id,
       signalVersion: CONCENTRATION_SIGNAL.version,
