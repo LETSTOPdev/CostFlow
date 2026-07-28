@@ -2,7 +2,7 @@ export { dec, decToString, compareDecimalStrings, formatWholeMoney, Money } from
 export type { MoneyDecimal } from './decimal';
 export { addRanges, makeRange, rangeFromSpec, rangeToSpec, scaleRange, ZERO_RANGE } from './range';
 export type { DecRange } from './range';
-export { composeConfidence } from './confidence';
+export { composeConfidence, byStrongestConfidence } from './confidence';
 export type { Confidence, ConfidenceCap, ConfidenceTier } from './confidence';
 export { resolveActorRate, vendorSuggestedRateRefs } from './rate';
 export type { ResolvedRate } from './rate';
