@@ -270,3 +270,54 @@ describe('admin console — audited actions (CSRF-gated)', () => {
     expect(audit.rows.some((a) => a.action === 'job-retry')).toBe(true);
   });
 });
+
+/**
+ * The console answers a probe with 404 rather than 403 so its existence is not
+ * disclosed. That is right for outsiders and unhelpful for the operator, who
+ * cannot tell "my email is not on the allowlist" from "I typed the URL wrong".
+ * A sanitized server log answers it without weakening the response.
+ */
+describe('admin denial is diagnosable from the log, never from the response', () => {
+  it('logs the shape of the denial when the allowlist does not match', async () => {
+    const t = await makeApp({ adminEmails: ['someone-else@example.com'] });
+    const cookie = await signIn(t, 'nobody@example.com');
+
+    const res = await get(t, cookie, '/admin');
+    expect(res.statusCode).toBe(404);
+
+    const denied = t.logs.find((l) => l['msg'] === 'admin-denied');
+    expect(denied).toBeDefined();
+    expect(denied!['hasAllowlist']).toBe(true);
+    expect(denied!['allowlistSize']).toBe(1);
+    expect(denied!['hasUser']).toBe(true);
+  });
+
+  /** Distinguishes "variable not set" from "set but wrong", which is the whole point. */
+  it('distinguishes an unset allowlist from a non-matching one', async () => {
+    const t = await makeApp({ adminEmails: [] });
+    const cookie = await signIn(t, 'nobody@example.com');
+    await get(t, cookie, '/admin');
+
+    const denied = t.logs.find((l) => l['msg'] === 'admin-denied');
+    expect(denied!['hasAllowlist']).toBe(false);
+    expect(denied!['allowlistSize']).toBe(0);
+  });
+
+  /** Logs are booleans, enums and ids only. An email is none of those. */
+  it('never writes the attempted email or the allowlist into the log', async () => {
+    const t = await makeApp({ adminEmails: ['secret-admin@example.com'] });
+    const cookie = await signIn(t, 'attacker@example.com');
+    await get(t, cookie, '/admin');
+
+    const serialized = JSON.stringify(t.logs);
+    expect(serialized).not.toContain('attacker@example.com');
+    expect(serialized).not.toContain('secret-admin@example.com');
+  });
+
+  it('stays silent when the caller is a legitimate admin', async () => {
+    const t = await makeApp({ adminEmails: ['boss@example.com'] });
+    const cookie = await signIn(t, 'boss@example.com');
+    expect((await get(t, cookie, '/admin')).statusCode).toBe(200);
+    expect(t.logs.find((l) => l['msg'] === 'admin-denied')).toBeUndefined();
+  });
+});

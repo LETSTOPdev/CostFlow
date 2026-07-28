@@ -811,6 +811,19 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const user = await currentUser(session);
     const admins = (deps.adminEmails ?? []).map((email) => email.toLowerCase());
     if (!user || !admins.includes(user.email.toLowerCase())) {
+      // The 404 is deliberately opaque so the console's existence is not
+      // disclosed to anyone probing for it — which also leaves an operator
+      // unable to tell "my email is not on the allowlist" from "I typed the URL
+      // wrong". This line answers that from the server log without weakening
+      // the response: booleans and a count only, never the email that was
+      // tried and never the allowlist contents.
+      logLine({
+        level: 'warn',
+        msg: 'admin-denied',
+        hasAllowlist: admins.length > 0,
+        allowlistSize: admins.length,
+        hasUser: user !== null,
+      });
       notFound(reply);
       return null;
     }
