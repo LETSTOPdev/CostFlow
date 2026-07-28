@@ -8,6 +8,7 @@ function item(overrides: Partial<WorkItem>): WorkItem {
   return {
     id: 'x',
     sourceId: 'x',
+    originScopeId: null,
     title: 'Item',
     stage: { name: 'Working on it', kind: 'active' },
     actor: { kind: 'role', roleRef: 'Ops' },
@@ -102,5 +103,40 @@ describe('f2-aging detector', () => {
     });
     expect(result.canRun).toBe(false);
     if (!result.canRun) expect(result.reason).toContain('hasLastUpdated');
+  });
+});
+
+describe('origin partitioning', () => {
+  /**
+   * Two teams whose boards both have a status called "In review" run two
+   * different review queues. Grouping by stage name alone reports one finding
+   * that belongs to neither of them.
+   */
+  it('splits one stage name across two origins into two findings', () => {
+    const stage = { name: 'In review', kind: 'review' as const };
+    const found = detectAging(
+      batch([
+        item({ id: 'a', stage, originScopeId: 'eng' }),
+        item({ id: 'b', stage, originScopeId: 'eng' }),
+        item({ id: 'c', stage, originScopeId: 'legal' }),
+      ]),
+      { thresholdDays: 5, now: NOW },
+    );
+    expect(found).toHaveLength(2);
+    expect(found.map((f) => f.location.originScopeId).sort()).toEqual(['eng', 'legal']);
+    // Ids stay distinct so nothing downstream can conflate them.
+    expect(new Set(found.map((f) => f.id)).size).toBe(2);
+    // Each carries only its own team's items.
+    const eng = found.find((f) => f.location.originScopeId === 'eng');
+    expect(eng?.evidence.map((e) => e.workItemId).sort()).toEqual(['a', 'b']);
+  });
+
+  /** An import with no scope structure keeps exactly the ids it always had. */
+  it('leaves ids untouched when there is no origin', () => {
+    const found = detectAging(
+      batch([item({ id: 'a', stage: { name: 'In review', kind: 'review' } })]),
+      { thresholdDays: 5, now: NOW },
+    );
+    expect(found[0]?.id).toBe('f2-aging:in-review');
   });
 });

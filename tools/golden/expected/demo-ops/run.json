@@ -1,11 +1,11 @@
 {
   "runId": "golden-demo-ops",
   "engineVersions": {
-    "analysis": "0.5.0",
+    "analysis": "0.6.0",
     "signals": {
-      "f2-aging": "1.0.0",
-      "f1-queue-wait": "1.0.0",
-      "f3-overdue": "1.0.0"
+      "f2-aging": "1.1.0",
+      "f1-queue-wait": "1.1.0",
+      "f3-overdue": "1.1.0"
     },
     "contextSignals": {
       "c6-wip-load": "1.0.0"
@@ -54,6 +54,7 @@
       {
         "id": "1001",
         "sourceId": "1001",
+        "originScopeId": null,
         "title": "Renew vendor contract",
         "stage": {
           "name": "Waiting for approval",
@@ -70,6 +71,7 @@
       {
         "id": "1002",
         "sourceId": "1002",
+        "originScopeId": null,
         "title": "Q3 budget review",
         "stage": {
           "name": "Working on it",
@@ -86,6 +88,7 @@
       {
         "id": "1003",
         "sourceId": "1003",
+        "originScopeId": null,
         "title": "Onboard new supplier",
         "stage": {
           "name": "Waiting for approval",
@@ -102,6 +105,7 @@
       {
         "id": "1004",
         "sourceId": "1004",
+        "originScopeId": null,
         "title": "Website copy refresh",
         "stage": {
           "name": "Stuck",
@@ -118,6 +122,7 @@
       {
         "id": "1005",
         "sourceId": "1005",
+        "originScopeId": null,
         "title": "Annual audit prep",
         "stage": {
           "name": "Working on it",
@@ -134,6 +139,7 @@
       {
         "id": "1006",
         "sourceId": "1006",
+        "originScopeId": null,
         "title": "Old campaign wrap-up",
         "stage": {
           "name": "Done",
@@ -150,6 +156,7 @@
       {
         "id": "1007",
         "sourceId": "1007",
+        "originScopeId": null,
         "title": "CRM cleanup",
         "stage": {
           "name": "Working on it",
@@ -165,6 +172,7 @@
       {
         "id": "1009",
         "sourceId": "1009",
+        "originScopeId": null,
         "title": "Legacy migration",
         "stage": {
           "name": "Working on it",
@@ -181,6 +189,7 @@
       {
         "id": "1010",
         "sourceId": "1010",
+        "originScopeId": null,
         "title": "Press release",
         "stage": {
           "name": "Waiting for approval",
@@ -258,14 +267,14 @@
   "detectors": [
     {
       "signalId": "f2-aging",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "signalName": "Aging / stagnation",
       "status": "ran",
       "instanceCount": 3
     },
     {
       "signalId": "f1-queue-wait",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "signalName": "Queue wait",
       "status": "skipped",
       "reason": "Requires hasEventHistory — not present in this import.",
@@ -273,7 +282,7 @@
     },
     {
       "signalId": "f3-overdue",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "signalName": "Overdue exposure",
       "status": "ran",
       "instanceCount": 3
@@ -283,13 +292,14 @@
     {
       "id": "f2-aging:working-on-it",
       "signalId": "f2-aging",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "aging",
       "location": {
         "stage": {
           "name": "Working on it",
           "kind": "active"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-beyond-threshold",
@@ -322,13 +332,14 @@
     {
       "id": "f2-aging:waiting-for-approval",
       "signalId": "f2-aging",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "aging",
       "location": {
         "stage": {
           "name": "Waiting for approval",
           "kind": "review"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-beyond-threshold",
@@ -362,13 +373,14 @@
     {
       "id": "f2-aging:stuck",
       "signalId": "f2-aging",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "aging",
       "location": {
         "stage": {
           "name": "Stuck",
           "kind": "blocked"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-beyond-threshold",
@@ -391,13 +403,14 @@
     {
       "id": "f3-overdue:waiting-for-approval",
       "signalId": "f3-overdue",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "overdue",
       "location": {
         "stage": {
           "name": "Waiting for approval",
           "kind": "review"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-overdue",
@@ -433,13 +446,14 @@
     {
       "id": "f3-overdue:stuck",
       "signalId": "f3-overdue",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "overdue",
       "location": {
         "stage": {
           "name": "Stuck",
           "kind": "blocked"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-overdue",
@@ -463,13 +477,14 @@
     {
       "id": "f3-overdue:working-on-it",
       "signalId": "f3-overdue",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "overdue",
       "location": {
         "stage": {
           "name": "Working on it",
           "kind": "active"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-overdue",

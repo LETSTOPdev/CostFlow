@@ -73,7 +73,7 @@ number; it aggregates, formats, or compares numbers the engine already produced.
 Provider vocabulary dies at the ingestion boundary. Downstream code never sees a
 Jira status or a ClickUp list.
 
-- **`WorkItem`** — id, title, stage, actor, created/due/updated dates.
+- **`WorkItem`** — id, title, stage, actor, origin, created/due/updated dates.
   Deliberately minimal: a field exists only because a consumer reads it.
 - **`StageRef`** — the customer's own status name plus one of six canonical
   kinds: `queue`, `active`, `review`, `blocked`, `done`, `abandoned`.
@@ -105,6 +105,14 @@ coverage wider.
 Coverage is the one that belongs on the immutable artifact, because it is the
 only one that states what the numbers were computed from. Comparison compares
 coverage, and blocks a trend when it moves (§8).
+
+Each `WorkItem` also records the origin it came from, and every friction
+instance is located at **(origin, stage)** rather than stage alone. Engineering
+and Legal both having a status called "In review" is two queues owned by two
+teams; grouping them by stage name would report one blended finding naming
+neither, which is aggregation where the question was attribution. For an import
+with no scope structure the origin is null, so grouping by (origin, stage) is
+exactly grouping by stage — the partition changes nothing for a single origin.
 
 `BatchScope` deliberately carries no scope *kind*. "List", "Folder", "Space" and
 "project" are provider vocabulary, and the domain does not learn provider
@@ -276,6 +284,25 @@ List to it, with no configuration change to point at.
 
 **On `not-comparable`, no trend is rendered at all** — replaced by what differs
 and what to do about it. A wrong trend is worse than no trend.
+
+### The report an executive reads
+
+The order of the report is an argument, not a layout. A CEO with two minutes
+needs, in sequence: the biggest operational problem, why it is happening, what
+to do first, what that action is worth, and what evidence stands behind it.
+
+The recommendations answer all five, so they come **second** — immediately after
+the one number that decides whether to keep reading — and everything below them
+is explicitly marked as supporting detail. Until 2026-07-28 they came last,
+after the methodology, so a reader who stopped at the total never saw the part
+of the product that tells them what to do; and the printable export, the surface
+that actually gets forwarded, omitted them entirely.
+
+Every surface that renders a report renders the same body: the report page, the
+print/export view, `/demo` and `/try/report`. The public ones mark the
+recommendations as computed from demonstration data, because a recommendation is
+a claim about someone's organisation and a visitor must never mistake a
+generated one for their own.
 
 ## 9. The web application
 

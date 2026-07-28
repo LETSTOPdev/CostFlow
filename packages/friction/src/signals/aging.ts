@@ -1,7 +1,7 @@
 import type { ImportBatch, IsoDateString, StageRef } from '@costflow/domain';
 import { isTerminal, parseIsoUtc, wholeDaysBetween } from '@costflow/domain';
 import type { AgingEvidence, AgingInstance, FrictionSignalMeta } from '../signal';
-import { slugify } from './slug';
+import { locationId, locationKey } from './slug';
 
 /**
  * F2 — Aging / stagnation (doc 02 §4): an in-flight item untouched beyond a
@@ -10,7 +10,10 @@ import { slugify } from './slug';
  */
 export const AGING_SIGNAL: FrictionSignalMeta = {
   id: 'f2-aging',
-  version: '1.0.0',
+  // 1.1.0 — instances are located at (origin, stage) rather than stage alone,
+  // so two teams sharing a status name are two findings. Identical output for a
+  // single-origin import.
+  version: '1.1.0',
   name: 'Aging / stagnation',
   requires: ['hasLastUpdated'],
 };
@@ -36,13 +39,21 @@ export function detectAging(batch: ImportBatch, params: AgingParams): AgingInsta
       `Invalid analysis time "${params.now}" — expected ISO-8601 (YYYY-MM-DD or full timestamp).`,
     );
   }
-  const byStage = new Map<string, { stage: StageRef; evidence: AgingEvidence[] }>();
+  const byLocation = new Map<
+    string,
+    { stage: StageRef; originScopeId: string | null; evidence: AgingEvidence[] }
+  >();
 
   for (const item of batch.items) {
     if (isTerminal(item.stage) || item.lastUpdatedAt === null) continue;
     const agingDays = wholeDaysBetween(item.lastUpdatedAt, params.now);
     if (agingDays === null || agingDays <= params.thresholdDays) continue;
-    const entry = byStage.get(item.stage.name) ?? { stage: item.stage, evidence: [] };
+    const key = locationKey(item.originScopeId, item.stage.name);
+    const entry = byLocation.get(key) ?? {
+      stage: item.stage,
+      originScopeId: item.originScopeId,
+      evidence: [],
+    };
     entry.evidence.push({
       workItemId: item.id,
       title: item.title,
@@ -51,26 +62,28 @@ export function detectAging(batch: ImportBatch, params: AgingParams): AgingInsta
       agingDays,
       excessDays: agingDays - params.thresholdDays,
     });
-    byStage.set(item.stage.name, entry);
+    byLocation.set(key, entry);
   }
 
-  const instances: AgingInstance[] = [...byStage.values()].map(({ stage, evidence }) => {
-    const sorted = [...evidence].sort(
-      (a, b) => b.excessDays - a.excessDays || a.workItemId.localeCompare(b.workItemId),
-    );
-    return {
-      id: `${AGING_SIGNAL.id}:${slugify(stage.name)}`,
-      signalId: AGING_SIGNAL.id,
-      signalVersion: AGING_SIGNAL.version,
-      frictionType: 'aging',
-      location: { stage },
-      magnitude: {
-        unit: 'item-days-beyond-threshold',
-        value: sorted.reduce((sum, e) => sum + e.excessDays, 0),
-      },
-      evidence: sorted,
-    };
-  });
+  const instances: AgingInstance[] = [...byLocation.values()].map(
+    ({ stage, originScopeId, evidence }) => {
+      const sorted = [...evidence].sort(
+        (a, b) => b.excessDays - a.excessDays || a.workItemId.localeCompare(b.workItemId),
+      );
+      return {
+        id: locationId(AGING_SIGNAL.id, originScopeId, stage.name),
+        signalId: AGING_SIGNAL.id,
+        signalVersion: AGING_SIGNAL.version,
+        frictionType: 'aging' as const,
+        location: { stage, originScopeId },
+        magnitude: {
+          unit: 'item-days-beyond-threshold',
+          value: sorted.reduce((sum, e) => sum + e.excessDays, 0),
+        },
+        evidence: sorted,
+      };
+    },
+  );
 
   return instances.sort(
     (a, b) => b.magnitude.value - a.magnitude.value || a.id.localeCompare(b.id),

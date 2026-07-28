@@ -17,7 +17,7 @@ export const overdueAt = (at: StageRef, days: readonly number[]): FrictionInstan
   signalId: 'f3-overdue',
   signalVersion: '1.0.0',
   frictionType: 'overdue',
-  location: { stage: at },
+  location: { stage: at, originScopeId: null },
   magnitude: { unit: 'item-days-overdue', value: days.reduce((s, d) => s + d, 0) },
   evidence: days.map((overdueDays, i) => ({
     workItemId: `${at.name}-${i}`,
@@ -36,7 +36,7 @@ export const overdueOver = (at: StageRef, ids: readonly string[], days = 5): Fri
   signalId: 'f3-overdue',
   signalVersion: '1.0.0',
   frictionType: 'overdue',
-  location: { stage: at },
+  location: { stage: at, originScopeId: null },
   magnitude: { unit: 'item-days-overdue', value: ids.length * days },
   evidence: ids.map((workItemId) => ({
     workItemId,
@@ -55,7 +55,7 @@ export const waitAt = (at: StageRef, hours: readonly number[]): FrictionInstance
   signalId: 'f1-queue-wait',
   signalVersion: '1.0.0',
   frictionType: 'queue-wait',
-  location: { stage: at },
+  location: { stage: at, originScopeId: null },
   magnitude: { unit: 'item-hours-waiting', value: hours.reduce((s, h) => s + h, 0) },
   evidence: hours.map((waitHours, i) => ({
     workItemId: `${at.name}-w${i}`,
@@ -82,7 +82,7 @@ export const waitOver = (
   signalId: 'f1-queue-wait',
   signalVersion: '1.0.0',
   frictionType: 'queue-wait',
-  location: { stage: at },
+  location: { stage: at, originScopeId: null },
   magnitude: { unit: 'item-hours-waiting', value: ids.length * hours },
   evidence: ids.map((workItemId) => ({
     workItemId,
@@ -97,6 +97,7 @@ export const waitOver = (
 export const item = (id: string, at: StageRef, actor: WorkItem['actor']): WorkItem => ({
   id,
   sourceId: id,
+  originScopeId: null,
   title: '',
   stage: at,
   actor,

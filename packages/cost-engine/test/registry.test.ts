@@ -44,7 +44,7 @@ const agingInstance: AgingInstance = {
   signalId: 'f2-aging',
   signalVersion: '1.0.0',
   frictionType: 'aging',
-  location: { stage: { name: 'X', kind: 'active' } },
+  location: { stage: { name: 'X', kind: 'active' }, originScopeId: null },
   magnitude: { unit: 'item-days-beyond-threshold', value: 5 },
   evidence: [],
 };
@@ -54,7 +54,7 @@ const queueInstance: QueueWaitInstance = {
   signalId: 'f1-queue-wait',
   signalVersion: '1.0.0',
   frictionType: 'queue-wait',
-  location: { stage: { name: 'X', kind: 'review' } },
+  location: { stage: { name: 'X', kind: 'review' }, originScopeId: null },
   magnitude: { unit: 'item-hours-waiting', value: 24 },
   evidence: [],
 };

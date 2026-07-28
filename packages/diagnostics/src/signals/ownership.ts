@@ -85,14 +85,21 @@ export function detectMissingOwnership(
 
   // Distinct items carrying friction evidence, and where their unowned ones sit.
   const frictionItemIds = new Set<string>();
-  const unownedByStage = new Map<string, { stage: StageRef; count: number }>();
+  const unownedByStage = new Map<
+    string,
+    { stage: StageRef; originScopeId: string | null; count: number }
+  >();
   for (const instance of run.frictions as readonly FrictionInstance[]) {
     for (const e of instance.evidence) {
       if (frictionItemIds.has(e.workItemId)) continue;
       frictionItemIds.add(e.workItemId);
       if (!unowned(byId.get(e.workItemId))) continue;
-      const key = instance.location.stage.name;
-      const bucket = unownedByStage.get(key) ?? { stage: instance.location.stage, count: 0 };
+      const key = `${instance.location.originScopeId ?? ''}\u0000${instance.location.stage.name}`;
+      const bucket = unownedByStage.get(key) ?? {
+        stage: instance.location.stage,
+        originScopeId: instance.location.originScopeId,
+        count: 0,
+      };
       bucket.count += 1;
       unownedByStage.set(key, bucket);
     }
@@ -134,7 +141,7 @@ export function detectMissingOwnership(
         signalId: OWNERSHIP_SIGNAL.id,
         signalVersion: OWNERSHIP_SIGNAL.version,
         signalName: OWNERSHIP_SIGNAL.name,
-        subject: { stage: top.stage },
+        subject: { stage: top.stage, originScopeId: top.originScopeId },
         sharePercent: frictionSharePercent,
         shareOf: 'items carrying friction that have no owner',
         facts: {

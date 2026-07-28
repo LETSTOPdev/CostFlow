@@ -157,6 +157,7 @@ export function transformJira(input: JiraTransformInput): ImportBatch {
     items.push({
       id: key,
       sourceId: key,
+      originScopeId: scope?.id ?? null,
       title: (issue.fields?.summary ?? '').trim(),
       stage,
       actor,

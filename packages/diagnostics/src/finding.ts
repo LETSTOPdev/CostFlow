@@ -25,8 +25,14 @@ export interface DiagnosticFinding {
   readonly signalId: string;
   readonly signalVersion: string;
   readonly signalName: string;
-  /** Structural attribution: a stage, never a person (ADR-0006 §2). */
-  readonly subject: { readonly stage: StageRef };
+  /**
+   * Structural attribution: a stage within an origin, never a person (ADR-0006
+   * §2). `originScopeId` matches a `BatchScope.id` on the run's batch and is
+   * null when the import has no scope structure — it is what lets a
+   * recommendation say WHOSE review queue to fix in a workspace that spans
+   * several teams. Still a structure, so the attribution rule is untouched.
+   */
+  readonly subject: { readonly stage: StageRef; readonly originScopeId: string | null };
   /**
    * How much of the measured whole this factor accounts for (doc 07 §1.4
    * "explanatory share"), 0–100. The primary magnitude an operator reads.

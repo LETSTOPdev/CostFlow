@@ -95,6 +95,7 @@ export function detectSerialGatekeeping(
     .filter((f) => f.location.stage.kind === 'review')
     .map((f) => ({
       stage: f.location.stage as StageRef,
+      originScopeId: f.location.originScopeId,
       wait: f.magnitude.value,
       items: new Set(f.evidence.map((e) => e.workItemId)).size,
       largestItemWait: f.evidence.reduce((m, e) => Math.max(m, e.waitHours), 0),
@@ -134,7 +135,7 @@ export function detectSerialGatekeeping(
         signalId: GATEKEEPING_SIGNAL.id,
         signalVersion: GATEKEEPING_SIGNAL.version,
         signalName: GATEKEEPING_SIGNAL.name,
-        subject: { stage: top.stage },
+        subject: { stage: top.stage, originScopeId: top.originScopeId },
         sharePercent: waitSharePercent,
         shareOf: 'observed waiting time',
         facts: {

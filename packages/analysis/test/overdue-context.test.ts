@@ -27,6 +27,7 @@ function item(id: string, overrides: Partial<WorkItem>): WorkItem {
   return {
     id,
     sourceId: id,
+    originScopeId: null,
     title: `Item ${id}`,
     stage: { name: 'Doing', kind: 'active' },
     actor: { kind: 'role', roleRef: 'Ops' },

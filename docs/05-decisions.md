@@ -335,3 +335,55 @@ which is more actionable than a silently understated figure.
 missing List can restore wait analysis for the whole workspace. Refusing beats
 half-measuring, the same posture as report mode declining to price
 vendor-suggested assumptions.
+
+---
+
+## D18 — The recommendations come second, and everything below them is detail
+
+**Decision.** The report is ordered for a reader with two minutes: total, then
+recommendations, then a labelled boundary, then all supporting detail. Every
+surface that renders a report renders the same body, including the printable
+export and the public samples.
+
+**Reason.** The five questions an executive actually has — what is the biggest
+problem, why, what to do first, what it is worth, what backs it — are all
+answered by the recommendations. Putting them after the methodology meant a
+reader who stopped at the total never reached them, and the export omitted them
+outright. Sophistication that never reaches a report is not progress.
+
+**Tradeoffs.** The decision now sits above the working that justifies it, which
+inverts how the artifact is built. The labelled boundary is what keeps that
+honest: it says where the claim ends and the evidence begins rather than hiding
+the evidence.
+
+**Consequences.** `/demo` and `/try/report` show recommendations, marked as
+computed from demonstration data (founder decision, 2026-07-28). Where the
+sample is too small to support one, the refusal is stated as what it is — the
+product declining to recommend on thin evidence — and links to a full-size
+demonstration.
+
+---
+
+## D19 — Friction is located at (origin, stage), never stage alone
+
+**Decision.** Every `WorkItem` records its origin, and every `FrictionInstance`
+and `DiagnosticFinding` is located at the pair. Two origins sharing a status
+name produce two findings.
+
+**Reason.** A workspace spanning Engineering and Legal that reports one blended
+"review queue" finding has answered a question nobody asked. The manager needs
+to know whose queue is expensive, and multi-scope monitoring is worth little
+without it — cross-team aggregation is not cross-team visibility.
+
+**Tradeoffs.** This changed the frozen engine: three detector versions and the
+analysis version moved, and runs from before are not comparable with runs after.
+It is a no-op for a single-origin import — grouping by (null, stage) is grouping
+by stage — so no golden number moved, only version strings and the new fields.
+That is what made the cost worth paying (see `04-engineering-principles.md`
+§ Proportion).
+
+**Consequences.** Instance ids gain an origin segment only when the origin is
+non-null, so imports without scope structure keep exactly the ids they had. The
+origin id travels through the engine; the customer-facing LABEL is resolved at
+the render edge from the batch, which keeps customer content out of the pure
+layers. Attribution is still structural, so ADR-0002 is untouched.

@@ -26,6 +26,7 @@ export const assumptions = (over: Partial<AssumptionSet> = {}): AssumptionSet =>
 export const item = (id: string, statusName: string, kind: StageKind): WorkItem => ({
   id,
   sourceId: id,
+  originScopeId: null,
   title: '',
   stage: { name: statusName, kind },
   actor: { kind: 'missing' },
@@ -39,7 +40,7 @@ export const priced = (id: string, signalId: string, expected: string): Friction
   signalId,
   signalVersion: '1.0.0',
   frictionType: 'overdue',
-  location: { stage: { name: 'Open', kind: 'queue' } },
+  location: { stage: { name: 'Open', kind: 'queue' }, originScopeId: null },
   magnitude: { unit: 'item-days-overdue', value: Number(expected) },
   evidence: [
     {

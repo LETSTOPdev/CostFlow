@@ -1,11 +1,11 @@
 {
   "runId": "golden-demo-clickup",
   "engineVersions": {
-    "analysis": "0.5.0",
+    "analysis": "0.6.0",
     "signals": {
-      "f2-aging": "1.0.0",
-      "f1-queue-wait": "1.0.0",
-      "f3-overdue": "1.0.0"
+      "f2-aging": "1.1.0",
+      "f1-queue-wait": "1.1.0",
+      "f3-overdue": "1.1.0"
     },
     "contextSignals": {
       "c6-wip-load": "1.0.0"
@@ -60,6 +60,7 @@
       {
         "id": "86czqa1",
         "sourceId": "86czqa1",
+        "originScopeId": null,
         "title": "Renew SOC 2 evidence collection",
         "stage": {
           "name": "review",
@@ -76,6 +77,7 @@
       {
         "id": "86czqb2",
         "sourceId": "86czqb2",
+        "originScopeId": null,
         "title": "Vendor risk review",
         "stage": {
           "name": "in progress",
@@ -92,6 +94,7 @@
       {
         "id": "86czqc3",
         "sourceId": "86czqc3",
+        "originScopeId": null,
         "title": "Quarterly access audit",
         "stage": {
           "name": "backlog",
@@ -108,6 +111,7 @@
       {
         "id": "86czqd4",
         "sourceId": "86czqd4",
+        "originScopeId": null,
         "title": "Publish incident postmortem",
         "stage": {
           "name": "complete",
@@ -275,21 +279,21 @@
   "detectors": [
     {
       "signalId": "f2-aging",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "signalName": "Aging / stagnation",
       "status": "ran",
       "instanceCount": 1
     },
     {
       "signalId": "f1-queue-wait",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "signalName": "Queue wait",
       "status": "ran",
       "instanceCount": 2
     },
     {
       "signalId": "f3-overdue",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "signalName": "Overdue exposure",
       "status": "ran",
       "instanceCount": 2
@@ -299,13 +303,14 @@
     {
       "id": "f2-aging:backlog",
       "signalId": "f2-aging",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "aging",
       "location": {
         "stage": {
           "name": "backlog",
           "kind": "queue"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-beyond-threshold",
@@ -328,13 +333,14 @@
     {
       "id": "f1-queue-wait:backlog",
       "signalId": "f1-queue-wait",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "queue-wait",
       "location": {
         "stage": {
           "name": "backlog",
           "kind": "queue"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-hours-waiting",
@@ -390,13 +396,14 @@
     {
       "id": "f1-queue-wait:review",
       "signalId": "f1-queue-wait",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "queue-wait",
       "location": {
         "stage": {
           "name": "review",
           "kind": "review"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-hours-waiting",
@@ -419,13 +426,14 @@
     {
       "id": "f3-overdue:backlog",
       "signalId": "f3-overdue",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "overdue",
       "location": {
         "stage": {
           "name": "backlog",
           "kind": "queue"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-overdue",
@@ -449,13 +457,14 @@
     {
       "id": "f3-overdue:review",
       "signalId": "f3-overdue",
-      "signalVersion": "1.0.0",
+      "signalVersion": "1.1.0",
       "frictionType": "overdue",
       "location": {
         "stage": {
           "name": "review",
           "kind": "review"
-        }
+        },
+        "originScopeId": null
       },
       "magnitude": {
         "unit": "item-days-overdue",

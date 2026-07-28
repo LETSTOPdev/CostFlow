@@ -214,6 +214,7 @@ export function transformAsana(input: AsanaTransformInput): ImportBatch {
     items.push({
       id: gid,
       sourceId: gid,
+      originScopeId: scope?.id ?? null,
       title: (task.name ?? '').trim(),
       stage:
         task.completed === true

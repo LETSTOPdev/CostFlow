@@ -21,6 +21,21 @@ export interface WorkItem {
   readonly stage: StageRef;
   /** Mapped role, pseudonymized unknown, or missing — never a raw identity. */
   readonly actor: ActorRef;
+  /**
+   * Which origin this item came from, matching a `BatchScope.id` on the batch;
+   * null when the import has no scope structure (a CSV file).
+   *
+   * The field exists because a workspace can span several origins, and a
+   * manager whose workspace covers Engineering and Legal needs to know WHOSE
+   * review queue is expensive. Without it, two teams that happen to use the
+   * same status name collapse into one friction and the report can only report
+   * a blended total — which is aggregation where the question was attribution.
+   *
+   * An ID rather than the label: labels are customer content and would be
+   * duplicated across every item, where the batch already carries each origin's
+   * name exactly once.
+   */
+  readonly originScopeId: string | null;
   readonly createdAt: IsoDateString | null;
   readonly dueAt: IsoDateString | null;
   readonly lastUpdatedAt: IsoDateString | null;

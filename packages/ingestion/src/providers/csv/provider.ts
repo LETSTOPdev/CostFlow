@@ -161,6 +161,8 @@ export function importCsv(input: CsvImportInput): ImportBatch {
     items.push({
       id: canonicalId,
       sourceId,
+      // A file has no provider scope; see `ImportBatch.scopes`.
+      originScopeId: null,
       title: row[mapping.columns.title]?.trim() ?? '',
       stage: { name: status, kind: stageKind },
       actor: mapping.columns.actor

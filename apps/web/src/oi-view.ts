@@ -25,6 +25,13 @@ export interface DiagnosticsView {
   readonly findings: readonly DiagnosticFinding[];
   readonly unavailable: readonly DiagnosticUnavailable[];
   readonly assessment: EvidenceAssessment;
+  /**
+   * Origin id → the name the customer knows it by, from the run's own batch. A
+   * finding carries the id because the diagnostics layer must stay free of
+   * customer content; the label is resolved here, at the render edge, where
+   * customer content already lives.
+   */
+  readonly originLabels: Readonly<Record<string, string>>;
 }
 
 /**
@@ -36,6 +43,7 @@ export interface DiagnosticsView {
 interface ActionCard {
   readonly stageName: string;
   readonly stageKind: string;
+  readonly originScopeId: string | null;
   readonly recommendation: string;
   readonly complexity: string;
   readonly effortClass: string;
@@ -49,7 +57,9 @@ interface ActionCard {
 export function buildActionCards(findings: readonly DiagnosticFinding[]): ActionCard[] {
   const byAction = new Map<string, ActionCard & { findings: DiagnosticFinding[] }>();
   for (const f of findings) {
-    const key = `${f.subject.stage.name}\u0000${f.intervention.primitive}`;
+    // Two teams' review queues are two actions even when the intervention is
+    // the same, so the origin is part of the identity of a card.
+    const key = `${f.subject.originScopeId ?? ''}\u0000${f.subject.stage.name}\u0000${f.intervention.primitive}`;
     const existing = byAction.get(key);
     if (existing) {
       existing.findings.push(f);
@@ -58,6 +68,7 @@ export function buildActionCards(findings: readonly DiagnosticFinding[]): Action
     byAction.set(key, {
       stageName: f.subject.stage.name,
       stageKind: f.subject.stage.kind,
+      originScopeId: f.subject.originScopeId,
       recommendation: f.intervention.recommendation,
       complexity: f.intervention.complexity,
       effortClass: f.intervention.effortClass,
@@ -120,7 +131,7 @@ const SUBHEAD =
  * objectively the right answer. Presenting them as one block would let the
  * second borrow the authority of the first.
  */
-const renderCard = (card: ActionCard): string => {
+const renderCard = (card: ActionCard, originLabels: Readonly<Record<string, string>>): string => {
   const lead = card.findings[0];
   if (!lead) return '';
   const tier = lead.confidence.tier;
@@ -140,6 +151,13 @@ const renderCard = (card: ActionCard): string => {
     .join('');
   return `<article class="card" style="margin:0 0 .9rem">
     <div class="meta" style="margin:0 0 .6rem">
+      ${
+        // Named first, because in a workspace spanning several teams the first
+        // question an executive asks of a recommendation is whose it is.
+        card.originScopeId !== null && originLabels[card.originScopeId] !== undefined
+          ? `<span class="chip">${esc(originLabels[card.originScopeId] as string)}</span>`
+          : ''
+      }
       <span class="chip">Stage: ${esc(card.stageName)} (${esc(card.stageKind)})</span>
       <span class="chip">Operational impact: ${card.topShare}% concentrated</span>
       <span class="chip">Confidence ${esc(tier)} — ${esc(CONFIDENCE_NOTE[tier] ?? '')}</span>
@@ -186,15 +204,37 @@ const renderUnavailable = (
   </section>`;
 };
 
-export function renderDiagnostics(view: DiagnosticsView): string {
+export interface DiagnosticsOptions {
+  /**
+   * True on `/demo` and `/try/report`. The recommendations are the strongest
+   * thing the product does, so they belong on a public surface — but a
+   * recommendation is a claim about someone's organisation, and a visitor must
+   * never be able to mistake one computed from generated data for one computed
+   * from theirs. The banner at the top of those pages says the report is a
+   * sample; this says it again where the claim actually is.
+   */
+  readonly demo?: boolean;
+}
+
+export function renderDiagnostics(view: DiagnosticsView, options: DiagnosticsOptions = {}): string {
   const cards = buildActionCards(view.findings);
+  const provenance = options.demo
+    ? `<p class="note" style="margin:0 0 .6rem"><strong>Generated from demonstration data.</strong> These recommendations were computed by the real engine from a simulated company, not from any real organisation.</p>`
+    : '';
   const body =
     cards.length === 0
-      ? `<p class="note" style="margin:0">No operational findings above the declared thresholds for this run. That is a result, not an omission: the evidence did not support a recommendation.</p>`
+      ? options.demo
+        ? // The static sample is small, and CostFlow refuses to recommend on thin
+          // evidence. Saying so demonstrates a real differentiator rather than
+          // leaving a prospect on a shrug — and points them at the surface that
+          // does show the capability at full size.
+          `<p class="note" style="margin:0">This sample is smaller than the evidence threshold CostFlow requires before it will recommend anything, so it recommends nothing. That refusal is the product working: a confident-sounding action drawn from a handful of items is exactly what costs an executive their trust. <a href="/try">See the recommendations on a full-size organisation →</a></p>`
+        : `<p class="note" style="margin:0">No operational findings above the declared thresholds for this run. That is a result, not an omission: the evidence did not support a recommendation.</p>`
       : `<p class="note" style="margin:0 0 .6rem">Ordered by strength of evidence first, then by how concentrated each finding is. This is not a recommended sequence and not an ordering by cost. Implementation complexity is a property of the action itself and never changes this order — weighing the two is your call.</p>
-         ${cards.map(renderCard).join('')}`;
+         ${cards.map((c) => renderCard(c, view.originLabels)).join('')}`;
   return `<section>
-    <h2 style="margin:1.6rem 0 .5rem">Where attention pays off</h2>
+    <h2 style="margin:1.8rem 0 .5rem">Where to act first</h2>
+    ${provenance}
     ${body}
     ${renderUnavailable(view.unavailable, view.assessment)}
   </section>`;

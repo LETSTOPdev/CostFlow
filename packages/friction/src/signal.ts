@@ -37,7 +37,18 @@ interface FrictionInstanceBase {
   readonly id: string;
   readonly signalId: string;
   readonly signalVersion: string;
-  readonly location: { readonly stage: StageRef };
+  /**
+   * WHERE the friction is: a stage, within the origin that stage belongs to.
+   *
+   * The origin is what makes a multi-scope workspace answerable. Engineering
+   * and Legal both having a status called "In review" is two queues owned by
+   * two teams, and grouping them by stage name alone would report one blended
+   * finding that names neither. `originScopeId` matches a `BatchScope.id` on
+   * the batch, and is null when the import has no scope structure — in which
+   * case grouping by (origin, stage) is exactly grouping by stage, which is why
+   * this changes nothing for a single-origin import.
+   */
+  readonly location: { readonly stage: StageRef; readonly originScopeId: string | null };
   readonly magnitude: { readonly unit: string; readonly value: number };
 }
 

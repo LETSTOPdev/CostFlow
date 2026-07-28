@@ -23,6 +23,7 @@ function item(id: string, stage: WorkItem['stage'], lastUpdatedAt: string | null
   return {
     id,
     sourceId: id,
+    originScopeId: null,
     title: `Item ${id}`,
     stage,
     actor: { kind: 'role', roleRef: 'Ops' },

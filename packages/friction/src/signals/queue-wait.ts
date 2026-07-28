@@ -7,7 +7,7 @@ import type {
 } from '@costflow/domain';
 import { isTerminal, parseIsoUtc } from '@costflow/domain';
 import type { FrictionSignalMeta, QueueWaitEvidence, QueueWaitInstance } from '../signal';
-import { slugify } from './slug';
+import { locationId, locationKey } from './slug';
 
 /**
  * F1 — Queue wait (doc 02 §4): time items spend sitting in queue/review-kind
@@ -16,7 +16,8 @@ import { slugify } from './slug';
  */
 export const QUEUE_WAIT_SIGNAL: FrictionSignalMeta = {
   id: 'f1-queue-wait',
-  version: '1.0.0',
+  // 1.1.0 — see the aging signal: located at (origin, stage).
+  version: '1.1.0',
   name: 'Queue wait',
   requires: ['hasEventHistory'],
 };
@@ -59,20 +60,25 @@ export function detectQueueWait(batch: ImportBatch, params: QueueWaitParams): Qu
     eventsByItem.set(event.workItemId, list);
   }
 
-  interface StageAccumulator {
+  interface LocationAccumulator {
     stage: StageRef;
+    originScopeId: string | null;
     perItem: Map<string, { waitHours: number; visits: number; open: boolean }>;
   }
-  const byStage = new Map<string, StageAccumulator>();
+  const byLocation = new Map<string, LocationAccumulator>();
+  const itemsById = new Map(batch.items.map((item) => [item.id, item]));
 
   const addWait = (stage: StageRef, itemId: string, hours: number, open: boolean): void => {
-    const acc = byStage.get(stage.name) ?? { stage, perItem: new Map() };
+    // The wait happened in the queue of whichever origin the item belongs to.
+    const originScopeId = itemsById.get(itemId)?.originScopeId ?? null;
+    const key = locationKey(originScopeId, stage.name);
+    const acc = byLocation.get(key) ?? { stage, originScopeId, perItem: new Map() };
     const entry = acc.perItem.get(itemId) ?? { waitHours: 0, visits: 0, open: false };
     entry.waitHours += hours;
     entry.visits += 1;
     entry.open = entry.open || open;
     acc.perItem.set(itemId, entry);
-    byStage.set(stage.name, acc);
+    byLocation.set(key, acc);
   };
 
   for (const [itemId, events] of eventsByItem) {
@@ -90,9 +96,8 @@ export function detectQueueWait(batch: ImportBatch, params: QueueWaitParams): Qu
     }
   }
 
-  const itemsById = new Map(batch.items.map((item) => [item.id, item]));
-  const instances: QueueWaitInstance[] = [...byStage.values()]
-    .map(({ stage, perItem }) => {
+  const instances: QueueWaitInstance[] = [...byLocation.values()]
+    .map(({ stage, originScopeId, perItem }) => {
       const evidence: QueueWaitEvidence[] = [...perItem.entries()]
         .filter(([, e]) => e.waitHours > 0)
         .map(([workItemId, e]) => {
@@ -107,15 +112,15 @@ export function detectQueueWait(batch: ImportBatch, params: QueueWaitParams): Qu
           };
         })
         .sort((a, b) => b.waitHours - a.waitHours || a.workItemId.localeCompare(b.workItemId));
-      return { stage, evidence };
+      return { stage, originScopeId, evidence };
     })
     .filter(({ evidence }) => evidence.length > 0)
-    .map(({ stage, evidence }) => ({
-      id: `${QUEUE_WAIT_SIGNAL.id}:${slugify(stage.name)}`,
+    .map(({ stage, originScopeId, evidence }) => ({
+      id: locationId(QUEUE_WAIT_SIGNAL.id, originScopeId, stage.name),
       signalId: QUEUE_WAIT_SIGNAL.id,
       signalVersion: QUEUE_WAIT_SIGNAL.version,
       frictionType: 'queue-wait' as const,
-      location: { stage },
+      location: { stage, originScopeId },
       magnitude: {
         unit: 'item-hours-waiting',
         value: evidence.reduce((sum, e) => sum + e.waitHours, 0),

@@ -181,6 +181,7 @@ export function transformMonday(input: MondayTransformInput): ImportBatch {
     items.push({
       id,
       sourceId: id,
+      originScopeId: scope?.id ?? null,
       title: (raw.name ?? '').trim(),
       stage,
       actor:

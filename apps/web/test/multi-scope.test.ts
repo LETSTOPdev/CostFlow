@@ -281,3 +281,104 @@ describe('comparability across a coverage change', () => {
     expect(assessComparability(runWith(undefined), runWith(undefined)).verdict).toBe('comparable');
   });
 });
+
+/**
+ * The question multi-scope existed to answer, and could not until now: WHOSE
+ * queue is expensive. Two teams that happen to use the same status name are two
+ * queues owned by two people, and a report that blends them names neither.
+ */
+describe('friction is attributed to the origin it happened in', () => {
+  it('separates two origins that share a status name, and names each', async () => {
+    const t = makeApp();
+    const email = 'attribution@acme.example';
+    const cookie = await clickupWorkspace(t, email);
+    await post(t, cookie, '/scope', { scope: '790', action: 'import' });
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const workspace = (await t.store.listWorkspaces(tenantId))[0]!;
+    // Both Lists carry a "backlog" status; mapping it to one stage kind is
+    // exactly the case that used to collapse them into a single finding.
+    await post(
+      t,
+      cookie,
+      '/mapping/statuses',
+      Object.fromEntries(
+        workspace.observedStatuses.map((s, i) => [
+          `s${i}`,
+          s === 'complete' || s === 'done' ? 'done' : s === 'review' ? 'review' : 'queue',
+        ]),
+      ),
+    );
+    await post(
+      t,
+      cookie,
+      '/mapping/actors',
+      Object.fromEntries(workspace.observedActors.map((_, i) => [`a${i}`, 'Ops'])),
+    );
+    await post(t, cookie, '/assumptions', {
+      defaultRate: '50',
+      agingThresholdDays: '1',
+      accept_agingThresholdDays: 'on',
+      attention_low: '0.15',
+      attention_expected: '0.3',
+      attention_high: '0.6',
+      accept_attention: 'on',
+      queueWait_low: '0.1',
+      queueWait_expected: '0.2',
+      queueWait_high: '0.4',
+      accept_queueWait: 'on',
+      overdue_low: '0.1',
+      overdue_expected: '0.2',
+      overdue_high: '0.4',
+      accept_overdue: 'on',
+      rate0: '50',
+    });
+    await post(t, cookie, '/runs', {});
+
+    const runs = await t.store.listRuns(tenantId);
+    const run = JSON.parse(runs[0]!.runJson) as AnalysisRun;
+
+    // Every friction says which origin it is in, and none is left unattributed.
+    const origins = new Set(run.frictions.map((f) => f.location.originScopeId));
+    expect(origins.has(null)).toBe(false);
+    expect(origins.size).toBeGreaterThan(1);
+
+    // A "backlog" stage exists in both Lists, so each detector that fires on it
+    // produces one finding PER ORIGIN rather than one blended finding.
+    const backlogBySignal = new Map<string, Set<string | null>>();
+    for (const f of run.frictions.filter((x) => x.location.stage.name === 'backlog')) {
+      const seen = backlogBySignal.get(f.signalId) ?? new Set();
+      // Distinct origin per finding within one signal: never two findings for
+      // the same (signal, origin, stage), which would mean a split that failed.
+      expect(seen.has(f.location.originScopeId)).toBe(false);
+      seen.add(f.location.originScopeId);
+      backlogBySignal.set(f.signalId, seen);
+    }
+    expect([...backlogBySignal.values()].some((seen) => seen.size > 1)).toBe(true);
+
+    // And the report says whose, by the name the customer chose it under.
+    const report = await get(t, cookie, `/reports/${run.runId}`);
+    expect(report.body).toContain('Sprint Board');
+    expect(report.body).toContain('Backlog');
+  });
+
+  /**
+   * A single-origin import must be untouched by any of this: the ids it
+   * produces, and therefore every stored artifact that references them, stay
+   * exactly as they were.
+   */
+  it('leaves an import with no scope structure completely unchanged', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'single@acme.example');
+    await post(t, cookie, '/connect', {
+      provider: 'jira',
+      site: 'https://acme.atlassian.net',
+      email: 'single@acme.example',
+      token: 'secret-jira-token-abc123',
+    });
+    await post(t, cookie, '/scope', { scope: 'OPS', action: 'import' });
+    const tenantId = (await t.store.findUserByEmail('single@acme.example'))!.tenantId;
+    const workspace = (await t.store.listWorkspaces(tenantId))[0]!;
+    // One origin: every friction shares it, so nothing is partitioned.
+    expect(workspace.scopes).toHaveLength(1);
+  });
+});

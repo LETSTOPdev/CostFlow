@@ -1,7 +1,7 @@
 import type { ImportBatch, IsoDateString, StageRef } from '@costflow/domain';
 import { isTerminal, parseIsoUtc, wholeDaysBetween } from '@costflow/domain';
 import type { FrictionSignalMeta, OverdueEvidence, OverdueInstance } from '../signal';
-import { slugify } from './slug';
+import { locationId, locationKey } from './slug';
 
 /**
  * F3a — Open overdue exposure (doc 12): in-flight items past their own due
@@ -10,7 +10,8 @@ import { slugify } from './slug';
  */
 export const OVERDUE_SIGNAL: FrictionSignalMeta = {
   id: 'f3-overdue',
-  version: '1.0.0',
+  // 1.1.0 — see the aging signal: located at (origin, stage).
+  version: '1.1.0',
   name: 'Overdue exposure',
   requires: ['hasDueDates'],
 };
@@ -38,6 +39,7 @@ export function detectOverdue(batch: ImportBatch, params: OverdueParams): Overdu
 
   interface Candidate {
     readonly stage: StageRef;
+    readonly originScopeId: string | null;
     readonly evidence: Omit<OverdueEvidence, 'sharedDueDateCohortSize'>;
   }
   const candidates: Candidate[] = [];
@@ -50,6 +52,7 @@ export function detectOverdue(batch: ImportBatch, params: OverdueParams): Overdu
     const dueMs = parseIsoUtc(item.dueAt);
     candidates.push({
       stage: item.stage,
+      originScopeId: item.originScopeId,
       evidence: {
         workItemId: item.id,
         title: item.title,
@@ -68,33 +71,43 @@ export function detectOverdue(batch: ImportBatch, params: OverdueParams): Overdu
     cohorts.set(c.evidence.dueAt, (cohorts.get(c.evidence.dueAt) ?? 0) + 1);
   }
 
-  const byStage = new Map<string, { stage: StageRef; evidence: OverdueEvidence[] }>();
+  const byLocation = new Map<
+    string,
+    { stage: StageRef; originScopeId: string | null; evidence: OverdueEvidence[] }
+  >();
   for (const c of candidates) {
-    const entry = byStage.get(c.stage.name) ?? { stage: c.stage, evidence: [] };
+    const key = locationKey(c.originScopeId, c.stage.name);
+    const entry = byLocation.get(key) ?? {
+      stage: c.stage,
+      originScopeId: c.originScopeId,
+      evidence: [],
+    };
     entry.evidence.push({
       ...c.evidence,
       sharedDueDateCohortSize: (cohorts.get(c.evidence.dueAt) ?? 1) - 1,
     });
-    byStage.set(c.stage.name, entry);
+    byLocation.set(key, entry);
   }
 
-  const instances: OverdueInstance[] = [...byStage.values()].map(({ stage, evidence }) => {
-    const sorted = [...evidence].sort(
-      (a, b) => b.overdueDays - a.overdueDays || a.workItemId.localeCompare(b.workItemId),
-    );
-    return {
-      id: `${OVERDUE_SIGNAL.id}:${slugify(stage.name)}`,
-      signalId: OVERDUE_SIGNAL.id,
-      signalVersion: OVERDUE_SIGNAL.version,
-      frictionType: 'overdue',
-      location: { stage },
-      magnitude: {
-        unit: 'item-days-overdue',
-        value: sorted.reduce((sum, e) => sum + e.overdueDays, 0),
-      },
-      evidence: sorted,
-    };
-  });
+  const instances: OverdueInstance[] = [...byLocation.values()].map(
+    ({ stage, originScopeId, evidence }) => {
+      const sorted = [...evidence].sort(
+        (a, b) => b.overdueDays - a.overdueDays || a.workItemId.localeCompare(b.workItemId),
+      );
+      return {
+        id: locationId(OVERDUE_SIGNAL.id, originScopeId, stage.name),
+        signalId: OVERDUE_SIGNAL.id,
+        signalVersion: OVERDUE_SIGNAL.version,
+        frictionType: 'overdue' as const,
+        location: { stage, originScopeId },
+        magnitude: {
+          unit: 'item-days-overdue',
+          value: sorted.reduce((sum, e) => sum + e.overdueDays, 0),
+        },
+        evidence: sorted,
+      };
+    },
+  );
 
   return instances.sort(
     (a, b) => b.magnitude.value - a.magnitude.value || a.id.localeCompare(b.id),

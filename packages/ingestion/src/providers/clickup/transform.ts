@@ -262,6 +262,7 @@ export function transformClickUp(input: ClickUpTransformInput): ImportBatch {
     items.push({
       id,
       sourceId: id,
+      originScopeId: scope?.id ?? null,
       title: (task.name ?? '').trim(),
       stage,
       actor,

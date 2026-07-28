@@ -15,6 +15,7 @@ import { mergeBatches } from '../src/merge';
 const item = (id: string, actor = 'Ops'): WorkItem => ({
   id,
   sourceId: id,
+  originScopeId: null,
   title: `Item ${id}`,
   stage: { name: 'backlog', kind: 'queue' },
   actor: { kind: 'role', roleRef: actor },

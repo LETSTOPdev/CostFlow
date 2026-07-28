@@ -1,6 +1,7 @@
 import { formatWholeMoney } from '@costflow/cost-engine';
 import { isTerminal } from '@costflow/domain';
 import type { BatchScope } from '@costflow/domain';
+
 import type { AgingTraceTerm, OverdueTraceTerm, QueueWaitTraceTerm } from '@costflow/analysis';
 import type { RankedFriction, ReportModel } from './report';
 
@@ -40,6 +41,17 @@ function esc(value: string): string {
  */
 export function renderMarkdown(model: ReportModel): string {
   const { run, ranked, unpriced } = model;
+  // Origin id → the name the customer knows it by. A friction in a workspace
+  // covering several teams has to say which team's queue it is in, or the
+  // report reads as one blended organisation.
+  const originLabels = new Map(
+    ((run.batch.scopes as readonly BatchScope[] | undefined) ?? []).map((sc) => [sc.id, sc.label]),
+  );
+  const at = (location: { readonly originScopeId: string | null }): string => {
+    const label =
+      location.originScopeId === null ? undefined : originLabels.get(location.originScopeId);
+    return label === undefined ? '' : ` in ${esc(label)}`;
+  };
   const lines: string[] = [];
   const money = (value: string) => formatWholeMoney(value, run.assumptions.currency);
   const range = (cost: { low: string; expected: string; high: string }) =>
@@ -135,7 +147,7 @@ export function renderMarkdown(model: ReportModel): string {
     lines.push('|---|---|---|---|---|---|');
     for (const r of ranked) {
       lines.push(
-        `| ${r.rank} | ${r.instance.frictionType} | stage "${esc(r.instance.location.stage.name)}" (${r.instance.location.stage.kind}) | ${r.instance.magnitude.value} ${r.instance.magnitude.unit} | ${range(r.estimate.cost)} | ${r.estimate.confidence.tier} |`,
+        `| ${r.rank} | ${r.instance.frictionType} | stage "${esc(r.instance.location.stage.name)}" (${r.instance.location.stage.kind})${at(r.instance.location)} | ${r.instance.magnitude.value} ${r.instance.magnitude.unit} | ${range(r.estimate.cost)} | ${r.estimate.confidence.tier} |`,
       );
     }
   }
@@ -148,7 +160,7 @@ export function renderMarkdown(model: ReportModel): string {
     lines.push('');
     for (const u of unpriced) {
       lines.push(
-        `- ${u.instance.frictionType} at stage "${esc(u.instance.location.stage.name)}" — ${u.instance.magnitude.value} ${u.instance.magnitude.unit}. Not priced: ${esc(u.reason)}`,
+        `- ${u.instance.frictionType} at stage "${esc(u.instance.location.stage.name)}"${at(u.instance.location)} — ${u.instance.magnitude.value} ${u.instance.magnitude.unit}. Not priced: ${esc(u.reason)}`,
       );
     }
     lines.push('');
@@ -168,7 +180,7 @@ export function renderMarkdown(model: ReportModel): string {
   }
 
   for (const r of ranked) {
-    renderDrilldown(lines, r, range);
+    renderDrilldown(lines, r, range, at);
   }
 
   lines.push('---');
@@ -192,9 +204,10 @@ function renderDrilldown(
   lines: string[],
   r: RankedFriction,
   range: (cost: { low: string; expected: string; high: string }) => string,
+  origin: (location: { readonly originScopeId: string | null }) => string,
 ): void {
   lines.push(
-    `## Drill-down #${r.rank}: ${r.instance.frictionType} at stage "${esc(r.instance.location.stage.name)}"`,
+    `## Drill-down #${r.rank}: ${r.instance.frictionType} at stage "${esc(r.instance.location.stage.name)}"${origin(r.instance.location)}`,
   );
   lines.push('');
   lines.push(`**What is this?** ${esc(r.estimate.trace.claim)}`);

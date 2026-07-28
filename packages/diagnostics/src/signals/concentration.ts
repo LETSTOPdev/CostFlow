@@ -80,6 +80,7 @@ export const interventionForUnit = (unit: string): InterventionPrimitive | null 
 
 interface StageBucket {
   readonly stage: StageRef;
+  readonly originScopeId: string | null;
   total: number;
   items: number;
   largestItem: number;
@@ -118,9 +119,12 @@ export function detectConcentration(
   for (const instance of run.frictions as readonly FrictionInstance[]) {
     const unit = instance.magnitude.unit;
     const stages = byUnit.get(unit) ?? new Map<string, StageBucket>();
-    const key = instance.location.stage.name;
+    // Keyed by the same (origin, stage) pair the engine located the friction
+    // at: concentrating two teams' queues into one bucket would name neither.
+    const key = `${instance.location.originScopeId ?? ''}\u0000${instance.location.stage.name}`;
     const bucket = stages.get(key) ?? {
       stage: instance.location.stage,
+      originScopeId: instance.location.originScopeId,
       total: 0,
       items: 0,
       largestItem: 0,
@@ -174,7 +178,7 @@ export function detectConcentration(
       signalId: CONCENTRATION_SIGNAL.id,
       signalVersion: CONCENTRATION_SIGNAL.version,
       signalName: CONCENTRATION_SIGNAL.name,
-      subject: { stage: top.stage },
+      subject: { stage: top.stage, originScopeId: top.originScopeId },
       sharePercent,
       shareOf: unitLabel(unit),
       facts: {

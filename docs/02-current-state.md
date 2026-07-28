@@ -71,6 +71,16 @@ and per-signal diff. The report's trend section is gated on it.
 import batch and carried in the artifact. ClickUp declares its reconstruction
 limits; other providers currently declare none.
 
+**Report structure.** The report is ordered for a two-minute executive read:
+total, then recommendations, then a labelled boundary, then supporting detail.
+The printable export and both public sample surfaces render the same body; the
+public ones mark the recommendations as computed from demonstration data. See
+D18.
+
+**Per-origin attribution.** Friction is located at (origin, stage), so a
+workspace spanning several teams reports which team's queue is expensive rather
+than one blended figure. See D19.
+
 **Multi-scope.** A workspace analyses a SET of origins. The selection may name
 a container, and what it covers is resolved on every run and recorded on the
 artifact, so a Space that gains a List shows up as a coverage change rather than

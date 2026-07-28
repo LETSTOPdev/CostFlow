@@ -9,10 +9,11 @@ import {
   type CostEstimate,
   type TraceTerm,
 } from '@costflow/cost-engine';
-import type { RangeSpec } from '@costflow/domain';
+import type { BatchScope, RangeSpec } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import { compareRuns, type ChangeDirection } from '@costflow/comparison';
 import { esc } from './html';
+import { renderDiagnostics, type DiagnosticsView } from './oi-view';
 
 /**
  * P5 structured reporting view. Renders the IMMUTABLE run.json artifact as an
@@ -34,6 +35,9 @@ const PROVENANCE_LABELS: Record<string, string> = {
   'customer-measured': 'measured by customer',
 };
 const provLabel = (p: string): string => PROVENANCE_LABELS[p] ?? p;
+
+const DETAIL_LABEL =
+  'margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.72rem;font-weight:640;color:var(--faint)';
 
 const FRICTION_LABELS: Record<string, string> = {
   aging: 'Aging / stagnation',
@@ -167,6 +171,7 @@ function renderRankedFriction(
   open: boolean,
   barPct: number,
   agingDays: number,
+  originLabel: (originScopeId: string | null) => string | null,
 ): string {
   const { instance, estimate } = rf;
   const trace = estimate.trace;
@@ -183,7 +188,13 @@ function renderRankedFriction(
           .map((r) => `<li>${esc(displayText(r))}</li>`)
           .join('')}</ul>`;
   return `<div class="friction">
-    <h3>#${rf.rank} ${esc(frictionLabel(instance.frictionType))} in stage “${esc(instance.location.stage.name)}”</h3>
+    <h3>#${rf.rank} ${esc(frictionLabel(instance.frictionType))} in stage “${esc(instance.location.stage.name)}”${
+      // Whose queue this is. Omitted entirely for an import with no scope
+      // structure, where the qualifier would be noise.
+      originLabel(instance.location.originScopeId) === null
+        ? ''
+        : ` <span class="note">— ${esc(originLabel(instance.location.originScopeId) as string)}</span>`
+    }</h3>
     <p class="figure">${money(estimate.cost.expected, currency)} <span class="range-sub">${money(estimate.cost.low, currency)} to ${money(estimate.cost.high, currency)}</span> ${confidenceBadge(estimate.confidence.tier)}</p>
     <div class="fbar" aria-hidden="true"><i style="width:${barPct}%"></i></div>
     <p class="note">${humanizeMagnitude(instance.magnitude.value, instance.magnitude.unit)}</p>
@@ -324,6 +335,19 @@ export function renderTrend(current: AnalysisRun, previous: AnalysisRun | null):
 }
 
 /** The report body (to be wrapped in the page shell). `previous` enables trend. */
+/**
+ * The report an executive reads.
+ *
+ * The order is the argument. A CEO with two minutes needs, in this sequence:
+ * what the biggest operational problem is, why it is happening, what to do
+ * first, what that action is worth, and what evidence stands behind it. The
+ * recommendations answer all five, so they come SECOND — immediately after the
+ * one number that says whether to keep reading — and everything else on the
+ * page is explicitly marked as supporting detail.
+ *
+ * Until 2026-07-28 they came last, after the methodology. A reader who stopped
+ * at the total never saw the part of the product that tells them what to do.
+ */
 export function renderReportBody(
   run: AnalysisRun,
   options: {
@@ -331,6 +355,10 @@ export function renderReportBody(
     previous?: AnalysisRun | null;
     printLinks?: boolean;
     open?: boolean;
+    /** Recommendations. Absent only where none could be computed. */
+    diagnostics?: DiagnosticsView | null;
+    /** Marks the recommendations as computed from generated data. */
+    demo?: boolean;
   } = { runId: '' },
 ): string {
   const model = buildReportModel(run);
@@ -343,6 +371,13 @@ export function renderReportBody(
       : '';
   // A business reader wants a readable date, not a raw ISO timestamp.
   const analysisDate = /^\d{4}-\d{2}-\d{2}/.test(run.now) ? run.now.slice(0, 10) : run.now;
+  const scopes = run.batch.scopes as readonly BatchScope[] | undefined;
+  const originLabel = (originScopeId: string | null): string | null =>
+    originScopeId === null ? null : (scopes?.find((sc) => sc.id === originScopeId)?.label ?? null);
+  const covers =
+    scopes === undefined || scopes.length === 0
+      ? ''
+      : `<span class="chip">Covering ${scopes.map((sc) => esc(sc.label)).join(', ')}</span>`;
   const summary = `<section class="report-hero">
     <p class="note" style="margin:0 0 .3rem;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Total priced friction (expected)</p>
     <p class="figure big" style="margin:0">${model.ranked.length === 0 ? 'No priced frictions above thresholds' : money(total.expected, currency)}</p>
@@ -352,6 +387,7 @@ export function renderReportBody(
       <span class="chip">${model.unpriced.length} unpriced</span>
       <span class="chip">Analysis of ${esc(analysisDate)}</span>
       <span class="chip">Currency ${esc(currency)}</span>
+      ${covers}
     </div>
   </section>`;
   // Relative-magnitude bars: the width ratio is PURE PRESENTATION (a CSS
@@ -381,30 +417,43 @@ export function renderReportBody(
               options.open === true,
               pctOf(rf),
               agingDays,
+              originLabel,
             ),
           )
           .join('');
   const links = options.printLinks
     ? `<p class="note"><a href="/reports/${esc(options.runId)}/print">Printable / export version</a> &nbsp; <a href="/reports/${esc(options.runId)}/raw">Raw markdown</a></p>`
     : '';
-  const readingNote =
+  const lead =
     model.ranked.length === 0
       ? ''
-      : `<p class="lead" style="margin-top:.6rem">This is the ongoing cost of workflow friction your team is currently carrying: time lost to waiting, chasing, and stalled work. It's <strong>recoverable</strong>: the ranked items below are where fixing the process would pay back the most.</p>
-         <p class="note">Every figure is an <strong>estimate shown as a range</strong>, computed from your own work items and the rates you confirmed, and traceable to its formula (open “How this number was computed”). <strong>Confidence A/B/C</strong> reflects how much we observed versus inferred. Where a required input isn't confirmed, we leave the item <strong>unpriced</strong> rather than guess. <span title="Reference for support">Ref <code>${esc(run.runId)}</code></span></p>`;
+      : `<p class="lead" style="margin-top:.6rem">This is the ongoing cost of workflow friction your team is currently carrying: time lost to waiting, chasing, and stalled work. It's <strong>recoverable</strong>, and the section below says where to start.</p>`;
+  // Methodology used to sit between the headline and the number, which is the
+  // wrong place for it: it is what a reader consults after deciding to trust
+  // the report, not before deciding to read it.
+  const methodology = `<p class="note">Every figure is an <strong>estimate shown as a range</strong>, computed from your own work items and the rates you confirmed, and traceable to its formula (open “How this number was computed”). <strong>Confidence A/B/C</strong> reflects how much we observed versus inferred. Where a required input isn't confirmed, we leave the item <strong>unpriced</strong> rather than guess. <span title="Reference for support">Ref <code>${esc(run.runId)}</code></span></p>`;
+  const recommendations = options.diagnostics
+    ? renderDiagnostics(options.diagnostics, options.demo === true ? { demo: true } : {})
+    : '';
+  const detailDivider = `<hr style="margin:2.2rem 0 1.4rem">
+     <p class="note" style="${DETAIL_LABEL}">Supporting detail</p>
+     <p class="note" style="margin:0 0 1.2rem">Everything above is the decision. Everything below is the working behind it: each priced friction with its formula, what moved since last time, what could not be priced, and how much of your data the analysis could see.</p>`;
   return `<p class="eyebrow">Friction report</p>
     <h1 style="margin-top:.6rem">What friction is costing this team</h1>
-    ${readingNote}
+    ${lead}
     ${banner}
     ${summary}
-    ${links}
+    ${recommendations}
+    ${detailDivider}
     <section><h2>Ranked frictions</h2>
     ${model.ranked.length === 0 ? '' : '<p class="note" style="margin-top:-.3rem">Ranked by expected cost, biggest first.</p>'}
     ${ranked}</section>
     ${renderTrend(run, options.previous ?? null)}
     ${renderUnpriced(model.unpriced)}
     ${renderContext(run)}
-    ${renderCoverage(run)}`;
+    ${renderCoverage(run)}
+    ${methodology}
+    ${links}`;
 }
 
 /** Parse a persisted run.json string into the typed artifact. */

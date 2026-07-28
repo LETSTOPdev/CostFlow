@@ -11,6 +11,7 @@ function item(id: string, dueAt: string | null, overrides: Partial<WorkItem> = {
   return {
     id,
     sourceId: id,
+    originScopeId: null,
     title: `Item ${id}`,
     stage: ACTIVE,
     actor: { kind: 'role', roleRef: 'Ops' },

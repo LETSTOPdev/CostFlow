@@ -1,6 +1,6 @@
 import type { StageKind } from '@costflow/domain';
 import { transformJira, type JiraMapping } from '@costflow/ingestion';
-import { runAnalysis } from '@costflow/analysis';
+import { runAnalysis, type AnalysisRun } from '@costflow/analysis';
 import { buildPseudonymizationContext } from './crypto';
 import { renderReportBody } from './report-view';
 import type { AssumptionSet } from '@costflow/domain';
@@ -439,6 +439,12 @@ export interface DemoCompany {
   readonly issueCount: number;
   readonly teamSize: number;
   readonly reportBody: string;
+  /**
+   * The artifact itself. The caller composes the recommendations, because
+   * assessing what a connector can provide needs the connector registry, and a
+   * demo generator has no business knowing about one.
+   */
+  readonly run: AnalysisRun;
 }
 
 /** Generate the company, feed the REAL engine, and render the report. */
@@ -594,6 +600,7 @@ export function renderDemoCompany(seed: number): DemoCompany {
   const reportBody = renderReportBody(run, { runId: `demo-${seed}` });
 
   return {
+    run,
     seed,
     industry: ind.label,
     companyName,

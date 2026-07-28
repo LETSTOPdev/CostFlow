@@ -17,6 +17,7 @@ function item(id: string, stage: StageRef = ACTIVE): WorkItem {
   return {
     id,
     sourceId: id,
+    originScopeId: null,
     title: `Item ${id}`,
     stage,
     actor: { kind: 'role', roleRef: 'Ops' },

@@ -17,9 +17,9 @@ Import batch `batch-golden-demo-monday` (provider: monday, mapping `monday-ops-b
 
 ## Detectors
 
-- Aging / stagnation (`f2-aging@1.0.0`): ran — 1 finding(s)
-- Queue wait (`f1-queue-wait@1.0.0`): ran — 2 finding(s)
-- Overdue exposure (`f3-overdue@1.0.0`): ran — 2 finding(s)
+- Aging / stagnation (`f2-aging@1.1.0`): ran — 1 finding(s)
+- Queue wait (`f1-queue-wait@1.1.0`): ran — 2 finding(s)
+- Overdue exposure (`f3-overdue@1.1.0`): ran — 2 finding(s)
 
 ## Ranked frictions
 
@@ -155,4 +155,4 @@ Context signals describe conditions that explain frictions. They are not priced,
 
 ---
 
-Engine versions: analysis 0.5.0 · signals f2-aging@1.0.0, f1-queue-wait@1.0.0, f3-overdue@1.0.0 · context c6-wip-load@1.0.0 · cost models cm-aging-attention@1.0.0, cm-overdue-attention@1.0.0, cm-queue-wait-attention@1.0.0
+Engine versions: analysis 0.6.0 · signals f2-aging@1.1.0, f1-queue-wait@1.1.0, f3-overdue@1.1.0 · context c6-wip-load@1.0.0 · cost models cm-aging-attention@1.0.0, cm-overdue-attention@1.0.0, cm-queue-wait-attention@1.0.0

@@ -6,7 +6,7 @@ import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
 import { describeSelection, hasSelection, selectionNames, sortSelection } from './scopes';
 import { marked } from 'marked';
-import type { AssumptionSet, Provenance, RangeSpec, StageKind } from '@costflow/domain';
+import type { AssumptionSet, BatchScope, Provenance, RangeSpec, StageKind } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
 import { dec, decToString } from '@costflow/cost-engine';
 import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assumptions';
@@ -125,7 +125,7 @@ import {
   type DiagnosticSignalMeta,
 } from '@costflow/diagnostics';
 import { assessEvidence, inheritedCapsFor } from './evidence';
-import { renderDiagnostics, type DiagnosticsView } from './oi-view';
+import { type DiagnosticsView } from './oi-view';
 
 /**
  * The web application shell (doc 09 P4.1): server-rendered onboarding wizard
@@ -612,7 +612,12 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       '<a href="/login">Sign in</a> to run one on your own Jira or ClickUp.</div>';
     let body: string;
     try {
-      body = renderReportBody(parseRun(DEMO_RUN_JSON), { runId: 'demo' });
+      const demoRun = parseRun(DEMO_RUN_JSON);
+      body = renderReportBody(demoRun, {
+        runId: 'demo',
+        diagnostics: diagnosticsFor(demoRun, null),
+        demo: true,
+      });
     } catch {
       body = '<p class="error">The sample report is temporarily unavailable.</p>';
     }
@@ -677,7 +682,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       .send(
         layout(
           `Demo: ${demo.companyName}`,
-          `${banner}${demo.reportBody}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
+          `${banner}${renderReportBody(demo.run, {
+            runId: `demo-${demo.seed}`,
+            diagnostics: diagnosticsFor(demo.run, null),
+            demo: true,
+          })}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
           undefined,
           // Infinite seed space — canonicalise crawlers to /try, don't index each.
           { canonical: 'https://app.fbx1.com/try', noindex: true },
@@ -3285,8 +3294,15 @@ Sitemap: https://app.fbx1.com/sitemap.xml
    * Computed from the stored artifact at render time, so no pure package
    * changes and no golden regenerates.
    */
+  /**
+   * Recommendations for one run. The provider is taken from the workspace when
+   * there is one and from the artifact otherwise, so the public sample surfaces
+   * — which have no workspace — still get a truthful capability assessment
+   * rather than a blank one that would report every diagnostic as unavailable.
+   */
   const diagnosticsFor = (run: AnalysisRun, workspace: WorkspaceRecord | null): DiagnosticsView => {
-    const descriptor = workspace ? connectors.get(workspace.provider)?.descriptor : undefined;
+    const providerId = workspace?.provider ?? run.batch.provider;
+    const descriptor = connectors.get(providerId)?.descriptor;
     // No connector (legacy or CSV-era workspace): claim nothing on its behalf.
     // The artifact still says what it contained, so snapshot-only diagnostics
     // run and the rest report honestly as unavailable.
@@ -3308,10 +3324,12 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       detectMissingOwnership(run, assessment.profile, caps(OWNERSHIP_SIGNAL)),
       detectSerialGatekeeping(run, assessment.profile, caps(GATEKEEPING_SIGNAL)),
     ];
+    const scopes = (run.batch.scopes as readonly BatchScope[] | undefined) ?? [];
     return {
       findings: results.flatMap((r) => r.findings),
       unavailable: results.flatMap((r) => (r.unavailable ? [r.unavailable] : [])),
       assessment,
+      originLabels: Object.fromEntries(scopes.map((sc) => [sc.id, sc.label])),
     };
   };
 
@@ -3332,9 +3350,12 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       // The OI section is appended BEFORE the attribution guard runs below, so
       // it is covered by the same choke point as everything else on this
       // surface (ADR-0002 scope clause, restated in ADR-0006).
-      body =
-        renderReportBody(run, { runId: loaded.record.id, previous, printLinks: true }) +
-        renderDiagnostics(diagnosticsFor(run, loaded.workspace));
+      body = renderReportBody(run, {
+        runId: loaded.record.id,
+        previous,
+        printLinks: true,
+        diagnostics: diagnosticsFor(run, loaded.workspace),
+      });
       title = `Report ${run.runId}`;
     } catch {
       logLine({ level: 'warn', msg: 'report-render-fallback', surface: 'report' });
@@ -3372,7 +3393,15 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     try {
       const run = parseRun(loaded.record.runJson);
       const previous = await previousRunFor(session, loaded.record);
-      body = `${renderReportBody(run, { runId: loaded.record.id, previous, open: true })}${METHODOLOGY_APPENDIX}`;
+      // The export is what gets forwarded to whoever did not run the analysis,
+      // so it is the LAST surface that should omit the recommendations. It did,
+      // until 2026-07-28.
+      body = `${renderReportBody(run, {
+        runId: loaded.record.id,
+        previous,
+        open: true,
+        diagnostics: diagnosticsFor(run, loaded.workspace),
+      })}${METHODOLOGY_APPENDIX}`;
     } catch {
       logLine({ level: 'warn', msg: 'report-render-fallback', surface: 'print' });
       body = `<article>${await renderReportMdSafely(loaded.record.reportMd)}</article>${METHODOLOGY_APPENDIX}`;

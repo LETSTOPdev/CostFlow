@@ -46,7 +46,7 @@ function instance(items: OverdueEvidence[]): OverdueInstance {
     signalId: 'f3-overdue',
     signalVersion: '1.0.0',
     frictionType: 'overdue',
-    location: { stage: { name: 'Doing', kind: 'active' } },
+    location: { stage: { name: 'Doing', kind: 'active' }, originScopeId: null },
     magnitude: {
       unit: 'item-days-overdue',
       value: items.reduce((s, e) => s + e.overdueDays, 0),
@@ -150,7 +150,7 @@ describe('cm-overdue-attention (doc 12 §6/§7)', () => {
       signalId: 'f2-aging',
       signalVersion: '1.0.0',
       frictionType: 'aging',
-      location: { stage: { name: 'X', kind: 'active' } },
+      location: { stage: { name: 'X', kind: 'active' }, originScopeId: null },
       magnitude: { unit: 'item-days-beyond-threshold', value: 1 },
       evidence: [],
     } as const;
