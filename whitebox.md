@@ -65,6 +65,7 @@ not systemic problems.
 ### HIGH
 
 #### H-1 · Stored HTML injection in the raw/fallback report renderer
+
 > **Status: FIXED.** Reporting's `esc()` stayed markdown-only (it's shared with the CLI's
 > plain-markdown output — HTML-escaping it there broke golden-file tests). Instead added
 > `renderReportMdSafely()` in [server.ts](apps/web/src/server.ts), which HTML-escapes
@@ -72,6 +73,7 @@ not systemic problems.
 > structured-report fallback branch) — the one boundary where markdown actually becomes
 > HTML. Verified: `<img src=x onerror=...>` now renders as literal text; full test suite
 > (441 tests) passes.
+
 - **Category**: security (XSS / HTML injection)
 - **Files / lines**:
   - `packages/reporting/src/markdown.ts:23-31` — the `esc()` used to build the report
@@ -95,6 +97,7 @@ not systemic problems.
   So a Jira/ClickUp issue titled `<img src=x onerror=...>` (or any HTML) is rendered as
   live markup on the `/reports/:runId/raw` page (always) and on the structured report/
   print pages when the run JSON fails to parse (the `catch` fallback).
+
 - **Root cause**: two different `esc()` functions with different contracts. The structured
   path (`apps/web/src/report-view.ts`, which imports the HTML-escaping `esc` from
   `html.ts`) is safe; the markdown path relies on `reporting`'s markdown-only `esc()` and
@@ -120,10 +123,12 @@ not systemic problems.
 ### MEDIUM
 
 #### M-1 · Logged-in header nav is mis-aligned (regression from the uncommitted "Fix nav" edit)
+
 > **Status: FIXED.** Added a `.nb-row--app` modifier (applied only when logged in) that
 > keeps `.nb-col-r` at `flex-end` for the authenticated header, while the logged-out
 > marketing header keeps the new symmetric hug-the-logo layout. Verified live: signed-in
 > "Home / Runs / Sign out" is back in the top-right corner.
+
 - **Category**: UX / bug (visual regression)
 - **File / lines**: `apps/web/src/html.ts:121-122` (the uncommitted change), with the
   header markup at `apps/web/src/html.ts:469-478`.
@@ -159,12 +164,14 @@ not systemic problems.
 ### LOW
 
 #### L-1 · `/runs` double-submit guard is a non-atomic TOCTOU check
+
 > **Status: FIXED.** Added a partial unique index (`jobs_one_active_per_workspace`, `schema.sql`)
 > enforcing at most one queued/running job per workspace, plus a new atomic
 > `Store.createJobIfNoneActive()` (implemented in both `pg.ts` — insert + catch
 > `23505`/unique-violation — and `memory.ts` — synchronous check-then-set, no `await` in
 > between). `/runs` in `server.ts` now calls this instead of the old
 > list-then-create race. Full test suite passes.
+
 - **Category**: bug / concurrency
 - **Files / lines**: `apps/web/src/server.ts:2213-2217` (check-then-create) and
   `apps/web/src/jobs.ts:81` (`updateJob(..., { status: 'running' })` with no atomic
@@ -185,10 +192,12 @@ not systemic problems.
   no-op if no row is returned.
 
 #### L-2 · OIDC callback does not validate the ID token (no nonce, no `email_verified`)
+
 > **Status: Deferred (backlog).** Real fix needs JWKS fetch/cache, signature/`aud`/`iss`/`exp`
 > verification, and a per-request nonce threaded through the authorize/callback round-trip —
 > a genuine feature addition to `auth.ts`, not a targeted patch. Left unimplemented this pass
 > rather than rushed.
+
 - **Category**: security (defense-in-depth) / architecture
 - **File / lines**: `apps/web/src/auth.ts:335-452` (`/auth/callback`).
 - **Description**: The callback validates the `state` cookie (good CSRF protection), then
@@ -207,9 +216,11 @@ not systemic problems.
   per-request `nonce`) and require `email_verified === true` before `completeSignIn`.
 
 #### L-3 · `server.ts` is a 2901-line monolith
+
 > **Status: Deferred (backlog).** Maintainability issue, not a runtime defect. Splitting into
 > route-domain plugins is a structural refactor of a 127KB file — out of scope for this fix
 > pass; flagged for a dedicated refactor.
+
 - **Category**: architecture / maintainability
 - **File**: `apps/web/src/server.ts` (127 KB); also `html.ts` (52 KB), `landing.ts`/
   `marketing.ts` (30 KB+ each).
@@ -224,14 +235,16 @@ not systemic problems.
   Fastify plugins, and factor the large HTML string builders into per-page modules.
 
 #### L-4 · Stale/contradictory dark-theme comment
+
 > **Status: FIXED.** Corrected the `STYLES` doc comment in [html.ts](apps/web/src/html.ts) to
 > state a single light theme, matching actual behavior and the other comments.
+
 - **Category**: documentation / code quality
 - **File / line**: `apps/web/src/html.ts:35` (the `STYLES` doc comment claims "a
   light/dark theme via `prefers-color-scheme`").
 - **Description**: Lines 4-5 and 63 state the product is intentionally **light-theme
   only** with no auto dark-mode switch, and there is no `@media (prefers-color-scheme:
-  dark)` rule anywhere in the stylesheet. The line-35 comment contradicts the actual
+dark)` rule anywhere in the stylesheet. The line-35 comment contradicts the actual
   behavior and the other comments.
 - **Impact**: Trivial; misleads future maintainers.
 - **Suggested fix**: Correct the line-35 comment to match reality (light-theme only).
@@ -271,7 +284,7 @@ clear:
 - **Security headers / CSP**: strict `default-src 'none'`, `script-src 'none'`,
   `form-action` allowlisted for the IdP logout hop, `frame-ancestors 'none'`, HSTS in
   production, `no-store, private` on authenticated responses (`security.ts:39-102`).
-- **Error handling**: global error boundary logs only the error *class* and a redacted
+- **Error handling**: global error boundary logs only the error _class_ and a redacted
   path, never messages/stacks/bodies/tokens/emails (`security.ts:108-154`); invite tokens
   and UUIDs are redacted from logs (`redactPath`).
 - **Public demo `/try`**: seed input is validated to a bounded integer and only feeds a
@@ -331,32 +344,33 @@ promised-vs-enforced gap below is real and user-visible.
 ### Tier × feature × enforcement matrix
 
 Legend — Enforced: gate exists and matches copy. None: advertised but no gate/impl found
-(everyone gets it, or nobody does). Arch: enforced by architecture for *all* tiers, not by
+(everyone gets it, or nobody does). Arch: enforced by architecture for _all_ tiers, not by
 plan. N/A: non-code (human/legal) — not gateable.
 
-| Feature (advertised) | Tier | Advertised behaviour | Enforced in code? | Enforcement / gap location | Mismatch |
-|---|---|---|---|---|---|
-| 1 workspace, 1 tracker | Limited | Max 1 workspace | Arch (all tiers capped at 1) | `server.ts:442-445` `soleWorkspace` → `workspaces[0]` | Caps *every* tier, incl. Pro (see E-4) |
-| Up to 3 team members | Limited | Hard cap 3 | **None** | invite handler `server.ts:2785-2811` — no count check | Not enforced (E-1) |
-| Up to 3 analysis runs / month | Limited | Hard cap 3/mo | **None** | `POST /runs` `server.ts:2204-2217` — only double-submit guard | Not enforced (E-2) |
-| 30-day report history | Limited | Runs pruned after 30d | **None** | no retention/prune; runs append-only `schema.sql:80-90` | Not enforced (E-3) |
-| Formula drill-down | Limited | Included | Delivered (all) | `report-view.ts` | Match (base feature) |
-| Email support | Limited | Included | N/A | — | Non-code |
-| Unlimited runs | Pro | No cap | Trivially true (nobody capped) | — | Not a differentiator (E-2) |
-| Unlimited report history | Pro | No cap | Trivially true | — | Not a differentiator (E-3) |
-| Unlimited members, per-seat billed | Pro | No cap + per-seat billing | **None** | no member cap + no billing at all | Not implemented (E-1) |
-| CSV & raw JSON export on every report | Pro | Export button per report | **None** | no export route exists (`server.ts` has only `/reports/:runId`, `/raw`, `/print`) | Under-delivering, paid (E-5) |
-| Multiple workspaces per org | Pro | >1 workspace | **None** | `soleWorkspace` caps all tenants at 1 `server.ts:442-445` | Under-delivering, paid (E-4) |
-| Priority email support | Pro | Included | N/A | — | Non-code |
-| SSO / SAML for whole org | Enterprise | Per-org SAML | **None** (single global Auth0) | `auth.ts` one shared OIDC flow; no per-tenant SSO config | Under-delivering, paid (E-6) |
-| Audit logs across workspaces & members | Enterprise | Customer-facing audit log | **None** | only `admin_audit` = internal ops console `schema.sql:125-136` | Under-delivering, paid (E-7) |
-| Signed DPA | Enterprise | Legal doc | N/A | — | Non-code |
-| Dedicated support + SLA | Enterprise | Included | N/A | — | Non-code |
-| Org-wide role & workspace management | Enterprise | Roles + membership admin | Delivered to **all** tiers | `server.ts:2785,2824-2872,2873` (invites, role changes, membership) | Over-delivering (E-8) |
+| Feature (advertised)                   | Tier       | Advertised behaviour      | Enforced in code?              | Enforcement / gap location                                                        | Mismatch                               |
+| -------------------------------------- | ---------- | ------------------------- | ------------------------------ | --------------------------------------------------------------------------------- | -------------------------------------- |
+| 1 workspace, 1 tracker                 | Limited    | Max 1 workspace           | Arch (all tiers capped at 1)   | `server.ts:442-445` `soleWorkspace` → `workspaces[0]`                             | Caps _every_ tier, incl. Pro (see E-4) |
+| Up to 3 team members                   | Limited    | Hard cap 3                | **None**                       | invite handler `server.ts:2785-2811` — no count check                             | Not enforced (E-1)                     |
+| Up to 3 analysis runs / month          | Limited    | Hard cap 3/mo             | **None**                       | `POST /runs` `server.ts:2204-2217` — only double-submit guard                     | Not enforced (E-2)                     |
+| 30-day report history                  | Limited    | Runs pruned after 30d     | **None**                       | no retention/prune; runs append-only `schema.sql:80-90`                           | Not enforced (E-3)                     |
+| Formula drill-down                     | Limited    | Included                  | Delivered (all)                | `report-view.ts`                                                                  | Match (base feature)                   |
+| Email support                          | Limited    | Included                  | N/A                            | —                                                                                 | Non-code                               |
+| Unlimited runs                         | Pro        | No cap                    | Trivially true (nobody capped) | —                                                                                 | Not a differentiator (E-2)             |
+| Unlimited report history               | Pro        | No cap                    | Trivially true                 | —                                                                                 | Not a differentiator (E-3)             |
+| Unlimited members, per-seat billed     | Pro        | No cap + per-seat billing | **None**                       | no member cap + no billing at all                                                 | Not implemented (E-1)                  |
+| CSV & raw JSON export on every report  | Pro        | Export button per report  | **None**                       | no export route exists (`server.ts` has only `/reports/:runId`, `/raw`, `/print`) | Under-delivering, paid (E-5)           |
+| Multiple workspaces per org            | Pro        | >1 workspace              | **None**                       | `soleWorkspace` caps all tenants at 1 `server.ts:442-445`                         | Under-delivering, paid (E-4)           |
+| Priority email support                 | Pro        | Included                  | N/A                            | —                                                                                 | Non-code                               |
+| SSO / SAML for whole org               | Enterprise | Per-org SAML              | **None** (single global Auth0) | `auth.ts` one shared OIDC flow; no per-tenant SSO config                          | Under-delivering, paid (E-6)           |
+| Audit logs across workspaces & members | Enterprise | Customer-facing audit log | **None**                       | only `admin_audit` = internal ops console `schema.sql:125-136`                    | Under-delivering, paid (E-7)           |
+| Signed DPA                             | Enterprise | Legal doc                 | N/A                            | —                                                                                 | Non-code                               |
+| Dedicated support + SLA                | Enterprise | Included                  | N/A                            | —                                                                                 | Non-code                               |
+| Org-wide role & workspace management   | Enterprise | Roles + membership admin  | Delivered to **all** tiers     | `server.ts:2785,2824-2872,2873` (invites, role changes, membership)               | Over-delivering (E-8)                  |
 
 ### Findings
 
 #### E-1 · "Up to 3 team members" (Limited) is not enforced — no member cap on any tier
+
 - **Advertised (exact)**: `'Up to 3 team members'` (Limited) — `marketing.ts:61`. Pro
   advertises `'Unlimited team members (billed per active seat)'` — `marketing.ts:77`.
 - **Expected**: a Limited tenant cannot have more than 3 users/pending invites; Pro is
@@ -373,6 +387,7 @@ plan. N/A: non-code (human/legal) — not gateable.
   active seats for Pro billing.
 
 #### E-2 · "Up to 3 analysis runs per month" (Limited) is not enforced
+
 - **Advertised (exact)**: `'Up to 3 analysis runs per month'` (Limited) — `marketing.ts:62`;
   Pro: `'Unlimited analysis runs'` — `marketing.ts:75`.
 - **Expected**: a Limited tenant's 4th run in a calendar month is blocked/upsold.
@@ -386,6 +401,7 @@ plan. N/A: non-code (human/legal) — not gateable.
   tenant is Limited and count ≥ 3, block with an upgrade prompt.
 
 #### E-3 · "30-day report history" (Limited) is not enforced — history is unlimited for all
+
 - **Advertised (exact)**: `'30-day report history'` (Limited) — `marketing.ts:63`; Pro:
   `'Unlimited report history'` — `marketing.ts:76`.
 - **Expected**: Limited tenants can only view reports from the last 30 days.
@@ -398,6 +414,7 @@ plan. N/A: non-code (human/legal) — not gateable.
   tenants (retain rows for upgrade, just hide/deny access beyond the window).
 
 #### E-4 · "Multiple workspaces per organization" (Pro) is not implemented for anyone
+
 - **Advertised (exact)**: `'Multiple workspaces per organization'` (Pro) — `marketing.ts:79`.
 - **Expected**: a Pro org can create more than one workspace/tracker connection.
 - **Actual**: the app is architecturally single-workspace. `soleWorkspace`
@@ -414,6 +431,7 @@ plan. N/A: non-code (human/legal) — not gateable.
   pricing copy until it ships.
 
 #### E-5 · "CSV and raw JSON export on every report" (Pro) is not implemented for anyone
+
 - **Advertised (exact)**: `'CSV and raw JSON export on every report'` (Pro) —
   `marketing.ts:78`.
 - **Expected**: an export/download control on each report producing CSV and JSON.
@@ -428,6 +446,7 @@ plan. N/A: non-code (human/legal) — not gateable.
   `Content-Disposition: attachment`; the JSON is already the stored `run_json`.
 
 #### E-6 · "SSO / SAML sign-in for your whole org" (Enterprise) is not differentiated
+
 - **Advertised (exact)**: `'SSO / SAML sign-in for your whole org'` (Enterprise) —
   `marketing.ts:91`.
 - **Expected**: an Enterprise org configures its own IdP (SAML/OIDC connection) for its
@@ -443,6 +462,7 @@ plan. N/A: non-code (human/legal) — not gateable.
   bullet to reflect the single shared IdP.
 
 #### E-7 · "Audit logs across workspaces and members" (Enterprise) is not implemented
+
 - **Advertised (exact)**: `'Audit logs across workspaces and members'` (Enterprise) —
   `marketing.ts:92`.
 - **Expected**: a customer-facing audit log of member/workspace actions inside their org.
@@ -456,6 +476,7 @@ plan. N/A: non-code (human/legal) — not gateable.
   do not repurpose the internal `admin_audit` (different trust boundary).
 
 #### E-8 · "Org-wide role and workspace management" (Enterprise) is free to every tier
+
 - **Advertised (exact)**: `'Org-wide role and workspace management'` (Enterprise) —
   `marketing.ts:95` (listed under "Everything in Pro, plus:").
 - **Expected**: role/workspace administration is an Enterprise-only capability.
@@ -484,7 +505,7 @@ plan. N/A: non-code (human/legal) — not gateable.
 - **Root cause (single, shared)**: no plan/subscription/entitlement layer exists — no plan
   column (`schema.sql`), no Stripe/billing, and the tier names are referenced by zero
   enforcement code. Client-side vs server-side is moot: there is no entitlement check on
-  *either* side.
+  _either_ side.
 - **Not defects (non-code)**: email/priority/dedicated support, signed DPA, SLA — human/
   legal deliverables, correctly out of code scope.
 
@@ -499,23 +520,26 @@ No changes were made — audit only.
 Entitlement Audit section above (root cause: no billing/entitlement layer exists).
 
 By severity:
-| Severity | Count | IDs |
-|----------|-------|-----|
-| Critical | 0     | —   |
-| High     | 1     | H-1 |
-| Medium   | 1     | M-1 |
+
+| Severity | Count | IDs                |
+| -------- | ----- | ------------------ |
+| Critical | 0     | —                  |
+| High     | 1     | H-1                |
+| Medium   | 1     | M-1                |
 | Low      | 4     | L-1, L-2, L-3, L-4 |
 
 By category:
-| Category                     | Count | IDs |
-|------------------------------|-------|-----|
-| Security                     | 2     | H-1, L-2 |
-| Bug / concurrency            | 1     | L-1 |
-| UX / visual regression       | 1     | M-1 |
-| Architecture / maintainability | 1   | L-3 |
-| Documentation / code quality | 1     | L-4 |
+
+| Category                       | Count | IDs      |
+| ------------------------------ | ----- | -------- |
+| Security                       | 2     | H-1, L-2 |
+| Bug / concurrency              | 1     | L-1      |
+| UX / visual regression         | 1     | M-1      |
+| Architecture / maintainability | 1     | L-3      |
+| Documentation / code quality   | 1     | L-4      |
 
 **Top 3 to address first:**
+
 1. **H-1** — HTML-escape report content before it reaches `marked` so the `/reports/:runId/raw`
    path stops rendering work-item titles as raw HTML (currently only the CSP prevents this
    from being full stored XSS).

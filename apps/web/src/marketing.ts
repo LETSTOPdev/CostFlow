@@ -26,12 +26,7 @@ function prose(inner: string): string {
   return `<article class="panel" style="max-width:46rem;margin-inline:auto;margin-top:2rem">${inner}</article>`;
 }
 
-function page(
-  title: string,
-  description: string,
-  path: string,
-  body: string,
-): string {
+function page(title: string, description: string, path: string, body: string): string {
   return layout(title, body, undefined, {
     canonical: `${CANON}${path}`,
     description,
@@ -85,7 +80,8 @@ const TIERS: Tier[] = [
   {
     name: 'Enterprise',
     price: '$100 / user / month',
-    blurb: 'For teams whose security review is the thing standing between "interested" and "connected."',
+    blurb:
+      'For teams whose security review is the thing standing between "interested" and "connected."',
     bullets: [
       'Everything in Pro, plus:',
       'SSO / SAML sign-in for your whole org',
@@ -119,7 +115,9 @@ const PRICING_FAQ: [string, string][] = [
 
 export function renderPricing(): string {
   const cards = TIERS.map(
-    (t) => `<div class="card card-hover"${t.featured ? ' style="border-color:color-mix(in srgb,var(--primary) 40%,var(--line));box-shadow:var(--sh-2)"' : ''}>
+    (
+      t,
+    ) => `<div class="card card-hover"${t.featured ? ' style="border-color:color-mix(in srgb,var(--primary) 40%,var(--line));box-shadow:var(--sh-2)"' : ''}>
       <h3>${t.name}</h3>
       <p class="figure big" style="font-size:clamp(1.6rem,1.2rem + 1.5vw,2.1rem)">${t.price}</p>
       <p class="note" style="min-height:2.8em">${t.blurb}</p>
@@ -154,7 +152,12 @@ export function renderPricing(): string {
       <a class="btn btn-lg" href="/signup">Get started free</a>
     </div>`;
 
-  return page('Pricing', "Start free. Pay per person once you need the whole team on it.", '/pricing', body);
+  return page(
+    'Pricing',
+    'Start free. Pay per person once you need the whole team on it.',
+    '/pricing',
+    body,
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -290,7 +293,12 @@ export function renderContact(): string {
       <p style="margin-top:1.5rem"><a class="btn" href="${MAIL}">${SUPPORT_EMAIL}</a></p>
     `)}`;
 
-  return page('Contact', 'One real way to reach CostFlow: email. We read everything.', '/contact', body);
+  return page(
+    'Contact',
+    'One real way to reach CostFlow: email. We read everything.',
+    '/contact',
+    body,
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -302,7 +310,7 @@ export function renderChangelog(): string {
     ${pageHead(
       'Changelog',
       "What's new.",
-      "A running log of what changed in CostFlow, newest first. No marketing spin, just what shipped.",
+      'A running log of what changed in CostFlow, newest first. No marketing spin, just what shipped.',
     )}
     ${prose(`
       <p>We're in beta, so this moves fast and sometimes backward. We ship things, learn they're wrong, and
@@ -336,7 +344,7 @@ const BLOG_TOPICS = [
   ],
   [
     "The first version of CostFlow's cost model was wrong. Here's what changed.",
-    'An honest post-mortem once there\'s something real to write about.',
+    "An honest post-mortem once there's something real to write about.",
   ],
   [
     'Reading a Jira board like a queueing problem.',
@@ -367,7 +375,12 @@ export function renderBlog(): string {
       <p>Check back soon, or <a href="/">see the product</a> in the meantime.</p>
     </div>`;
 
-  return page('Blog', "Notes on workflow friction, pricing methodology, and what we're building.", '/blog', body);
+  return page(
+    'Blog',
+    "Notes on workflow friction, pricing methodology, and what we're building.",
+    '/blog',
+    body,
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -397,7 +410,12 @@ export function renderCareers(): string {
       <p class="note" style="margin-top:1.5rem">Questions anyway? <a href="${MAIL}">${SUPPORT_EMAIL}</a></p>
     `)}`;
 
-  return page('Careers', 'Not actively hiring right now. Here\'s what we\'d look for when that changes.', '/careers', body);
+  return page(
+    'Careers',
+    "Not actively hiring right now. Here's what we'd look for when that changes.",
+    '/careers',
+    body,
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -453,7 +471,12 @@ export function renderDocs(): string {
     <div style="max-width:42rem;margin:2rem auto 0">${sections}</div>
     <p class="note" style="text-align:center;margin-top:1.5rem">Still stuck? <a href="${MAIL}">${SUPPORT_EMAIL}</a>. A real person answers.</p>`;
 
-  return page('Documentation', 'How to connect your tracker, read your report, and understand the numbers.', '/docs', body);
+  return page(
+    'Documentation',
+    'How to connect your tracker, read your report, and understand the numbers.',
+    '/docs',
+    body,
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -465,7 +488,7 @@ export function renderCookies(): string {
     ${pageHead(
       'Cookies',
       "We use exactly one kind of cookie, and it's not for ads.",
-      'CostFlow sets a single session cookie so you stay logged in. That\'s the entire list.',
+      "CostFlow sets a single session cookie so you stay logged in. That's the entire list.",
     )}
     ${prose(`
       <p>There's no analytics cookie, no advertising cookie, no third-party tracking pixel, and no
@@ -487,7 +510,12 @@ export function renderCookies(): string {
       <p class="note" style="margin-top:1.5rem">Questions? <a href="${MAIL}">${SUPPORT_EMAIL}</a></p>
     `)}`;
 
-  return page('Cookie Policy', "CostFlow uses one cookie, and it's not for tracking you.", '/cookies', body);
+  return page(
+    'Cookie Policy',
+    "CostFlow uses one cookie, and it's not for tracking you.",
+    '/cookies',
+    body,
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -523,7 +551,12 @@ export function renderSubprocessors(): string {
       <a href="${MAIL}">${SUPPORT_EMAIL}</a> and we'll work through it directly.</p>
     `)}`;
 
-  return page('Subprocessors', 'The infrastructure and services CostFlow relies on to run.', '/dpa', body);
+  return page(
+    'Subprocessors',
+    'The infrastructure and services CostFlow relies on to run.',
+    '/dpa',
+    body,
+  );
 }
 
 /* ------------------------------------------------------------------ *
@@ -534,7 +567,7 @@ export function renderAccessibility(): string {
   const body = `
     ${pageHead(
       'Accessibility',
-      "Built to work with a keyboard, a screen reader, and normal eyesight, not just a mouse and 20/20 vision.",
+      'Built to work with a keyboard, a screen reader, and normal eyesight, not just a mouse and 20/20 vision.',
       "CostFlow hasn't gone through a formal accessibility audit. Here's what's actually true about how it's built, and where to tell us when it isn't enough.",
     )}
     ${prose(`
@@ -612,10 +645,12 @@ export function renderSitemap(): string {
     ([heading, links]) => `<div class="ws" style="text-align:left">
       <h4>${heading}</h4>
       <ul style="margin:.5rem 0 0;padding-left:1.15rem;display:flex;flex-direction:column;gap:.5rem">
-        ${links.map(([href, label]) => {
-          const [name, ...rest] = label.split(': ');
-          return `<li><a href="${href}">${name}</a>${rest.length ? `: ${rest.join(': ')}` : ''}</li>`;
-        }).join('')}
+        ${links
+          .map(([href, label]) => {
+            const [name, ...rest] = label.split(': ');
+            return `<li><a href="${href}">${name}</a>${rest.length ? `: ${rest.join(': ')}` : ''}</li>`;
+          })
+          .join('')}
       </ul>
     </div>`,
   ).join('');
@@ -679,5 +714,10 @@ export function renderFaq(): string {
     ${pageHead('FAQ', 'Questions people actually ask us.', 'Answers to the questions that come up most before and after connecting.')}
     <div class="faq-list" style="margin-top:1.5rem">${items}</div>`;
 
-  return page('FAQ', 'Answers to the questions that come up most before and after connecting.', '/faq', body);
+  return page(
+    'FAQ',
+    'Answers to the questions that come up most before and after connecting.',
+    '/faq',
+    body,
+  );
 }

@@ -777,7 +777,9 @@ Sitemap: https://app.fbx1.com/sitemap.xml
   app.get('/docs', async (_request, reply) => reply.type('text/html').send(renderDocs()));
   app.get('/cookies', async (_request, reply) => reply.type('text/html').send(renderCookies()));
   app.get('/dpa', async (_request, reply) => reply.type('text/html').send(renderSubprocessors()));
-  app.get('/accessibility', async (_request, reply) => reply.type('text/html').send(renderAccessibility()));
+  app.get('/accessibility', async (_request, reply) =>
+    reply.type('text/html').send(renderAccessibility()),
+  );
   app.get('/sitemap', async (_request, reply) => reply.type('text/html').send(renderSitemap()));
   app.get('/faq', async (_request, reply) => reply.type('text/html').send(renderFaq()));
 

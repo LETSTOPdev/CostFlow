@@ -570,7 +570,13 @@ export function layout(
   title: string,
   body: string,
   csrf?: string,
-  opts: { bleed?: boolean; canonical?: string; noindex?: boolean; jsonLd?: string; description?: string } = {},
+  opts: {
+    bleed?: boolean;
+    canonical?: string;
+    noindex?: boolean;
+    jsonLd?: string;
+    description?: string;
+  } = {},
 ): string {
   // Canonical host is app.fbx1.com (see docs/BIBLE §fbx1). SEO tags are opt-in
   // per page so authenticated/dynamic pages stay out of the index.

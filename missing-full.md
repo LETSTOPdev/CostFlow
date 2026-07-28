@@ -122,7 +122,7 @@ CostFlow is a beta product from a small team. We haven't gone through a formal S
 
 **CTA:** Questions before you connect? [support@fbx1.com](mailto:support@fbx1.com)
 
-*(Note: don't add a SOC 2 / ISO badge to this page until one is real. The honesty is the trust signal at this stage. A fake badge is worse than no badge.)*
+_(Note: don't add a SOC 2 / ISO badge to this page until one is real. The honesty is the trust signal at this stage. A fake badge is worse than no badge.)_
 
 ---
 
@@ -157,7 +157,7 @@ We're a small team building this in the open, during a free beta, because we'd r
 
 **CTA:** See what it's costing your team → `/signup`
 
-*(Note per your instruction: no invented founder names, headcount, funding, or founding date. None of that is asserted here. If you want real specifics on this page later, swap them in; don't let me guess at them.)*
+_(Note per your instruction: no invented founder names, headcount, funding, or founding date. None of that is asserted here. If you want real specifics on this page later, swap them in; don't let me guess at them.)_
 
 ---
 
@@ -217,7 +217,7 @@ We're in beta, so this moves fast and sometimes backward. We ship things, learn 
 Longer explanation if it needs one: what changed, why, and whether anyone needs to do anything about it.
 ```
 
-*(Note: I did not invent dated changelog entries. A changelog is a factual record; making up "shipped on this date" entries would be fabricating history, not writing marketing copy. Seed this page with real entries once someone owns pulling them from actual releases. The format above is ready to use.)*
+_(Note: I did not invent dated changelog entries. A changelog is a factual record; making up "shipped on this date" entries would be fabricating history, not writing marketing copy. Seed this page with real entries once someone owns pulling them from actual releases. The format above is ready to use.)_
 
 ---
 
@@ -238,7 +238,7 @@ Longer explanation if it needs one: what changed, why, and whether anyone needs 
 
 This is where the longer version of things lives: the reasoning behind a confidence tier, why we priced overdue work the way we did, what changed and why. If you want the short version, the product itself is the short version.
 
-**Suggested first topics** *(not written yet, flagged as planned rather than published, per your instruction not to fabricate content)*:
+**Suggested first topics** _(not written yet, flagged as planned rather than published, per your instruction not to fabricate content)_:
 
 - "Why every friction number is a range, not a point estimate." The actual reasoning behind expected-value-with-a-range instead of a single confident-looking number.
 - "What we mean by 'unpriced,' and why we'd rather show nothing than guess." The confidence-tier system and the decision to leave things unpriced instead of inventing an assumption.
@@ -340,8 +340,8 @@ There's no analytics cookie, no advertising cookie, no third-party tracking pixe
 
 **The one cookie we do set:**
 
-| Cookie | Purpose | Type | Expiry |
-|---|---|---|---|
+| Cookie       | Purpose                              | Type               | Expiry                 |
+| ------------ | ------------------------------------ | ------------------ | ---------------------- |
 | `cf_session` | Keeps you signed in between requests | Strictly necessary | Session / until logout |
 
 Because this cookie is strictly necessary for the product to function, and it's not used for tracking, advertising, or analytics, CostFlow doesn't show a cookie-consent banner. There's nothing optional to consent to.
@@ -425,6 +425,7 @@ We haven't run a full WCAG audit, and we're not going to claim a compliance leve
 **Body (grouped list):**
 
 **Product**
+
 - [Home](/): what CostFlow does and why
 - [Pricing](/pricing): free during beta
 - [Security](/security): how your data and credentials are handled
@@ -432,17 +433,20 @@ We haven't run a full WCAG audit, and we're not going to claim a compliance leve
 - [Try it live](/try): a random generated company, run through the real engine
 
 **Company**
+
 - [About](/about): who's building this
 - [Contact](/contact): one email address, real replies
 - [Careers](/careers): nothing open right now
 - [Blog](/blog): notes on the product and the problem
 
 **Resources**
+
 - [Documentation](/docs): how to connect, map, and read your report
 - [Changelog](/changelog): what shipped, in order
 - [FAQ](/faq): short answers to common questions
 
 **Legal**
+
 - [Terms of Service](/terms)
 - [Privacy](/privacy)
 - [Cookie Policy](/cookies)
@@ -513,7 +517,7 @@ Terms · Privacy · Cookies · Subprocessors · Accessibility
 
 Bottom row (unchanged from today, keep it): brand mark, "CostFlow is an FBX1 product," support email.
 
-*(No social links included. There's nothing real to link to yet. An empty social icon row that points at dead or unused accounts is worse than no row. Add it when there's an actual account behind it.)*
+_(No social links included. There's nothing real to link to yet. An empty social icon row that points at dead or unused accounts is worse than no row. Add it when there's an actual account behind it.)_
 
 ---
 
