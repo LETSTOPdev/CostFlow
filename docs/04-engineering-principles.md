@@ -268,6 +268,15 @@ machine — R5 in `06-known-risks.md`.
 A gate that fails intermittently stops being read, so a flaky test is a bug in
 the test.
 
+### Documentation is part of Done
+
+Updating the living documentation under `docs/` is part of finishing a piece of
+work, not a follow-up task. Obsolete text is deleted rather than appended to,
+and documentation found to disagree with reality is corrected on sight.
+
+*Partly enforced:* `docs-sync.test.ts` fails the build where the two can be shown
+to disagree. The rest is judgement. Full rules in `docs/README.md`.
+
 ### Deploy is push to `main`
 
 There is no separate deploy step and no staging environment. Confirm before

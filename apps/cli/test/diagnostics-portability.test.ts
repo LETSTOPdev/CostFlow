@@ -35,8 +35,9 @@ describe('the diagnostics layer is connector-blind (ADR-0006)', () => {
     expect(FILES.length).toBeGreaterThan(0);
   });
 
-  // Every provider that has an ingestion transform today, plus the platforms
-  // named in the doc 18 roadmap. Adding a connector must not add a branch here.
+  // Every provider that has an ingestion transform today, plus platforms a
+  // connector might plausibly be written for next (ADR-0005 makes that a new
+  // module, not a new branch). Adding a connector must not add a branch here.
   const PROVIDERS = ['jira', 'clickup', 'monday', 'asana', 'linear', 'trello', 'shortcut'];
 
   for (const provider of PROVIDERS) {

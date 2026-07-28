@@ -10,7 +10,7 @@ What is true today. Rewrite this document rather than appending to it.
 |---|---|
 | URL | https://app.fbx1.com |
 | Status | Live, free public beta |
-| Deployed commit | `f2b7646` |
+| Deployed commit | whatever `/healthz` reports — check it, do not trust a written SHA |
 | Replicas | 2, both serving |
 | Health | `GET /healthz` returns `{"status":"ok","commit":"<sha>"}` |
 | CSP | `script-src 'none'` — verified in production |
@@ -22,11 +22,13 @@ pre-deploy phase (never chained with start), and gates on the healthcheck.
 
 `pnpm check` = typecheck → lint → format → dependency-cruiser → tests.
 
-**629 passing, 1 skipped, 66 files.** Green on `main`.
+Green on `main`, with one skip: the Postgres half of the store contract suite,
+which needs `COSTFLOW_TEST_DATABASE_URL`. No Postgres runs on the development
+machine; those paths are validated against PGlite instead (`07-testing.md`).
 
-The skip is the Postgres half of the store contract suite, which needs
-`COSTFLOW_TEST_DATABASE_URL`. No Postgres runs on the development machine; the
-Postgres paths are validated against PGlite instead (see `07-testing.md`).
+Run `pnpm check` for the current count. It is deliberately not written down here
+— a number that changes on almost every commit would be stale more often than
+not, and a document that is usually slightly wrong stops being trusted.
 
 ## What works end to end
 

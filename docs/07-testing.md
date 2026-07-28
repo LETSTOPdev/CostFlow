@@ -26,10 +26,12 @@ inspect the source tree, and one of them caught its own author.
 pnpm check  =  typecheck → lint → format → dependency-cruiser → tests
 ```
 
-**Currently 629 passing, 1 skipped, 66 files.**
+One test is skipped: the Postgres half of the store contract suite, which
+activates when `COSTFLOW_TEST_DATABASE_URL` is set.
 
-The skip is the Postgres half of the store contract suite, which activates when
-`COSTFLOW_TEST_DATABASE_URL` is set.
+The passing count is deliberately not recorded in these documents. It changes on
+almost every commit, so writing it down guarantees it is usually wrong — and a
+document that is usually slightly wrong is one nobody checks. Run `pnpm check`.
 
 ---
 
@@ -92,6 +94,13 @@ Under `apps/cli/test/`, these inspect the repository itself:
   comments.*
 - **`diagnostics-unit-coverage.test.ts`** — every magnitude unit the goldens
   contain maps to an intervention.
+- **`docs-sync.test.ts`** — the documentation and the codebase have not drifted
+  apart in ways a test can see: every package and application is described in
+  the architecture document, the project brief still fits its five-minute
+  promise, every reference document and ADR cited from source still exists, and
+  every internal documentation link resolves. *This caught a dangling `doc 18`
+  citation on its first run — a document that only ever existed on an archived
+  branch.*
 
 ---
 

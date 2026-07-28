@@ -89,7 +89,7 @@ statuses, set assumptions, run an analysis, read a priced report with
 recommended actions, and compare against the previous run.
 
 - Nine pure packages, two applications (CLI and web).
-- 629 tests, one skipped, gated on every change.
+- A test suite gated on every change (`pnpm check`).
 - 100% server-rendered, zero client JavaScript, strict CSP.
 - Multi-tenant with an internal operations console and customer database.
 

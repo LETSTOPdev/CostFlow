@@ -6,6 +6,42 @@ Its purpose is to let a completely new AI session understand the current state o
 this project without any prior chat history. **These documents are the canonical
 source of truth.**
 
+## Definition of Done
+
+**A task is not complete until the documentation reflects it.** This applies to
+every milestone, feature, architectural decision, refactor, deployment, and
+change in production behaviour — not only to large ones.
+
+Before you call anything finished:
+
+1. **Update every affected document.** Not a note promising to update it later.
+2. **Remove what is now obsolete.** Do not accumulate history. If a sentence
+   describes how things used to be, delete it.
+3. **Keep the documentation synchronised with the code.** They are one artifact
+   in two forms.
+4. **Fix documentation that no longer matches reality the moment you find it**,
+   even if it is unrelated to what you were doing. A stale document is worse
+   than a missing one, because it is believed. This has already cost this
+   project a milestone's premise once.
+5. **Do not create hand-off documents, milestone summaries, or changelogs**
+   unless explicitly asked. Rewrite these documents instead. Git holds history.
+6. **Keep `00-project-brief.md` under five minutes to read.** It is the entry
+   point for every future session; if it grows, move detail into the document
+   that owns it.
+7. **`reference/` and `adr/` are historical and are not rewritten.** Reference
+   documents are immutable design notes. ADRs are decision records, amended in
+   place rather than rewritten.
+8. **The living documents in this folder are the canonical source of truth for
+   the current state of the project.**
+
+Then do a final pass: read what you changed and ask whether a stranger reading
+only these documents would now have an accurate picture. If not, you are not
+done.
+
+Some of this is enforced by `apps/cli/test/docs-sync.test.ts`, which fails the
+build when the documentation and the codebase disagree in ways a test can see.
+Most of it is not mechanically checkable and is your responsibility.
+
 ## For any AI assistant working on this project
 
 1. **Read `00-project-brief.md` first.** Always. It is under five minutes and it
