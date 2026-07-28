@@ -36,3 +36,9 @@ export {
   OWNERSHIP_THRESHOLDS,
   detectMissingOwnership,
 } from './signals/ownership';
+
+export {
+  GATEKEEPING_SIGNAL,
+  GATEKEEPING_THRESHOLDS,
+  detectSerialGatekeeping,
+} from './signals/gatekeeping';

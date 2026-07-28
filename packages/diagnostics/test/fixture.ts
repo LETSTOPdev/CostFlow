@@ -67,6 +67,33 @@ export const waitAt = (at: StageRef, hours: readonly number[]): FrictionInstance
   })),
 });
 
+/**
+ * A queue-wait instance at `at` over specific item ids. Use this when a test
+ * needs the same item to wait in several stages, which is what real lifecycles
+ * look like and what makes the "share of items through this gate" denominator
+ * meaningful.
+ */
+export const waitOver = (
+  at: StageRef,
+  ids: readonly string[],
+  hours: number,
+): FrictionInstance => ({
+  id: `f1-queue-wait:${at.name}`,
+  signalId: 'f1-queue-wait',
+  signalVersion: '1.0.0',
+  frictionType: 'queue-wait',
+  location: { stage: at },
+  magnitude: { unit: 'item-hours-waiting', value: ids.length * hours },
+  evidence: ids.map((workItemId) => ({
+    workItemId,
+    title: '',
+    actor: { kind: 'missing' as const },
+    waitHours: hours,
+    visits: 1,
+    openAtAnalysisTime: false,
+  })),
+});
+
 export const item = (id: string, at: StageRef, actor: WorkItem['actor']): WorkItem => ({
   id,
   sourceId: id,
