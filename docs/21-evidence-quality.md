@@ -94,11 +94,10 @@ batch stops being a record of an import.
 // packages/domain/src/evidence.ts
 
 export const EVIDENCE_WEAKNESSES = [
-  'derived-not-observed',   // the value was inferred, not read
-  'partial-coverage',       // some subjects were not observed at all
-  'open-interval',          // the observation window is truncated at analysis time
-  'collapsed-repetition',   // repeated states merged; order or duration is approximate
-  'ambiguous-semantics',    // the field may not mean what it is treated as
+  'derived-not-observed',   // we did not see it; we computed it
+  'partial-coverage',       // we saw some subjects, not all of them
+  'open-interval',          // we saw the start; the end has not happened yet
+  'ambiguous-semantics',    // we saw it accurately, but it may not mean what we treat it as
 ] as const;
 
 export type EvidenceWeakness = (typeof EVIDENCE_WEAKNESSES)[number];
@@ -124,6 +123,44 @@ analytics never needs a migration. The asymmetry is the point: analytics
 vocabulary should be cheap to extend, and the language the engine reasons in
 should not be.
 
+### 4.0 The rule for extending `EvidenceWeakness`
+
+> A new weakness is warranted only when it names a genuinely different
+> **epistemological problem** — not a different **mechanism** that produces a
+> problem already named.
+
+This is the same error `eventProvenance` makes, one level down. "Repeated visits
+to a status are collapsed by the source" is a *mechanism*; the *problem* it
+produces is that the transition sequence had to be derived rather than read.
+Modelling the mechanism would grow the vocabulary once per platform quirk, which
+is precisely what §2 rejects.
+
+The four members are intended to stay stable for years, and they are chosen to
+be orthogonal — each answers a different question about an observation:
+
+| Member | The question it answers |
+|---|---|
+| `derived-not-observed` | Is the value real, or did we compute it? |
+| `partial-coverage` | Is the population complete? |
+| `open-interval` | Is the measurement finished? |
+| `ambiguous-semantics` | Does it mean what we think it means? |
+
+`open-interval` earns separation from `derived-not-observed` on that test rather
+than by convention: an open interval's end is imputed, so the value is partly
+computed — but the two imply opposite futures. A derived value does not improve
+with time, because the source never recorded what was missing. An open interval
+is correct as of now and becomes *more* correct on the next run, because the
+observation is merely censored by the present. Same arithmetic, different
+epistemology, different advice to the reader.
+
+A note may of course carry several weaknesses about the same subject; `evidence`
+is an array, and they compose by minimum like everything else.
+
+**Every member now maps 1:1 onto a cap that already exists in §3.** Nothing in
+this vocabulary was invented for a case the codebase has not already met at
+least once, which is the standard this document holds itself to and the reason
+the earlier draft's fifth member was removed.
+
 ### 4.1 `subject`, and why it is not a field list
 
 The first draft of this proposal used `scope: 'events' | 'stages' | 'due-dates'
@@ -131,17 +168,17 @@ The first draft of this proposal used `scope: 'events' | 'stages' | 'due-dates'
 the name of a concept, and it was corrected under review. Two changes:
 
 **The governing rule.** `subject` names the canonical concept whose
-**observations** are weak — never the inference that suffers from it. CU1's
-bounce collapse is `subject: 'events'` (the sequence is what is approximate),
-not `'stages'` (which is merely what gets misattributed downstream). A
-diagnostic already knows that per-stage wait derives from events; connecting the
-two is the consumer's job, correctly placed.
+**observations** are weak — never the inference that suffers from it. CU1 is
+`subject: 'events'` (the sequence is what had to be derived), not `'stages'`
+(which is merely what gets misattributed downstream). A diagnostic already knows
+that per-stage wait derives from events; connecting the two is the consumer's
+job, correctly placed.
 
 **Only members with a real instance.** Applying that rule:
 
 | Subject | Real instance today |
 |---|---|
-| `events` | CU1 collapse; missing history; open intervals |
+| `events` | CU1 reconstruction; missing history; open intervals |
 | `items` | rows dropped at ingestion |
 | `actors` | CU3 — multi-assignee tasks keep only the primary assignee |
 | `commitments` | shared due dates that encode a milestone gate |
@@ -233,16 +270,35 @@ migrate when they are next touched for another reason. Retrofitting now would
 regenerate cost-model goldens for no behavioural gain and would put the hard
 constraint in §6 at risk for no return.
 
-## 8. Open questions
+## 8. The case that forced the concept, modelled
 
-1. **Does `collapsed-repetition` deserve its own member**, or is it
-   `derived-not-observed` with a detail string? It is the only member introduced
-   without a pre-existing prose instance, which by this document's own standard
-   is the weakest of the five.
-2. **Should `EvidenceNote` carry a magnitude** (how many items were affected)?
+The whole of MC-5 Part B, written out:
+
+```ts
+{
+  weakness: 'derived-not-observed',
+  subject: 'events',
+  detail:
+    'Repeated visits to the same status are collapsed by the source platform, ' +
+    'so individual transitions cannot be reconstructed exactly.',
+}
+```
+
+Note what the vocabulary does and does not carry. The *problem* — the sequence
+was computed rather than read — is machine-readable, so a diagnostic can cap on
+it. The *mechanism* — which platform collapsed what — lives in `detail`, where
+it informs the reader without becoming part of the engine's language. That split
+is the whole design in one record.
+
+A future platform with a different quirk producing the same problem reuses the
+same two fields and writes a different sentence. The vocabulary does not grow.
+
+## 9. Open questions
+
+1. **Should `EvidenceNote` carry a magnitude** (how many items were affected)?
    The existing prose caps do — "N item(s) have no event history". Adding it
    makes the note self-describing; leaving it out keeps `detail` as the only
    place a number lives, which is the current inconsistency.
-3. **Does the app layer author the cap text, or does `detail` become it
+2. **Does the app layer author the cap text, or does `detail` become it
    directly?** The latter is simpler and keeps one sentence; the former allows
    customer-facing copy to differ from the engine's internal record.
