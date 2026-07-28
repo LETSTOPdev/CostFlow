@@ -412,3 +412,32 @@ it, and the fallback says which of the two the reader is looking at.
 suppression is untouched, and the fallback shows figures the report already
 renders further down. The public sample surfaces keep their own empty state,
 which explains the evidence threshold and links to a full-size demonstration.
+
+---
+
+## D21 — "Where to act first" names one place to start
+
+**Decision.** When any diagnostic clears its evidence gate, the section opens by
+naming the single strongest-evidenced finding as the starting point, states that
+this is the basis, and reports its implementation complexity. The caveat about
+ordering stays, scoped to the remainder of the list.
+
+**Reason.** The section was titled "Where to act first" and opened with "this is
+not a recommended sequence" — a heading and a disclaimer that cancel each other,
+in the one section the North Star depends on. An executive reading both leaves
+less confident than they arrived.
+
+The disclaimer was defending something real (D9 / ADR-0006 §5: no composite
+priority score, and a ranked list does not become a work order because it is
+ordered). But "there is no optimal sequence" and "here is where to start" are
+different claims, and only the first was ever in question.
+
+**Tradeoffs.** Naming a starting point is a stronger statement than the product
+made before. It is bounded by saying what it is chosen ON — strongest evidence,
+explicitly not largest figure — so a reader who disagrees with that basis can
+see the basis and choose differently.
+
+**Consequences.** Nothing is fused: complexity is reported and still never
+reorders anything. The ranked-friction list, which is ordered by cost, now says
+why its order differs from the section above it — two orders on one page is a
+credibility problem unless the page says why.

@@ -76,7 +76,10 @@ best at — a priced report that says what to fix first — and the product
 screenshot mirrors the real report's order. The stage vocabulary shown before
 signup matches the six kinds the product actually uses.
 
-**Report structure.** The top section never says nothing while money is priced:
+**Report structure.** The recommendations section names one place to start and
+says it was chosen for strongest evidence rather than largest figure (D21). The
+ranked list below explains why its cost order differs. The top section never
+says nothing while money is priced:
 with no diagnostic above its evidence gate it names the largest measured cost
 and labels it as measured (D20). Durations are formatted for a reader; the
 artifact keeps full decimal precision. The statuses step explains what each of

@@ -175,6 +175,34 @@ const renderCard = (card: ActionCard, originLabels: Readonly<Record<string, stri
   </article>`;
 };
 
+/**
+ * One named place to begin.
+ *
+ * The section is titled "Where to act first" and used to open with "this is not
+ * a recommended sequence" — a heading and a disclaimer that cancel each other,
+ * in the one section the North Star depends on. An executive reading both
+ * leaves with less confidence than they arrived with.
+ *
+ * The disclaimer was right about what it was defending: ADR-0006 §5 forbids a
+ * composite priority score, and a ranked list does not become a work order just
+ * because it is ordered. But "there is no optimal sequence" and "here is where
+ * to start" are different claims, and only the first was ever in question.
+ * This names the strongest-evidenced finding and says that is the basis, which
+ * fuses nothing: complexity still never reorders anything, and the disclaimer
+ * below still scopes the ordering of the remainder.
+ */
+const startHere = (card: ActionCard, originLabels: Readonly<Record<string, string>>): string => {
+  const where =
+    card.originScopeId !== null && originLabels[card.originScopeId] !== undefined
+      ? `${esc(originLabels[card.originScopeId] as string)}, stage “${esc(card.stageName)}”`
+      : `stage “${esc(card.stageName)}”`;
+  return `<div class="info" style="margin:0 0 .9rem">
+    <p style="margin:0 0 .25rem"><strong>Start here: ${where}.</strong></p>
+    <p style="margin:0 0 .35rem">${esc(card.recommendation)}</p>
+    <p class="note" style="margin:0">Chosen as the finding this run has the strongest evidence for (confidence ${esc(card.bestTier)}), not as the most expensive one. Implementation complexity: ${esc(card.complexity)}.</p>
+  </div>`;
+};
+
 const renderUnavailable = (
   unavailable: readonly DiagnosticUnavailable[],
   assessment: EvidenceAssessment,
@@ -246,7 +274,8 @@ export function renderDiagnostics(view: DiagnosticsView, options: DiagnosticsOpt
             // does show the capability at full size.
             `<p class="note" style="margin:0">This sample is smaller than the evidence threshold CostFlow requires before it will recommend anything, so it recommends nothing. That refusal is the product working: a confident-sounding action drawn from a handful of items is exactly what costs an executive their trust. <a href="/try">See the recommendations on a full-size organisation →</a></p>`
           : `<p class="note" style="margin:0">No operational findings above the declared thresholds for this run. That is a result, not an omission: the evidence did not support a recommendation.</p>`
-      : `<p class="note" style="margin:0 0 .6rem">Ordered by strength of evidence first, then by how concentrated each finding is. This is not a recommended sequence and not an ordering by cost. Implementation complexity is a property of the action itself and never changes this order — weighing the two is your call.</p>
+      : `${startHere(cards[0] as ActionCard, view.originLabels)}
+         <p class="note" style="margin:0 0 .6rem">Below, findings are ordered by strength of evidence, then by how concentrated each one is — not by cost, and not as a sequence to work through. Implementation complexity is a property of each action and never changes that order; weighing impact against effort is your call.</p>
          ${cards.map((c) => renderCard(c, view.originLabels)).join('')}`;
   return `<section>
     <h2 style="margin:1.8rem 0 .5rem">Where to act first</h2>

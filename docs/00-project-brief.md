@@ -24,13 +24,20 @@ plus a set of recommended actions.
 
 Live at **https://app.fbx1.com**, free public beta.
 
-## The goal
+## The North Star
 
-**The product an executive cannot imagine running their organisation without** —
-not the most sophisticated friction engine. Founder directive, 2026-07-28. The
-engine is a means; sophistication that never reaches a report is not progress.
-See the priority order at the head of [`03-roadmap.md`](03-roadmap.md), which
-governs what gets built next.
+> **CostFlow succeeds if an executive can open a report, spend less than two
+> minutes reading it, and leave with complete confidence about the single
+> highest-impact action they should take next.**
+
+Founder directive, 2026-07-28. Everything else exists to support that outcome.
+When choosing between several good implementations, prefer the one that makes
+the executive's next decision clearer.
+
+The engine is a means. Sophistication that never reaches a report is not
+progress. See the priority order at the head of [`03-roadmap.md`](03-roadmap.md),
+which governs what gets built next, and the cold-start ritual in
+[`09-ai-context.md`](09-ai-context.md) §3, which governs how it is chosen.
 
 ## Who it is for
 

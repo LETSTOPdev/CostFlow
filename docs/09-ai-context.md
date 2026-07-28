@@ -128,11 +128,21 @@ Record every observation, then classify each one:
 | **Incorrect** | It states or implies something untrue, or is right but reads as wrong. |
 | **Low-value** | It occupies attention it does not earn. Removing it is the fix. |
 
+Then, of every screen, ask the question that outranks all the others:
+
+> **"If I were the CEO of this company, would I immediately know what to do
+> after reading this screen?"**
+
+**If the answer is no, explain why before writing any code.** The explanation is
+the work; the fix is downstream of it. An observation you cannot articulate is
+one you do not understand yet.
+
 **Fix the highest-impact observations before extending the engine.**
 
-The standard to hold: **the product should be easier to understand than it is to
-explain.** If explaining a screen takes longer than reading it, the screen is
-wrong.
+Two standards to hold. **The product should be easier to understand than it is
+to explain** — if explaining a screen takes longer than reading it, the screen
+is wrong. And the North Star in `00-project-brief.md`: under two minutes, and
+complete confidence about the single highest-impact next action.
 
 The question to optimise against, every time:
 

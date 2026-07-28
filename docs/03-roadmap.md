@@ -3,6 +3,14 @@
 Future work only. **When a milestone completes, delete it from this file** and
 update `02-current-state.md` instead.
 
+## The North Star
+
+> An executive opens a report, reads it in under two minutes, and leaves with
+> complete confidence about the single highest-impact action to take next.
+
+Stated in full in `00-project-brief.md`. Between several good implementations,
+prefer the one that makes the executive's next decision clearer.
+
 ## The priority order
 
 Founder directive, 2026-07-28: the centre of gravity moves from infrastructure,

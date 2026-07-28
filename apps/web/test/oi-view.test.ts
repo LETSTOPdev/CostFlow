@@ -98,15 +98,24 @@ describe('OI1 — the operational layer on the report', () => {
     expect(res.body).toContain('Suggested intervention');
   });
 
-  it('labels the ordering honestly and disclaims it as a sequence', async () => {
+  /**
+   * The disclaimer stays, and its scope moved. "There is no optimal sequence"
+   * and "here is where to start" are different claims; only the first was ever
+   * in question, and the section is titled after the second.
+   */
+  it('labels the ordering honestly without disclaiming the section itself', async () => {
     const t = await makeApp();
     const email = 'oi2@example.com';
     const cookie = await signIn(t, email);
     await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
 
     const res = await get(t, cookie, '/reports/r-flow');
-    expect(res.body).toContain('not a recommended sequence');
-    expect(res.body).toContain('never changes this order');
+    expect(res.body).toContain('not as a sequence to work through');
+    expect(res.body).toContain('never changes that order');
+    // The starting point comes before the caveat about the rest of the list.
+    expect(res.body.indexOf('Start here:')).toBeLessThan(
+      res.body.indexOf('not as a sequence to work through'),
+    );
   });
 
   it('shows the gate it could not assess, naming the capability and the platform reason', async () => {
@@ -357,5 +366,53 @@ describe('the sample report with nothing to recommend', () => {
     await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
     const res = await get(t, cookie, '/reports/r-flow');
     expect(res.body).not.toContain('smaller than the evidence threshold');
+  });
+});
+
+/**
+ * The North Star: under two minutes, complete confidence about the single
+ * highest-impact next action. The section that has to deliver that used to open
+ * by disclaiming it.
+ */
+describe('the section that answers "what do I do next"', () => {
+  it('names one place to start, and says on what basis', async () => {
+    const t = await makeApp();
+    const email = 'start@example.com';
+    const cookie = await signIn(t, email);
+    await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
+
+    const res = await get(t, cookie, '/reports/r-flow');
+    expect(res.body).toContain('Start here:');
+    expect(res.body).toContain('strongest evidence');
+    // The heading and the body no longer cancel each other out.
+    expect(res.body).not.toContain('This is not a recommended sequence');
+  });
+
+  /**
+   * ADR-0006 §5 still holds: naming a starting point is not a priority score.
+   * Complexity is reported and never reorders anything.
+   */
+  it('still refuses to fuse impact and complexity', async () => {
+    const t = await makeApp();
+    const email = 'nofuse@example.com';
+    const cookie = await signIn(t, email);
+    await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
+
+    const res = await get(t, cookie, '/reports/r-flow');
+    expect(res.body).toContain('never changes that order');
+    expect(res.body).not.toMatch(/priority score/i);
+    expect(res.body).not.toMatch(/ROI/i);
+  });
+
+  /** Two orders on one page, reconciled where the reader meets the second. */
+  it('explains why the ranked list is in a different order', async () => {
+    const t = await makeApp();
+    const email = 'orders@example.com';
+    const cookie = await signIn(t, email);
+    await seedRun(t, email, 'r-flow', 'jira', FLOW_RUN);
+
+    const res = await get(t, cookie, '/reports/r-flow');
+    expect(res.body).toContain('different order from');
+    expect(res.body).toContain('not always the same one');
   });
 });

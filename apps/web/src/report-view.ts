@@ -488,7 +488,19 @@ export function renderReportBody(
     ${recommendations}
     ${detailDivider}
     <section><h2>Ranked frictions</h2>
-    ${model.ranked.length === 0 ? '' : '<p class="note" style="margin-top:-.3rem">Ranked by expected cost, biggest first.</p>'}
+    ${
+      model.ranked.length === 0
+        ? ''
+        : `<p class="note" style="margin-top:-.3rem">Ranked by expected cost, biggest first. ${
+            options.diagnostics && options.diagnostics.findings.length > 0
+              ? // Two orders on one page is a credibility problem unless the page says
+                // why. The most expensive finding and the best-evidenced one are
+                // genuinely different questions, and a reader who spots the
+                // difference without an explanation loses confidence in both.
+                'This is a different order from <em>Where to act first</em> above, which leads with the strongest evidence rather than the largest figure. The biggest number and the surest finding are not always the same one.'
+              : ''
+          }</p>`
+    }
     ${ranked}</section>
     ${renderTrend(run, options.previous ?? null)}
     ${renderUnpriced(model.unpriced)}
