@@ -30,3 +30,9 @@ export {
   CONCENTRATION_THRESHOLDS,
   detectConcentration,
 } from './signals/concentration';
+
+export {
+  OWNERSHIP_SIGNAL,
+  OWNERSHIP_THRESHOLDS,
+  detectMissingOwnership,
+} from './signals/ownership';

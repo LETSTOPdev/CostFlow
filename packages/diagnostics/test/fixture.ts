@@ -30,6 +30,25 @@ export const overdueAt = (at: StageRef, days: readonly number[]): FrictionInstan
   })),
 });
 
+/** An overdue instance at `at` whose evidence points at specific item ids. */
+export const overdueOver = (at: StageRef, ids: readonly string[], days = 5): FrictionInstance => ({
+  id: `f3-overdue:${at.name}`,
+  signalId: 'f3-overdue',
+  signalVersion: '1.0.0',
+  frictionType: 'overdue',
+  location: { stage: at },
+  magnitude: { unit: 'item-days-overdue', value: ids.length * days },
+  evidence: ids.map((workItemId) => ({
+    workItemId,
+    title: '',
+    actor: { kind: 'missing' as const },
+    dueAt: '2026-07-01',
+    overdueDays: days,
+    dueBeforeCreated: false,
+    sharedDueDateCohortSize: 0,
+  })),
+});
+
 /** One queue-wait instance at `stage`, with the given per-item wait hours. */
 export const waitAt = (at: StageRef, hours: readonly number[]): FrictionInstance => ({
   id: `f1-queue-wait:${at.name}`,
