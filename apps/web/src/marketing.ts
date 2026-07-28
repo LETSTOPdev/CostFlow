@@ -437,7 +437,7 @@ const DOCS_SECTIONS: [string, string][] = [
   ],
   [
     'Mapping statuses and roles',
-    "How your board's statuses map to CostFlow's stages (active, queue, stalled, done), and how team members map to cost categories. Why this step exists: nothing gets priced on a mapping you didn't confirm yourself.",
+    "How your board's statuses map to CostFlow's six stage kinds (queue, active, review, blocked, done, abandoned) and what each one changes — queue and review are priced as waiting, done and abandoned are excluded. Plus how team members map to cost categories. Why this step exists: nothing gets priced on a mapping you didn't confirm yourself.",
   ],
   [
     'Understanding your report',

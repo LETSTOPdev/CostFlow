@@ -77,6 +77,11 @@ const productMockup = `
             <path d="M0 34 L28 30 L56 32 L84 20 L112 24 L140 12 L168 15 L200 6 L200 44 L0 44 Z" fill="url(#lpSpark)"/>
           </svg>
         </div>
+        <div class="lp-fr-label">Where to act first</div>
+        <div class="lp-rec">
+          <p class="lp-rec-head">Approvals in “In Review” are the constraint.</p>
+          <p class="lp-rec-sub">One reviewer holds 71% of the wait. Add a second approver — complexity: low.</p>
+        </div>
         <div class="lp-fr-label">Ranked frictions</div>
         <div class="lp-fr-list">
           ${frictionRow(1, 'Queue wait in To Do', '$1,062', 'C', 100)}
@@ -112,7 +117,7 @@ const hero = `
   <div class="container lp-hero-inner">
     <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Try the live demo for free during beta. No signup required. →</a>
     <h1 class="lp-h1">See what delays in Jira or ClickUp <br><span class="lp-grad">are costing you in dollars.</span></h1>
-    <p class="lp-sub">Connect Jira or ClickUp and get a ranked cost report in about a minute.
+    <p class="lp-sub">Connect Jira or ClickUp and get a priced, ranked report that says what to fix first.
       Every figure traces back to its formula.</p>
     <div class="lp-cta">
       <a class="btn btn-lg" href="/signup">Get started free</a>
@@ -147,7 +152,7 @@ const how = `
         <div class="lp-step-viz lp-viz-map">
           <div class="lp-map-row"><span>In Progress</span><em>→</em><i class="lp-tag">active</i></div>
           <div class="lp-map-row"><span>Waiting</span><em>→</em><i class="lp-tag">queue</i></div>
-          <div class="lp-map-row"><span>Blocked</span><em>→</em><i class="lp-tag lp-tag-warn">stalled</i></div>
+          <div class="lp-map-row"><span>In review</span><em>→</em><i class="lp-tag lp-tag-warn">review</i></div>
         </div>
         <div class="lp-step-num">02</div>
         <h3>Map &amp; confirm</h3>
@@ -162,7 +167,7 @@ const how = `
         </div>
         <div class="lp-step-num">03</div>
         <h3>Get your report</h3>
-        <p>Ranked frictions with cost ranges, confidence tiers, and a formula drill-down for every figure.</p>
+        <p>What to act on first, then every priced friction behind it — cost ranges, confidence tiers, and a formula drill-down for each figure.</p>
       </div>
     </div>
   </div>
@@ -284,7 +289,7 @@ function landingJsonLd(): string {
         operatingSystem: 'Web',
         url: 'https://app.fbx1.com/',
         description:
-          'Connect Jira or ClickUp and CostFlow turns delays, queues, and overdue work into a ranked cost report. Every figure traces back to its formula.',
+          'Connect Jira or ClickUp and CostFlow turns delays, queues, and overdue work into a priced report that says what to fix first. Every figure traces back to its formula.',
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
         publisher: { '@id': 'https://app.fbx1.com/#org' },
       },
@@ -398,6 +403,14 @@ const LANDING_STYLE = `
 .lp-spark{position:absolute;right:1rem;bottom:0;width:200px;max-width:44%;height:44px;opacity:.85}
 .lp-fr-label{font-size:.72rem;font-weight:640;letter-spacing:.06em;text-transform:uppercase;color:#8589a0;margin:1.1rem 0 .55rem}
 .lp-fr-list{display:flex;flex-direction:column;gap:.55rem}
+/* The recommendation band. Tinted rather than neutral because in the real
+   report this is the decision and the ranked list below it is the working —
+   the mockup has to show that order, or the landing page advertises the
+   product CostFlow used to be. */
+.lp-rec{padding:.75rem .85rem;border-radius:11px;background:rgba(99,102,241,.14);
+  border:1px solid rgba(129,140,248,.32)}
+.lp-rec-head{margin:0;font-size:.86rem;font-weight:660;color:#eef0ff;line-height:1.35}
+.lp-rec-sub{margin:.3rem 0 0;font-size:.76rem;color:#b9bcd6;line-height:1.45}
 .lp-fr{padding:.7rem .85rem;border-radius:11px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07)}
 .lp-fr-head{display:flex;align-items:center;gap:.5rem}
 .lp-fr-rank{font-size:.72rem;font-weight:700;color:#7d8198}

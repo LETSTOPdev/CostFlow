@@ -255,3 +255,50 @@ describe('SEO + canonical host', () => {
     expect(ok.statusCode).toBe(200);
   });
 });
+
+/**
+ * The acquisition path, checked by the cold-start walkthrough ritual
+ * (`docs/09-ai-context.md` §3).
+ *
+ * These are not defects a test would have found on its own. They are what an
+ * executive meets before they trust anything: a vocabulary that has to match
+ * the product they are about to use, and a pitch that has to name the thing the
+ * product is actually best at.
+ */
+describe('what the landing page promises', () => {
+  const publicPages = ['/', '/pricing', '/docs'];
+
+  /**
+   * The landing page taught "Blocked → stalled". There is no `stalled` stage
+   * kind — the six are queue, active, review, blocked, done, abandoned — so a
+   * prospect learned a word the product would never show them again, and the
+   * docs listed a four-kind set that invented one and omitted two.
+   */
+  it('never shows a stage kind that does not exist', async () => {
+    const t = await makeApp();
+    for (const url of publicPages) {
+      const res = await t.app.inject({ method: 'GET', url });
+      expect(res.statusCode, url).toBe(200);
+      // The word may appear as plain English ("stalled work"), never as a
+      // mapping target or a member of the stage list.
+      expect(res.body, url).not.toMatch(/→\s*<i[^>]*>stalled/);
+      expect(res.body, url).not.toMatch(/stages \([^)]*stalled/);
+    }
+  });
+
+  /**
+   * The strongest thing the product does is say what to fix first, and the
+   * entire acquisition path sold measurement: "ranked cost report", with no
+   * occurrence of the word anywhere before signup.
+   */
+  it('promises the decision, not only the measurement', async () => {
+    const t = await makeApp();
+    const landing = await t.app.inject({ method: 'GET', url: '/' });
+    expect(landing.body).toContain('what to fix first');
+    // And the product screenshot mirrors the real report's order.
+    expect(landing.body).toContain('Where to act first');
+    expect(landing.body.indexOf('Where to act first')).toBeLessThan(
+      landing.body.indexOf('Ranked frictions'),
+    );
+  });
+});

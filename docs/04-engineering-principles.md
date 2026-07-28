@@ -258,6 +258,11 @@ means a capability is not its own justification. State the product outcome in
 the same breath as the engine change, or do not make the change. The priority
 order this serves is at the head of `03-roadmap.md`.
 
+**And watch the ratio.** If a stretch of work is spending more time on the
+engine than on the customer's experience, say why that is the right trade-off,
+explicitly, rather than letting it happen by default. Engine work is where the
+interesting problems are, which is exactly why the drift needs naming.
+
 ## How to work here
 
 Process guidance — how to verify, review, implement, deploy, and maintain these

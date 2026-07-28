@@ -71,6 +71,11 @@ and per-signal diff. The report's trend section is gated on it.
 import batch and carried in the artifact. ClickUp declares its reconstruction
 limits; other providers currently declare none.
 
+**Acquisition.** The landing page, pricing and docs promise what the product is
+best at — a priced report that says what to fix first — and the product
+screenshot mirrors the real report's order. The stage vocabulary shown before
+signup matches the six kinds the product actually uses.
+
 **Report structure.** The top section never says nothing while money is priced:
 with no diagnostic above its evidence gate it names the largest measured cost
 and labels it as measured (D20). Durations are formatted for a reader; the

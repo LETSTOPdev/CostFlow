@@ -100,15 +100,39 @@ build next, the experience wins and the architecture changes.
 Founder directive, 2026-07-28: act as Product & Technical Lead. Do not wait for
 every UX issue to be named. Each milestone runs:
 
-1. `pnpm preview`, and walk the funnel as a first-time customer.
-2. Write down every point of friction, confusion or missing value.
-3. Rank by customer impact, not engineering elegance.
-4. Investigate the implementation before proposing anything.
-5. Implement the highest-impact items that need no product-policy decision.
-6. Stop and present trade-offs ONLY for a genuine product decision, or when
+1. **The cold-start walkthrough** (below). Not optional, and it comes first.
+2. Rank the observations by customer impact, not engineering elegance.
+3. Investigate the implementation before proposing anything.
+4. Implement the highest-impact items that need no product-policy decision.
+5. Stop and present trade-offs ONLY for a genuine product decision, or when
    there are several valid architectural directions.
-7. Otherwise continue through implementation, testing, deployment and
+6. Otherwise continue through implementation, testing, deployment and
    documentation without interrupting.
+
+### The cold-start walkthrough — a permanent ritual
+
+**Before every milestone**, run `pnpm preview` and go through the whole product
+as though seeing it for the first time.
+
+**Do not look for bugs.** Look for the moments where an executive would
+hesitate, misunderstand something, stop reading, lose confidence, or fail to
+immediately understand the value. Those are different from defects and mostly
+invisible to a test suite.
+
+Record every observation, then classify each one:
+
+| | |
+|---|---|
+| **Confusing** | It is there and it works, but the reader cannot tell what it means or what to do with it. |
+| **Missing** | The reader needs something at this moment and it does not exist. |
+| **Incorrect** | It states or implies something untrue, or is right but reads as wrong. |
+| **Low-value** | It occupies attention it does not earn. Removing it is the fix. |
+
+**Fix the highest-impact observations before extending the engine.**
+
+The standard to hold: **the product should be easier to understand than it is to
+explain.** If explaining a screen takes longer than reading it, the screen is
+wrong.
 
 The question to optimise against, every time:
 
