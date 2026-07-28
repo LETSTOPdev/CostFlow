@@ -31,9 +31,9 @@ export function esc(value: string): string {
  * strict CSP (`style-src 'unsafe-inline'`, `script-src 'none'`, no external
  * fonts). Everything premium is done in pure CSS: a fluid modular type scale,
  * tokenized color/shadow/gradient, custom form controls, modern cards, badges,
- * a stepper, a gradient hero system, smooth transitions, and a light/dark
- * theme via `prefers-color-scheme`. System font stack only — Inter/SF first,
- * degrading gracefully.
+ * a stepper, a gradient hero system, smooth transitions, and a single light
+ * theme (no `prefers-color-scheme` dark variant). System font stack only —
+ * Inter/SF first, degrading gracefully.
  */
 const STYLES = `
 :root{
@@ -63,7 +63,9 @@ const STYLES = `
    auto dark-mode switch (prefers-color-scheme) so the product never
    surprises a visitor whose OS is set to dark. */
 *,*::before,*::after{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+/* Clears the 64px sticky header (.nb) so anchor-scrolled/focused sections
+   never land partly underneath it. */
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth;scroll-padding-top:80px}
 body{margin:0;font-family:var(--font);color:var(--ink-2);background:var(--bg);
   font-size:16.5px;line-height:1.62;letter-spacing:-.011em;
   -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;
@@ -113,7 +115,17 @@ main.bleed{display:block}
 .nb-row{position:relative;height:100%;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:.75rem;
   padding-inline:clamp(1rem,3vw,1.75rem)}
 .nb-col{display:flex;align-items:center;gap:.9rem;min-width:0}
-.nb-col-r{justify-content:flex-end}
+/* Both columns hug the logo (not their outer edge) so the gap next to the
+   logo is just the grid gap — identical on both sides — no matter how
+   unevenly the link counts split; leftover slack lands at the outer edges
+   (near the corners) instead of stacking up on whichever side has fewer
+   links. */
+.nb-col-l{justify-content:flex-end}
+.nb-col-r{justify-content:flex-start}
+/* Signed-in header has no .nb-left/.nb-right links, only .nb-auth on the
+   right — hugging the logo there leaves the auth cluster stranded center-
+   right with dead space to the corner. Keep it pinned to the outer edge. */
+.nb-row--app .nb-col-r{justify-content:flex-end}
 .nb-left,.nb-right{display:flex;align-items:center;gap:1.35rem;font-size:.91rem;font-weight:500;min-width:0}
 .nb-left a,.nb-right a{color:var(--muted);white-space:nowrap} .nb-left a:hover,.nb-right a:hover{color:var(--ink)}
 .nb-auth{display:flex;align-items:center;gap:1rem;margin-left:1.1rem;padding-left:1.1rem;border-left:1px solid var(--line)}
@@ -144,6 +156,10 @@ main.bleed{display:block}
   .nb-left,.nb-right{display:none}
   .nb-burger{display:inline-flex}
   .nb-auth{margin-left:0;padding-left:0;border-left:none}
+  /* No side nav left to hug the logo with — put the burger back at the far
+     left and the auth cluster back at the far right, like a normal bar. */
+  .nb-col-l{justify-content:flex-start}
+  .nb-col-r{justify-content:flex-end}
 }
 @media (min-width:861px){.nb-mobile,.nb-scrim{display:none}}
 @media (max-width:480px){
@@ -206,7 +222,9 @@ form.inline button{padding:.42rem .8rem;font-size:.85rem;box-shadow:var(--sh-1)}
   transition:transform .18s var(--ease),box-shadow .18s var(--ease),border-color .18s var(--ease)}
 .card-hover:hover{transform:translateY(-3px);box-shadow:var(--sh-2);border-color:color-mix(in srgb,var(--primary) 22%,var(--line))}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:1.6rem 1.75rem;box-shadow:var(--sh-1);margin:0 0 1.5rem}
-.ws{border:1px solid var(--line);border-radius:12px;padding:.9rem 1.1rem;margin:.6rem 0;background:var(--surface);box-shadow:var(--sh-1)}
+/* Static reference content, not a link — flat with a left accent bar
+   instead of a bordered/shadowed box, so it doesn't read as clickable. */
+.ws{border-left:3px solid var(--line-2);padding:.9rem 0 .9rem 1.1rem;margin:.6rem 0}
 .ws h4{margin:0 0 .35rem}
 
 /* Text helpers */
@@ -396,6 +414,9 @@ a.report-card:hover{transform:translateY(-2px);box-shadow:var(--sh-2);border-col
 .feature:hover{transform:translateY(-3px);box-shadow:var(--sh-2);border-color:color-mix(in srgb,var(--primary) 22%,var(--line))}
 .feature h3{margin:.2rem 0 .4rem}
 .feature p{margin:0;color:var(--muted);font-size:.94rem}
+/* Non-interactive content, not a link — no hover lift, so it doesn't read as clickable. */
+.feature.is-static{cursor:default}
+.feature.is-static:hover{transform:none;box-shadow:var(--sh-1);border-color:var(--line)}
 .ic{display:inline-flex;width:2.6rem;height:2.6rem;align-items:center;justify-content:center;border-radius:13px;
   background:var(--grad-soft);color:var(--primary);border:1px solid color-mix(in srgb,var(--primary) 18%,transparent);margin-bottom:1rem}
 .ic svg{width:1.3rem;height:1.3rem}
@@ -413,7 +434,7 @@ a.report-card:hover{transform:translateY(-2px);box-shadow:var(--sh-2);border-col
 .site-footer{border-top:1px solid var(--line);margin-top:1rem;padding:3.2rem 0 2.2rem;color:var(--muted);font-size:.9rem;background:var(--bg-2)}
 .site-footer a{color:var(--muted)} .site-footer a:hover{color:var(--ink)}
 .sf-grid{display:grid;gap:2rem;grid-template-columns:repeat(4,minmax(0,1fr))}
-.sf-col h4{margin:0 0 .9rem;font-size:.76rem;font-weight:660;letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
+.sf-col-h{margin:0 0 .9rem;font-size:.76rem;font-weight:660;letter-spacing:.06em;text-transform:uppercase;color:var(--ink)}
 .sf-col nav{display:flex;flex-direction:column;gap:.6rem}
 .sf-col a{font-size:.89rem}
 .sf-bottom{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.8rem 1.5rem;
@@ -456,7 +477,7 @@ function renderHeader(csrf?: string): string {
     <div class="nb-corner nb-corner-l"><svg viewBox="0 0 26 64" preserveAspectRatio="none"><path d="M0 0H26V64C13 64 13 40 0 40Z"/></svg></div>
     <div class="nb-center">
       <input type="checkbox" id="nb-toggle" class="nb-toggle" aria-hidden="true">
-      <div class="nb-row">
+      <div class="nb-row${loggedOut ? '' : ' nb-row--app'}">
         <div class="nb-col nb-col-l">
           <label for="nb-toggle" class="nb-burger" aria-label="Toggle menu"><span class="nb-ic-menu">&#9776;</span><span class="nb-ic-x">&#10005;</span></label>
           ${loggedOut ? `<nav class="nb-left">${MARKETING_LEFT}</nav>` : ''}
@@ -515,11 +536,16 @@ const FOOTER_COLUMNS: readonly (readonly [string, readonly (readonly [string, st
   ],
 ];
 
-/** Four-column marketing footer (Product/Company/Resources/Legal), shown on every logged-out page. */
+/**
+ * Four-column marketing footer (Product/Company/Resources/Legal), shown on
+ * every logged-out page. Column labels are non-heading `<p>`s, not `<h4>` —
+ * page heading depth before the footer varies, so a fixed h-level here would
+ * skip a level on some pages and break screen-reader heading navigation.
+ */
 function renderFooter(): string {
   const cols = FOOTER_COLUMNS.map(
     ([heading, links]) =>
-      `<div class="sf-col"><h4>${heading}</h4><nav>${links
+      `<div class="sf-col"><p class="sf-col-h">${heading}</p><nav aria-label="${heading}">${links
         .map(([label, href]) => `<a href="${href}">${label}</a>`)
         .join('')}</nav></div>`,
   ).join('');

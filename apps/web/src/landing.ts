@@ -111,7 +111,7 @@ const hero = `
   ${perspectiveGrid()}
   <div class="container lp-hero-inner">
     <a class="lp-badge" href="/try"><span class="lp-badge-dot"></span> Try the live demo for free during beta. No signup required. →</a>
-    <h1 class="lp-h1">See what delays in Jira or ClickUp<br><span class="lp-grad">are costing you in dollars.</span></h1>
+    <h1 class="lp-h1">See what delays in Jira or ClickUp <br><span class="lp-grad">are costing you in dollars.</span></h1>
     <p class="lp-sub">Connect Jira or ClickUp and get a ranked cost report in about a minute.
       Every figure traces back to its formula.</p>
     <div class="lp-cta">
@@ -173,7 +173,7 @@ const traceable = `
   <div class="container lp-split">
     <div class="lp-split-copy">
       <p class="lp-kicker">Defensible by design</p>
-      <h2 class="lp-h2">Every number opens up<br>into <span class="lp-grad">exactly how it was computed.</span></h2>
+      <h2 class="lp-h2">Every number opens up <br>into <span class="lp-grad">exactly how it was computed.</span></h2>
       <p class="lp-lead">Every figure expands into its formula, inputs, and assumptions.
         Anything unconfirmed stays <em>unpriced</em>. We never guess.</p>
     </div>
@@ -308,7 +308,7 @@ const ctaBand = `
   <div class="lp-cta-band">
     <div class="lp-cta-glow" aria-hidden="true"></div>
     <div class="lp-cta-inner">
-      <h2 class="lp-cta-h">Find out what your delays<br>are really costing you.</h2>
+      <h2 class="lp-cta-h">Find out what your delays <br>are really costing you.</h2>
       <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>
         <a class="lp-cta-link" href="/try">or try a live demo →</a></div>
       <p class="lp-cta-fine">No credit card. Read-only access. Delete your data at any time.</p>

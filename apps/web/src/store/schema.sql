@@ -76,6 +76,10 @@ create table if not exists jobs (
 );
 create index if not exists jobs_tenant on jobs (tenant_id);
 create index if not exists jobs_workspace on jobs (tenant_id, workspace_id);
+-- At most one queued/running job per workspace; makes the /runs double-submit
+-- guard an atomic DB-level claim instead of a check-then-insert race.
+create unique index if not exists jobs_one_active_per_workspace
+  on jobs (workspace_id) where status in ('queued', 'running');
 
 create table if not exists runs (
   id text not null,

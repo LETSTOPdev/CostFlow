@@ -560,6 +560,30 @@ export class PgStore implements Store {
     return (await this.getJob(tenantId, id)) as JobRecord;
   }
 
+  async createJobIfNoneActive(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ job: JobRecord; created: boolean }> {
+    const id = newId();
+    const createdAt = this.now();
+    try {
+      await this.pool.query(
+        `insert into jobs (id, tenant_id, workspace_id, status, created_at)
+         values ($1, $2, $3, 'queued', $4)`,
+        [id, tenantId, workspaceId, createdAt],
+      );
+      return { job: (await this.getJob(tenantId, id)) as JobRecord, created: true };
+    } catch (error) {
+      // 23505 = unique_violation on jobs_one_active_per_workspace: another
+      // request already holds the active-job slot for this workspace.
+      if ((error as { code?: string }).code !== '23505') throw error;
+      const active = (await this.listJobsForWorkspace(tenantId, workspaceId)).find(
+        (j) => j.status === 'queued' || j.status === 'running',
+      );
+      return { job: active as JobRecord, created: false };
+    }
+  }
+
   async getJob(tenantId: string, jobId: string): Promise<JobRecord | null> {
     const result = await this.pool.query('select * from jobs where tenant_id = $1 and id = $2', [
       tenantId,

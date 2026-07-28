@@ -340,6 +340,22 @@ export class MemoryStore implements Store {
     return job;
   }
 
+  async createJobIfNoneActive(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ job: JobRecord; created: boolean }> {
+    // No `await` between the check and the set, so nothing else can run on
+    // this single-threaded map in between — the check-and-claim is atomic.
+    const active = [...this.jobs.values()].find(
+      (j) =>
+        j.tenantId === tenantId &&
+        j.workspaceId === workspaceId &&
+        (j.status === 'queued' || j.status === 'running'),
+    );
+    if (active) return { job: active, created: false };
+    return { job: await this.createJob(tenantId, workspaceId), created: true };
+  }
+
   async getJob(tenantId: string, jobId: string): Promise<JobRecord | null> {
     const job = this.jobs.get(jobId);
     return job && job.tenantId === tenantId ? job : null;

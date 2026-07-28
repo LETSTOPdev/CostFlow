@@ -346,7 +346,7 @@ const BLOG_TOPICS = [
 
 export function renderBlog(): string {
   const topics = BLOG_TOPICS.map(
-    ([t, d]) => `<div class="feature"><h3>${t}</h3><p>${d}</p></div>`,
+    ([t, d]) => `<div class="feature is-static"><h3>${t}</h3><p>${d}</p></div>`,
   ).join('');
 
   const body = `

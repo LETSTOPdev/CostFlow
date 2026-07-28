@@ -735,6 +735,16 @@ export interface Store {
   ): Promise<WorkspaceRecord | null>;
 
   createJob(tenantId: string, workspaceId: string): Promise<JobRecord>;
+  /**
+   * Atomic double-submit guard: claims the "one active job per workspace"
+   * slot and creates a job, or — if another request already holds it —
+   * returns that job instead. Never creates two queued/running jobs for the
+   * same workspace, even under concurrent requests.
+   */
+  createJobIfNoneActive(
+    tenantId: string,
+    workspaceId: string,
+  ): Promise<{ job: JobRecord; created: boolean }>;
   getJob(tenantId: string, jobId: string): Promise<JobRecord | null>;
   listJobsForWorkspace(tenantId: string, workspaceId: string): Promise<JobRecord[]>;
   updateJob(

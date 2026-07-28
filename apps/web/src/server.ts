@@ -2666,12 +2666,11 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     if (!workspace) return;
     // Double-submit guard: a second click (or a refresh re-POST) while a job
     // is queued/running lands on the SAME job instead of starting a duplicate
-    // fetch + analysis against the customer's tracker.
-    const active = (await store.listJobsForWorkspace(session.tenantId, workspace.id)).find(
-      (j) => j.status === 'queued' || j.status === 'running',
-    );
-    if (active) return reply.redirect(`/jobs/${active.id}`);
-    const job = await store.createJob(session.tenantId, workspace.id);
+    // fetch + analysis against the customer's tracker. Claim is atomic at the
+    // store level (partial unique index / single-threaded map) so two
+    // near-simultaneous POSTs can't both pass a check and both create a job.
+    const { job, created } = await store.createJobIfNoneActive(session.tenantId, workspace.id);
+    if (!created) return reply.redirect(`/jobs/${job.id}`);
     // Recorded at the start, not just on completion: an analysis that never
     // finishes is exactly the thing an operator needs to be able to see.
     recordEvent('analysis.started', at(session, workspace.id), { provider: workspace.provider });
@@ -2757,6 +2756,16 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       ),
     );
   });
+
+  // H-1: reporting's `esc()` only escapes markdown metacharacters, not HTML —
+  // a Jira/ClickUp title like `<img src=x onerror=...>` survives into the
+  // stored report.md untouched and `marked.parse()` passes inline HTML
+  // through. The generator never emits real HTML itself (checked: no `<`/`>`/
+  // `&` in packages/reporting's output), so escaping those three characters
+  // before parsing neutralizes any injected markup without breaking any
+  // legitimate markdown construct.
+  const renderReportMdSafely = async (reportMd: string): Promise<string> =>
+    marked.parse(reportMd.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'));
 
   // Load a run the session may view (tenant-scoped + member workspace check).
   const loadViewableRun = async (
@@ -2844,7 +2853,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       title = `Report ${run.runId}`;
     } catch {
       logLine({ level: 'warn', msg: 'report-render-fallback', surface: 'report' });
-      body = `<article>${await marked.parse(loaded.record.reportMd)}</article>`;
+      body = `<article>${await renderReportMdSafely(loaded.record.reportMd)}</article>`;
     }
     if (!attributionOk(body, loaded.workspace, session, reply)) return;
     const nowIso = new Date(Date.now()).toISOString();
@@ -2860,7 +2869,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
     const runId = (request.params as { runId: string }).runId;
     const loaded = await loadViewableRun(session, runId, reply);
     if (!loaded) return;
-    const html = await marked.parse(loaded.record.reportMd);
+    const html = await renderReportMdSafely(loaded.record.reportMd);
     const body = `<p class="note"><a href="/reports/${esc(loaded.record.id)}">← Structured report</a></p><article>${html}</article>`;
     if (!attributionOk(body, loaded.workspace, session, reply)) return;
     return reply.type('text/html').send(page(session, `Report ${runId} (raw)`, body));
@@ -2881,7 +2890,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       body = `${renderReportBody(run, { runId: loaded.record.id, previous, open: true })}${METHODOLOGY_APPENDIX}`;
     } catch {
       logLine({ level: 'warn', msg: 'report-render-fallback', surface: 'print' });
-      body = `<article>${await marked.parse(loaded.record.reportMd)}</article>${METHODOLOGY_APPENDIX}`;
+      body = `<article>${await renderReportMdSafely(loaded.record.reportMd)}</article>${METHODOLOGY_APPENDIX}`;
     }
     if (!attributionOk(body, loaded.workspace, session, reply)) return;
     return reply.type('text/html').send(printLayout(`Friction report ${runId}`, body));
