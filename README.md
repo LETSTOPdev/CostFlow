@@ -1,64 +1,64 @@
-# CostFlow — Product Foundation
+# CostFlow
 
-**Status: Phase 1 complete (M0 + M1 cycle 1, commit 4bc828f).** Detectors F1/F2/F3a,
-context signal c6, provenance-gated pricing policy, CLI pipeline, partner toolkit —
-all golden-tested and validated against one real workspace. Detector catalog frozen;
-Phase 2 (productization) planned in [docs/15](docs/15-productization-roadmap.md),
-awaiting approval. See [docs/09-implementation-log.md](docs/09-implementation-log.md).
+Deterministic Business Friction Intelligence. CostFlow reads a team's
+work-tracker data and answers three questions: what is going wrong, what it
+costs, and where attention should go — with every figure traceable to the
+assumption that produced it.
 
-Quick start: `pnpm install && pnpm check`, then
-`pnpm costflow analyze --csv tools/golden/fixtures/demo-ops.csv --mapping tools/golden/fixtures/mapping.json --assumptions tools/golden/fixtures/assumptions.json --org demo --salt-file tools/golden/fixtures/salt.txt`
+Live at **https://app.fbx1.com**.
 
-CostFlow is a Business Friction Intelligence platform: it translates organizational
-friction (delays, rework, handoffs, blockers) into financial impact, so executives can
-prioritize work based on money instead of urgency.
+---
 
-Foundation and design documents, in reading order:
+## Documentation
 
-| Doc                                                                                   | Contents                                                                                                                        |
-| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| [00-vision-scope-mvp.md](docs/00-vision-scope-mvp.md)                                 | Product vision, scope, MVP definition                                                                                           |
-| [01-personas-journeys.md](docs/01-personas-journeys.md)                               | Core user personas, user journeys                                                                                               |
-| [02-domain-model.md](docs/02-domain-model.md)                                         | Internal domain model, friction taxonomy, delay-cost taxonomy                                                                   |
-| [03-cost-engine.md](docs/03-cost-engine.md)                                           | Cost Engine philosophy, explainability philosophy                                                                               |
-| [04-requirements.md](docs/04-requirements.md)                                         | Functional and non-functional requirements                                                                                      |
-| [05-architecture.md](docs/05-architecture.md)                                         | Repository structure, module boundaries, integrations strategy, AI responsibilities, architecture principles                    |
-| [06-constraints-open-questions-risks.md](docs/06-constraints-open-questions-risks.md) | Things that must never be built, open architectural questions, existential risks                                                |
-| [07-decision-engine.md](docs/07-decision-engine.md)                                   | The decision layer: diagnostic (root cause) engine, recommendation engine, simulation engine, Decision object, five-year vision |
-| [08-implementation-roadmap.md](docs/08-implementation-roadmap.md)                     | Phase 1 implementation roadmap: milestones M0–M4, stack, standards, testing, CI/CD, security, deferred work                     |
-| [09-implementation-log.md](docs/09-implementation-log.md)                             | Running implementation log: M0 slice 1 checklist, decisions D-1…D-9, verification results                                       |
-| [10-engineering-review.md](docs/10-engineering-review.md)                             | Staff-engineer review of slice 1: verified defects R-01…R-20, decision verdicts, re-scoped next slices                          |
-| [11-partner-run-workflow.md](docs/11-partner-run-workflow.md)                         | Safe CLI workflow for real partner datasets: files, mapping, pseudonymization, validation, retention, deletion                  |
-| [12-overdue-detector.md](docs/12-overdue-detector.md)                                 | F3 overdue detector design (evidence-driven by M1): family split, algorithm, confidence, gaming analysis, recommendation        |
-| [13-detector-prioritization.md](docs/13-detector-prioritization.md)                   | Evidence-tagged ranking of all detector families: implementation priority vs long-term importance, launch-trio answer           |
-| [14-signal-taxonomy.md](docs/14-signal-taxonomy.md)                                   | Friction vs Context Signals: the four-part qualification test, per-family verdicts, migration criteria                          |
-| [15-productization-roadmap.md](docs/15-productization-roadmap.md)                     | Phase 2 plan: provider SPI v2, connector sequencing, self-serve spine, reporting UX, scenario engine                            |
+**Start at [`docs/00-project-brief.md`](docs/00-project-brief.md).** It is under
+five minutes and explains what everything else is for.
 
-## The three non-negotiable decisions
+[`docs/`](docs/README.md) is the canonical source of truth for this project. It
+describes the current state, not the history — the documents are rewritten in
+place rather than appended to. Git holds the history.
 
-1. **Internal domain model first.** CostFlow is built around a canonical model of work,
-   friction, and cost. Monday.com, Jira, ClickUp, HubSpot, and CSV are all just
-   providers that map into it. No provider concept may leak into the core.
-2. **CSV import is a first-class citizen.** The MVP delivers full value from a single
-   CSV upload, with zero integrations. Live integrations come only after product-market fit.
-3. **Every number is explainable.** No cost figure is ever shown without a traceable
-   formula, its inputs, and the assumptions behind it. AI never invents numbers;
-   the deterministic Cost Engine computes them.
+|                                                                          |                                                   |
+| ------------------------------------------------------------------------ | ------------------------------------------------- |
+| [`docs/00-project-brief.md`](docs/00-project-brief.md)                   | **Read first.** What this is and where it stands. |
+| [`docs/01-architecture.md`](docs/01-architecture.md)                     | How the system fits together.                     |
+| [`docs/02-current-state.md`](docs/02-current-state.md)                   | What is true today.                               |
+| [`docs/03-roadmap.md`](docs/03-roadmap.md)                               | What is planned, and why.                         |
+| [`docs/04-engineering-principles.md`](docs/04-engineering-principles.md) | Rules we follow on purpose.                       |
+| [`docs/05-decisions.md`](docs/05-decisions.md)                           | Why things are the way they are.                  |
+| [`docs/06-known-risks.md`](docs/06-known-risks.md)                       | What could go wrong.                              |
+| [`docs/07-testing.md`](docs/07-testing.md)                               | How correctness is enforced.                      |
+| [`docs/08-admin.md`](docs/08-admin.md)                                   | Deploying and debugging production.               |
 
-## Where this foundation deliberately disagrees with the original brief
+[`docs/adr/`](docs/adr) holds architecture decision records, several cited
+directly from source code. [`docs/reference/`](docs/reference) holds the original
+design corpus — design notes rather than current-state documents, still
+load-bearing for the decision layer, the signal taxonomy, and the detector
+designs.
 
-These are argued in detail in the docs, summarized here for honesty:
+> Source code cites those reference documents as `doc 07 §1.2`, `doc 14 FS-4`,
+> `doc 03 P4`. Those mean `docs/reference/NN-*.md`, never the numbered documents
+> above.
 
-- **Point estimates are a trap.** We show cost _ranges_ with named assumptions, not
-  single dollar figures. A single number invites a credibility fight with the CFO
-  that we lose. (See 03-cost-engine.md)
-- **Precision is not the product; ranking is.** The product wins if the _ordering_
-  of frictions by cost is right and defensible, even when the absolute dollars are
-  ±40%. (See 03-cost-engine.md)
-- **"FBX1" should stay an internal codename** until there is an engine worth
-  branding. Marketing an engine before it exists creates an expectation of AI magic
-  that conflicts with our explainability positioning. (See 06, Open Questions)
-- **Individual-level cost attribution is banned**, even though it is technically
-  trivial and customers will ask for it. It converts the product into employee
-  surveillance, poisons the data source (people will game statuses), and blocks
-  enterprise deals in most of Europe. (See 06, Never Implement)
+## Working on it
+
+```bash
+pnpm install
+pnpm check      # typecheck, lint, format, boundaries, tests
+```
+
+`pnpm check` is the gate. It runs before any deploy, and **deploy is a push to
+`main`** — there is no separate deploy step and no staging environment.
+
+Run an analysis from the command line against a fixture:
+
+```bash
+pnpm costflow analyze --csv tools/golden/fixtures/demo-ops.csv --mapping tools/golden/fixtures/mapping.json --assumptions tools/golden/fixtures/assumptions.json --org demo --salt-file tools/golden/fixtures/salt.txt
+```
+
+## For AI assistants
+
+Read [`docs/README.md`](docs/README.md) before making changes. It states how
+these documents are maintained and what is expected of you — in particular that
+the documentation is updated as part of each milestone rather than afterwards,
+and that when documentation and code disagree, the code is the evidence.

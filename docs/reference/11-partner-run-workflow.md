@@ -20,11 +20,11 @@ structure (`raw/`, `config/`, `output/`, `notes/`), scaffolded by
 `tools/partner/new-run.sh`. The ignore rule is enforced by a guardrail test
 (`apps/cli/test/partner-guardrail.test.ts`); if that test is red, no partner
 session may proceed. Operational toolkit and session checklist:
-[tools/partner/](../tools/partner/README.md).
+[tools/partner/](../../tools/partner/README.md).
 
 ## 2. Mapping configuration
 
-1. Start from [tools/golden/fixtures/mapping.json](../tools/golden/fixtures/mapping.json)
+1. Start from [tools/golden/fixtures/mapping.json](../../tools/golden/fixtures/mapping.json)
    as a shape reference (synthetic data only — never copy partner values into
    the repo).
 2. Map `columns`: item id, title, status, actor (owner/assignee), dates.
