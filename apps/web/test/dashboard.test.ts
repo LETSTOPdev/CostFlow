@@ -62,6 +62,12 @@ describe('executive dashboard', () => {
     // What-you-get preview instead of an empty report list.
     expect(res.body).toContain('Graded evidence');
     expect(res.body).not.toContain('Past analyses');
+    // The last screen before the first run promises the product the report
+    // actually delivers (D22), naming the selection rather than an invented
+    // singular "your Jira project".
+    expect(res.body).toContain('Connected: Operations.');
+    expect(res.body).toContain('One place to start');
+    expect(res.body).not.toContain('recoverable-cost total');
   });
 
   it('with findings: the hero leads with the action, and the total is its evidence', async () => {
@@ -113,6 +119,40 @@ describe('executive dashboard', () => {
     expect(res.body).toContain('Past analyses');
     expect(res.body).toContain('/reports/run-b');
     expect(res.body).toContain('/reports/run-a');
+  });
+
+  /**
+   * The trend is a claim, and the dashboard is not allowed to make one the
+   * report refuses to make (D10). This line used to compare the two totals
+   * unconditionally, which meant a first run that priced nothing (assumptions
+   * still unconfirmed) followed by a fully priced one rendered as
+   * "▲ 5,565 USD more than the previous analysis" — a fabricated regression on
+   * the first screen a returning customer sees.
+   */
+  it('shows no trend when the two runs are not comparable', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'ceo@dash.example');
+    const { tenantId, workspaceId } = await seedWorkspace(t, 'ceo@dash.example');
+    const older = JSON.parse(RUN_JSON) as { engineVersions: { analysis: string } };
+    older.engineVersions.analysis = '0.0.1-previous';
+    await t.store.createRun({
+      id: 'run-old',
+      tenantId,
+      workspaceId,
+      createdAt: '2026-07-19T10:00:00Z',
+      runJson: JSON.stringify(older),
+      reportMd: '',
+      telemetryJsonl: '',
+    });
+    await seedRun(t, tenantId, workspaceId, 'run-new', '2026-07-20T10:00:00Z');
+
+    const res = await get(t, cookie, '/dashboard');
+    expect(res.statusCode).toBe(200);
+    expect(res.body).not.toContain('than the previous analysis');
+    expect(res.body).not.toContain('Unchanged vs the previous analysis');
+    // The rest of the dashboard is unaffected: only the claim is withheld.
+    expect(res.body).toContain('Past analyses');
+    expect(res.body).toContain('/reports/run-new');
   });
 
   it('configuration is exiled: no config links on the dashboard, all of them on /settings', async () => {

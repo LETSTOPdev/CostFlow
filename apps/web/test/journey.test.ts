@@ -197,7 +197,14 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
     const jobPage = await get(t, cookie, runResponse.headers['location'] as string);
     const report = await get(t, cookie, jobPage.headers['location'] as string);
     expect(report.body).toContain('Unpriced frictions');
-    expect(report.body).toContain('vendor-suggested');
+    // Each unpriced row names the assumption it is waiting on, by the name the
+    // customer saw on the assumptions step. Not `parameters.attentionHoursPerDay`,
+    // and not an offer to "run in simulation mode" — a mode the web app never
+    // selects, so the instruction was unfollowable.
+    expect(report.body).toContain('Waiting on');
+    expect(report.body).toContain('attention on aging items');
+    expect(report.body).not.toContain('simulation mode');
+    expect(report.body).not.toContain('parameters.attentionHoursPerDay');
     // Nothing priced at all, and the report says so as a blocked analysis
     // rather than a healthy one, because frictions WERE found. A refusal must
     // never read as a pass (`04-engineering-principles.md`).

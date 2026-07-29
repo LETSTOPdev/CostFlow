@@ -188,3 +188,85 @@ List resolves it.
 
 **Status.** Open, accepted. Revisit if a real customer hits it — the fix would
 be a clearer error on this specific collision, never a weaker guard.
+
+---
+
+# Unvalidated assumptions
+
+Founder directive, 2026-07-29. These are beliefs about **customer behaviour**
+that the product is already built on and that no real customer has yet tested.
+They are recorded so nobody mistakes them for findings.
+
+**Do not optimise around them until there is evidence.** An assumption is not a
+bug and not a backlog item; building for a guess about how customers behave is
+how effort gets spent on nobody. Each one names what would settle it.
+
+The instrument already exists: the event spine and the onboarding funnel in
+`/admin` record every step of every real signup. Nothing here needs new
+telemetry — it needs traffic, and then someone to read it.
+
+## U1 — That an executive wants one action, not a ranked list
+
+The report, the dashboard, the export and the landing page were all rebuilt
+around a single "start here" (D22). It is a strong belief and an untested one:
+an operations lead may want the whole ranked list and resent being told where to
+begin.
+
+*Settled by:* which surface real customers open and return to, and whether they
+act on the lead or scroll past it.
+
+## U2 — That the six-step onboarding is completable unassisted
+
+Nobody outside this project has completed connect → scope → statuses → roles →
+assumptions → run without help. Every step has been walked here by someone who
+knows what each one is for.
+
+*Settled by:* the funnel in `/admin`, which already records step completion and
+drop-off per signup.
+
+## U3 — That customers accept suggested assumptions rather than abandon
+
+The provenance gate (D4) makes the assumptions step the point where a first run
+either becomes priced or does not. The product now states the consequence before
+the button, but whether a customer accepts, customises, or leaves is unknown.
+
+*Settled by:* the ratio of accepted to unconfirmed assumption sets among real
+first runs, and how many sessions end on that step.
+
+## U4 — That confidence grades build trust rather than undermine it
+
+A/B/C grading is on every figure and in the hero. It is designed to read as
+rigour. It may instead read as a vendor who is not sure, particularly at grade C
+— which is what every figure is graded when a customer skips the optional roles
+step.
+
+*Settled by:* whether customers ask about grades, ignore them, or cite them as a
+reason to doubt the numbers.
+
+## U5 — That customers want a second analysis at all
+
+The whole Monitoring Workspaces direction (MW2–MW5) presupposes recurring use.
+There is no scheduled run, no notification, and no evidence anyone wants either.
+Building a scheduler would be optimising around this assumption, not testing it.
+
+*Settled by:* how many tenants run a second analysis unprompted, and how long
+after the first.
+
+## U6 — That ClickUp's Total Time in Status ClickApp is usually on
+
+Queue wait is the largest priced category in every sample analysed so far, and
+on ClickUp it exists only when a workspace admin has enabled that ClickApp. If
+it is usually off, the flagship number is usually absent, and the first report
+most ClickUp customers see is materially weaker than the one demonstrated.
+
+*Settled by:* the capability profile recorded on real ClickUp imports. This one
+is cheap to check as soon as there are any.
+
+## U7 — That money is the right unit for this reader
+
+Everything is denominated in recoverable cost. Days of delay, or throughput,
+might be the unit an operations executive actually reasons in, with money the
+translation they perform for their own CFO rather than the one we should lead
+with.
+
+*Settled by:* what customers repeat back and what they forward internally.

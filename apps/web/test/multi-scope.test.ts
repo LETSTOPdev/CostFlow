@@ -541,7 +541,7 @@ describe('what a first-time executive is prevented from understanding', () => {
     // The suppression itself is untouched: no intervention is offered.
     expect(report.body).not.toContain('Suggested intervention');
     // The money is present as evidence, not as the headline.
-    expect(report.body).toContain('priced here');
+    expect(report.body).toContain('priced at this stage');
   });
 
   /**
@@ -580,6 +580,8 @@ describe('what a first-time executive is prevented from understanding', () => {
     // The reader sees one decimal.
     expect(report.body).toContain('57.8');
     expect(report.body).not.toContain('57.83333333333333333');
+    // Same rule, same table: a due date is a date, not a machine timestamp.
+    expect(report.body).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
   });
 
   /**
@@ -682,5 +684,34 @@ describe('when frictions are found but none can be priced', () => {
     const dash = await get(t, cookie, '/dashboard');
     expect(dash.body).toContain('Confirm your assumptions to price');
     expect(dash.body).not.toContain('No friction crossed your thresholds');
+  });
+
+  /**
+   * The unpriced list is the whole report for this customer, and it was the one
+   * list that had not caught up with per-origin attribution (D19). Two Lists
+   * whose statuses share a name produced rows identical except for a magnitude,
+   * which reads as the report duplicating itself rather than as two teams.
+   */
+  it('names which origin each unpriced friction is in', async () => {
+    const t = makeApp();
+    const { report } = await unpricedRun(t, 'origins@acme.example');
+    const unpriced = report.body.slice(report.body.indexOf('Unpriced frictions'));
+    expect(unpriced).toContain('Sprint Board');
+    expect(unpriced).toContain('Backlog');
+  });
+
+  /**
+   * The engine's skip reason is written for a formula trace. Rendered verbatim
+   * it named refs like `parameters.attentionHoursPerDay` and told the reader to
+   * "run in simulation mode" — a mode `jobs.ts` never selects, so the only
+   * instruction the report gave them could not be followed.
+   */
+  it('names the waiting assumption in the words the customer chose it by', async () => {
+    const t = makeApp();
+    const { report } = await unpricedRun(t, 'reasons@acme.example');
+    expect(report.body).toContain('Waiting on');
+    expect(report.body).toContain('on the assumptions step and run again');
+    expect(report.body).not.toContain('simulation mode');
+    expect(report.body).not.toMatch(/parameters\.[a-zA-Z]/);
   });
 });

@@ -99,7 +99,7 @@ describe('OI1 — the operational layer on the report', () => {
     const res = await get(t, cookie, '/reports/r-flow/print');
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain('Highest-leverage action');
-    expect(res.body).toContain('priced here');
+    expect(res.body).toContain('priced at this stage');
   });
 
   /**
@@ -385,7 +385,7 @@ describe('the section that answers "what do I do next"', () => {
     // The action is the headline; the money is the evidence beneath it.
     expect(res.body).toContain('Highest-leverage action');
     expect(res.body).toContain('strongest evidence');
-    expect(res.body).toContain('priced here');
+    expect(res.body).toContain('priced at this stage');
     expect(res.body).toContain('across the whole analysis');
     // The heading and the body no longer cancel each other out.
     expect(res.body).not.toContain('This is not a recommended sequence');

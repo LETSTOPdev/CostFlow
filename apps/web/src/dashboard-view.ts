@@ -3,6 +3,7 @@ import type { WorkspaceScope } from './store/contract';
 import { compareDecimalStrings, dec, decToString, formatWholeMoney } from '@costflow/cost-engine';
 import type { BatchScope, RangeSpec } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
+import { assessComparability } from '@costflow/comparison';
 import type { AnalysisRun } from '@costflow/analysis';
 import { esc } from './html';
 import { frictionInsight, frictionSubject, parseRun, totalRange } from './report-view';
@@ -107,9 +108,25 @@ const tierPills = (ranked: readonly RankedFriction[]): string => {
     .join(' ');
 };
 
-/** Money delta vs the previous analysis, via the engine's decimal (never a float). */
+/**
+ * Money delta vs the previous analysis, via the engine's decimal (never a float).
+ *
+ * Gated on the comparability verdict, exactly as the report's trend is (D10).
+ * A total can move because the work changed, or because the scope, the
+ * assumptions, the engine or the set of detectors that ran changed — and only
+ * the first of those is the customer improving. This line used to compare the
+ * two totals unconditionally, so a first run that priced nothing (because its
+ * assumptions were still unconfirmed) followed by a run that priced everything
+ * rendered as "▲ 5,565 USD more than the previous analysis": a fabricated
+ * regression, on the first screen a returning customer sees, while the report
+ * one click away correctly refused to compare them at all.
+ *
+ * On `not-comparable` the dashboard says nothing rather than guessing; the
+ * report is where the reasons are enumerated, and the link is already there.
+ */
 const trendLine = (current: RunDigest, previous: RunDigest | null): string => {
   if (!previous) return '';
+  if (assessComparability(previous.run, current.run).verdict === 'not-comparable') return '';
   const cmp = compareDecimalStrings(current.total.expected, previous.total.expected);
   if (cmp === 0) return `<p class="hero-trend note">Unchanged vs the previous analysis</p>`;
   const abs =
@@ -206,17 +223,33 @@ const heroUnreadable = (input: DashboardInput): string =>
     ${runForm(input.csrfField, 'Analyze again', safetyNote(input.providerName))}
   </section>`;
 
-const heroFirstRun = (input: DashboardInput): string =>
-  `<section class="dash-hero">
+/**
+ * The last screen before a customer's first run, so it sets the expectation the
+ * report then has to meet. It used to promise the pre-D22 product — "one
+ * recoverable-cost total" — and to say "your List is connected" in the singular
+ * however many the customer had selected. Both were wrong in the same
+ * direction: the report leads with an action, and a workspace is a set.
+ */
+const heroFirstRun = (input: DashboardInput): string => {
+  const selection = describeSelection(input.scopes);
+  // "Connected:" rather than "X is connected", because the selection is a set
+  // and "Delivery and 1 more is connected" has to agree with a count nobody
+  // knows at authoring time.
+  const what =
+    selection === null
+      ? `Your ${esc(input.providerName)} ${esc(input.scopeNounSingular)} is connected.`
+      : `Connected: ${esc(selection)}.`;
+  return `<section class="dash-hero">
     <p class="hero-eyebrow">CostFlow is ready</p>
-    <h1 class="hero-title">Your ${esc(input.providerName)} ${esc(input.scopeNounSingular)} is connected.<br>See what its friction costs.</h1>
+    <h1 class="hero-title">${what}<br>Find out where to act first.</h1>
     ${runForm(input.csrfField, 'Run first analysis', `Read-only, takes about a minute, and never changes anything in ${esc(input.providerName)}.`)}
   </section>
   <div class="dash-cards">
-    <div class="insight"><p class="k">You'll see</p><p class="lede">One recoverable-cost total for the whole ${esc(input.scopeNounSingular)}.</p></div>
+    <div class="insight"><p class="k">You'll see</p><p class="lede">One place to start, with the cost of not starting there.</p></div>
     <div class="insight"><p class="k">Ranked by cost</p><p class="lede">Every friction priced and ordered by expected business impact.</p></div>
     <div class="insight"><p class="k">Graded evidence</p><p class="lede">Each figure carries an A/B/C confidence grade and its full formula.</p></div>
   </div>`;
+};
 
 // ---------- insight cards ----------
 

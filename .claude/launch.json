@@ -16,6 +16,12 @@
         "apps/web/src/main.ts"
       ],
       "port": 3900
+    },
+    {
+      "name": "costflow-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "apps/web/test/preview.ts"],
+      "port": 3901
     }
   ]
 }

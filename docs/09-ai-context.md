@@ -151,6 +151,21 @@ has to be legible where the claim is made.
 
 **Fix the highest-impact observations before extending the engine.**
 
+Then rank what survives against the four adoption outcomes (founder directive,
+2026-07-29; stated in full in `03-roadmap.md`). **Say which one an improvement
+serves when you propose it:**
+
+1. Increase a customer's confidence.
+2. Reduce onboarding friction.
+3. Improve the quality of the first report.
+4. Increase the likelihood of a second analysis.
+
+If it serves none of them, question whether it should be built now at all. And
+when a proposal depends on a belief about how customers behave rather than on
+something observed, it is an **assumption** — add it to *Unvalidated assumptions*
+in `06-known-risks.md` and do not build around it. Marking one is finishing the
+thought, not deferring the work.
+
 Two standards to hold. **The product should be easier to understand than it is
 to explain** — if explaining a screen takes longer than reading it, the screen
 is wrong. And the North Star in `00-project-brief.md`: under two minutes, and
@@ -169,6 +184,11 @@ what I need to do next*.
 ```
 pnpm preview
 ```
+
+There is also a `costflow-preview` entry in `.claude/launch.json` pointing at the
+same script, so a preview tool that reads launch configurations opens the stub
+server rather than `costflow-web`, which wires the real gateways and cannot get
+past `/connect` without a live provider token.
 
 The real server on `http://127.0.0.1:3901` — same `buildServer`, routes,
 templates and CSP as production — with the test stub gateways in place of the

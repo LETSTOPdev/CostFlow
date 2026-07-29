@@ -261,3 +261,50 @@ describe('ClickUp token instructions', () => {
     expect(form.body).toContain('time spent waiting in a stage');
   });
 });
+
+/**
+ * Two onboarding steps let a customer make a choice whose consequence only
+ * appears in the report, several minutes later. Both cost the same thing —
+ * confidence in the first analysis — and both were silent about it.
+ */
+describe('onboarding states the cost of the fast path', () => {
+  it('warns that skipping roles caps the whole report at confidence C', async () => {
+    const t = makeApp();
+    const email = 'roles@acme.example';
+    const cookie = await signIn(t, email);
+    await post(t, cookie, '/connect', { provider: 'clickup', token: 'pk_12345678' });
+    await post(t, cookie, '/scope', { scope: '790', action: 'import' });
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const workspace = (await t.store.listWorkspaces(tenantId))[0]!;
+    await post(
+      t,
+      cookie,
+      '/mapping/statuses',
+      Object.fromEntries(
+        workspace.observedStatuses.map((st, i) => [
+          `s${i}`,
+          st === 'complete' || st === 'done' ? 'done' : st === 'review' ? 'review' : 'queue',
+        ]),
+      ),
+    );
+
+    const form = await get(t, cookie, '/mapping/actors');
+    expect(form.statusCode).toBe(200);
+    // Still honestly the fastest path.
+    expect(form.body).toContain('fastest path');
+    // And now the price of taking it, at the point of choice.
+    expect(form.body).toContain('confidence C');
+  });
+
+  it('says on the assumptions step what leaving a value unconfirmed produces', async () => {
+    const t = makeApp();
+    const { cookie } = await toAssumptions(t, 'consequence@acme.example');
+    const form = await get(t, cookie, '/assumptions');
+    // The consequence before the button, not discovered in the report.
+    const warning = form.body.indexOf('stays vendor-suggested');
+    const save = form.body.indexOf('Save assumptions');
+    expect(warning).toBeGreaterThan(-1);
+    expect(save).toBeGreaterThan(warning);
+    expect(form.body).toContain('<strong>unpriced</strong>');
+  });
+});

@@ -91,6 +91,21 @@ const days = (value: string): string => {
   return esc(String(Math.round(n * 10) / 10));
 };
 
+/**
+ * A due date a person can read. `2026-07-01T00:00:00.000Z` is the artifact's
+ * value and stays that in the export; in the evidence table beside "28 days
+ * overdue" it is machine output where a date belongs.
+ *
+ * Parsed out of the ISO string rather than through `Date`, so the rendered day
+ * never depends on the server's timezone — the same rule the run list follows.
+ */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const dueDate = (iso: string): string => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (!m) return esc(iso);
+  return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}`;
+};
+
 const rangeText = (spec: RangeSpec, currency: string): string =>
   `${money(spec.low, currency)} to ${money(spec.high, currency)} (expected ~${money(spec.expected, currency)})`;
 
@@ -165,6 +180,46 @@ function unconfirmed(run: AnalysisRun): string[] {
   return names;
 }
 
+/**
+ * One assumption ref, as the customer met it on the assumptions step.
+ *
+ * The engine's refs (`parameters.queueWaitAttentionHoursPerDay`,
+ * `defaultRate:unmapped-actor`, `rates.legal`) are correct identifiers for a
+ * formula trace and the wrong words for a sentence an executive reads. Under
+ * "What was assumed?" they render as `<code>` and belong there. In the unpriced
+ * list they were the entire explanation.
+ */
+const assumptionName = (ref: string): string => {
+  if (ref.startsWith('parameters.')) {
+    const key = ref.slice('parameters.'.length);
+    return ASSUMPTION_LABELS[key] ?? key;
+  }
+  if (ref.startsWith('defaultRate')) return 'the default hourly rate';
+  if (ref.startsWith('rates.')) return `the rate for ${ref.slice('rates.'.length)}`;
+  return ref;
+};
+
+/**
+ * The engine's report-mode skip reason, said in the product's own words.
+ *
+ * Two things are wrong with it verbatim (`packages/analysis/src/run.ts`). It
+ * names raw refs, and it offers simulation mode as a remedy — a mode the web
+ * app never selects (`jobs.ts` pins `mode: 'report'`), so the one instruction
+ * it gives a customer is to do something the product does not let them do. The
+ * engine is frozen and its artifact keeps the original string; this is the
+ * display layer, which is where the translation belongs.
+ */
+const unpricedReason = (reason: string): string => {
+  const m = /^Rests on vendor-suggested assumption\(s\): (.+?) — /.exec(reason);
+  if (!m) return displayText(reason);
+  const names = (m[1] ?? '').split(', ').map(assumptionName);
+  const list =
+    names.length === 1
+      ? (names[0] as string)
+      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] as string}`;
+  return `Waiting on ${list}. Confirm ${names.length === 1 ? 'it' : 'them'} on the assumptions step and run again to price this.`;
+};
+
 const unconfirmedCount = (run: AnalysisRun): number => unconfirmed(run).length;
 
 const unconfirmedList = (run: AnalysisRun): string => {
@@ -232,7 +287,7 @@ function renderTerms(
         return `<tr><td>${item(term.workItemId)}</td><td>${days(String(term.excessDays))}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
       }
       if (term.kind === 'overdue-attention') {
-        return `<tr><td>${item(term.workItemId)}</td><td>${days(String(term.overdueDays))}</td><td>${esc(term.dueAt)}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
+        return `<tr><td>${item(term.workItemId)}</td><td>${days(String(term.overdueDays))}</td><td>${dueDate(term.dueAt)}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
       }
       // queue-wait-attention
       return `<tr><td>${item(term.workItemId)}</td><td>${days(term.waitDays)}</td><td>${term.visits}</td><td>${term.openAtAnalysisTime ? 'yes' : 'no'}</td><td>${attn(term.attentionHoursPerDay)}</td><td>${rate(term)}</td><td>${rangeText(term.subtotal, currency)}</td></tr>`;
@@ -352,15 +407,24 @@ function renderContext(run: AnalysisRun): string {
     <ul>${rows}</ul></section>`;
 }
 
+/**
+ * `originLabel` is threaded in for the same reason the ranked list takes it
+ * (D19): without it, two Lists that both have a status called "backlog" produce
+ * two rows here that are identical except for their magnitudes, and a reader
+ * who cannot tell them apart concludes the report is duplicating itself.
+ */
 function renderUnpriced(
   unpriced: readonly { instance: RankedFriction['instance']; reason: string }[],
+  originLabel: (originScopeId: string | null) => string | null,
 ): string {
   if (unpriced.length === 0) return '';
   const rows = unpriced
-    .map(
-      (u) =>
-        `<li><strong>${esc(frictionLabel(u.instance.frictionType))}</strong> in stage “${esc(u.instance.location.stage.name)}” (${u.instance.magnitude.value} ${esc(u.instance.magnitude.unit)})<br><span class="note">${esc(displayText(u.reason))}</span></li>`,
-    )
+    .map((u) => {
+      const where = originLabel(u.instance.location.originScopeId);
+      return `<li><strong>${esc(frictionLabel(u.instance.frictionType))}</strong> in stage “${esc(u.instance.location.stage.name)}”${
+        where === null ? '' : ` <span class="note">— ${esc(where)}</span>`
+      } (${u.instance.magnitude.value} ${esc(u.instance.magnitude.unit)})<br><span class="note">${esc(unpricedReason(u.reason))}</span></li>`;
+    })
     .join('');
   return `<section><h2>Unpriced frictions</h2>
     <p class="note">Detected but not priced. The magnitude is real and the missing input is named. Confirm the assumption to price it.</p>
@@ -561,14 +625,26 @@ export function renderReportBody(
   const topAction = cards[0];
   const largest = model.ranked[0];
 
-  /** What sits at one (origin, stage) — the money that backs THIS action. */
-  const stakeAt = (originScopeId: string | null, stageName: string): RangeSpec => {
+  /**
+   * What sits at one (origin, stage) — the money that backs THIS action.
+   *
+   * It is the sum of EVERY priced friction at that location, not just the one
+   * named above it: an intervention at a stage addresses the queue wait, the
+   * aging and the overdue exposure there together, so the total is the right
+   * figure to justify going. The count travels with it because a bare total the
+   * reader cannot find in the ranked list below reads as an error in the
+   * report. Saying it spans three frictions tells them to add three rows.
+   */
+  const stakeAt = (
+    originScopeId: string | null,
+    stageName: string,
+  ): { readonly range: RangeSpec; readonly count: number } => {
     const here = model.ranked.filter(
       (rf) =>
         rf.instance.location.stage.name === stageName &&
         rf.instance.location.originScopeId === originScopeId,
     );
-    return totalRange(here);
+    return { range: totalRange(here), count: here.length };
   };
   /**
    * Where the action applies, as a label directly beneath it. The curated
@@ -581,10 +657,13 @@ export function renderReportBody(
       ? `Stage “${esc(stageName)}”`
       : `Stage “${esc(stageName)}” · ${esc(label)}`;
   };
-  const evidenceChips = (stake: RangeSpec, extra: string): string =>
+  const evidenceChips = (
+    stake: { readonly range: RangeSpec; readonly count: number },
+    extra: string,
+  ): string =>
     `<div class="meta">
        ${extra}
-       <span class="chip">${money(stake.expected, currency)} priced here</span>
+       <span class="chip">${money(stake.range.expected, currency)} priced at this stage${stake.count > 1 ? `, across ${stake.count} frictions` : ''}</span>
        <span class="chip">${money(total.expected, currency)} across the whole analysis</span>
      </div>`;
 
@@ -685,7 +764,7 @@ export function renderReportBody(
     }
     ${ranked}</section>
     ${renderTrend(run, options.previous ?? null)}
-    ${renderUnpriced(model.unpriced)}
+    ${renderUnpriced(model.unpriced, originLabel)}
     ${renderContext(run)}
     ${renderCoverage(run)}
     ${methodology}

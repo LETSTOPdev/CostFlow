@@ -42,6 +42,26 @@ the front of the queue. This does not stop engine work — it requires that engi
 work be justified by the product outcome it unlocks, not by the capability
 itself.
 
+## The four adoption outcomes
+
+Founder directive, 2026-07-29: optimise for **first real customers**, not for
+ourselves. Every remaining improvement must do at least one of these, and the
+proposal has to say which:
+
+1. **Increase a customer's confidence.**
+2. **Reduce onboarding friction.**
+3. **Improve the quality of the first report.**
+4. **Increase the likelihood of a second analysis.**
+
+An improvement that does none of them is not necessarily wrong, but it is not
+now — question whether it should be built at all yet. The goal stopped being a
+better product in isolation and became a product real customers adopt.
+
+Assumptions this product rests on that no customer has yet tested are listed in
+`06-known-risks.md` under *Unvalidated assumptions*. **Mark them, do not build
+around them.** Optimising for a guess about customer behaviour is how a roadmap
+fills up with work that turns out to have been aimed at nobody.
+
 The items below predate the North Star and are ordered by their old logic.
 Rank them against it as you go, not in a separate pass.
 

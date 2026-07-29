@@ -65,7 +65,9 @@ enforced test.
 
 **Comparison (MW1).** Comparability verdict across seven aspects — engine,
 detectors, assumptions, scope, coverage, evidence, policy — plus a per-instance
-and per-signal diff. The report's trend section is gated on it.
+and per-signal diff. Both surfaces that make a run-over-run claim are gated on
+it: the report's trend section, and the dashboard's delta line, which withholds
+the comparison entirely rather than asserting one the report refuses to make.
 
 **Evidence quality.** `EvidenceWeakness` × `EvidenceSubject` recorded on the
 import batch and carried in the artifact. ClickUp declares its reconstruction
@@ -90,10 +92,17 @@ why its order differs.
 The lead is never empty while money is priced: with no diagnostic above its
 evidence gate it names the largest measured cost and labels it as measured, and
 a run that found frictions but priced none reads as a blocked analysis with
-confirming the assumptions as the action, never as a healthy result. Durations
-are formatted for a reader; the artifact keeps full decimal precision. The
-statuses step explains what each of the six stage kinds changes, because that
-choice decides whether time is measured as work or as waiting.
+confirming the assumptions as the action, never as a healthy result. Its money
+figure says it covers the whole stage, and how many frictions that spans, so it
+can be reconciled against the ranked list below. Durations and due dates are
+formatted for a reader; the artifact keeps full decimal precision and the
+original ISO strings. Unpriced frictions name their origin, like the ranked
+ones, and name the assumption they are waiting on in the words the customer
+chose it by. The statuses step explains what each of the six stage kinds
+changes, because that choice decides whether time is measured as work or as
+waiting; the roles step says that skipping it caps the report at confidence C;
+the assumptions step says what leaving a value unconfirmed will produce, before
+the button rather than in the report.
 
 The run history names what each analysis found rather than listing dollar
 amounts. The printable export and both public sample surfaces render the same

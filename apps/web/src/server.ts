@@ -2682,7 +2682,15 @@ Sitemap: https://app.fbx1.com/sitemap.xml
          <p class="lead">Roles like "Legal" or "Ops" decide which hourly rate prices the work. Anyone left
          blank is pseudonymized and priced at the default rate with reduced confidence.</p>
          <form method="post" action="/mapping/actors" class="panel" style="margin-top:1.5rem">${csrfField(session)}
-           <div class="info">This step is optional. Leaving everything blank is fine and is the fastest path to your first report. You can refine roles later.</div>
+           <!--
+             The trade-off, at the point of choice. Skipping is genuinely the
+             fastest path, and it also caps EVERY figure in the report at
+             confidence C ("default hourly rate applied to unmapped actor(s)"),
+             because the rate behind each one was never role-specific. Saying
+             only "optional" and letting the reader discover a report graded C
+             throughout is how a fast first run becomes a distrusted one.
+           -->
+           <div class="info">This step is optional and skipping it is the fastest path to your first report. It has one cost: with nobody mapped, every figure is priced at the default rate, which caps the whole report at <strong>confidence C</strong>. Mapping even the few people who do most of the work raises it. You can refine roles later and re-run.</div>
            <div class="table-wrap"><table><tr><th>Person (from ${esc(connectorOf(workspace).descriptor.name)})</th><th>Role (blank = pseudonymize)</th></tr>
            ${workspace.observedActors
              .map(
@@ -2942,7 +2950,17 @@ Sitemap: https://app.fbx1.com/sitemap.xml
              'overdue',
            )}
            </table></div>
-           <button type="submit" style="margin-top:1.1rem">Save assumptions</button>
+           <!--
+             What saving is about to produce, stated before the button rather
+             than discovered in the report. Nothing is ticked by default and the
+             provenance gate (D4) is absolute, so a customer who fills in their
+             own hourly rate and leaves the rest alone gets a report that prices
+             nothing at all. That is the correct behaviour and a terrible first
+             run, and the difference between the two is entirely whether anyone
+             told them in advance.
+           -->
+           <p class="note" style="margin:1rem 0 0">A value you neither accept nor change stays vendor-suggested, and anything resting on it is reported as measured but <strong>unpriced</strong>. Accepting every value is the fastest route to a fully priced first report.</p>
+           <button type="submit" style="margin-top:.6rem">Save assumptions</button>
          </form>`,
       ),
     );
