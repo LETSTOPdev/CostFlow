@@ -37,7 +37,7 @@ process.
 | [`08-admin.md`](08-admin.md) | Running it: deploys, env vars, debugging production. |
 | [`09-ai-context.md`](09-ai-context.md) | How an AI assistant should work here. |
 
-## Two directories that are NOT living documents
+## Three directories that are NOT living documents
 
 **[`adr/`](adr)** — architecture decision records, amended in place rather than
 rewritten. Several are cited from source code.
@@ -45,6 +45,11 @@ rewritten. Several are cited from source code.
 **[`reference/`](reference)** — the original design corpus (`00`–`21` plus
 `BIBLE.md`), immutable. Several hold reasoning still load-bearing and reproduced
 nowhere else.
+
+**[`runbooks/`](runbooks)** — one-time procedures that are scheduled, executed
+and then **deleted**. A runbook exists because a change is coming, not because
+something is true; when it has been carried out, the living documents describe
+the result and the runbook goes. If this directory is empty, nothing is pending.
 
 > **Numbering trap.** Source code cites those as `doc 07 §1.2`, `doc 14 FS-4`,
 > `doc 03 P4` — meaning `reference/NN-*.md`, never the living documents above.

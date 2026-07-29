@@ -261,7 +261,17 @@ installing the App on that account *and* connecting it to the Vercel team's git
 identity, or by connecting `LETSTOPdev` as the team's GitHub account. If that is
 done, **delete the workflow**, or every push deploys twice.
 
-**Status.** Open. One dashboard action away; not a code change.
+**The permanent fix** is to move the repository into a business-owned GitHub
+organization, where installing an app is a role several people can hold rather
+than one person's personal account. That also removes the larger risk hiding
+behind this one: today, if that account is lost, the business cannot regain
+administrative control of its own production repository. The sequenced
+procedure, with verification and rollback at every step, is
+[`runbooks/github-org-migration.md`](runbooks/github-org-migration.md).
+
+**Status.** Open. The permanent fix is written and unscheduled; the workflow
+above closes the deployment half of it in the meantime, and is not a code
+change.
 
 ---
 

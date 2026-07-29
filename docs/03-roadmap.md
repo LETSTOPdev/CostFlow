@@ -138,6 +138,29 @@ Procedure in `08-admin.md`.
 
 ---
 
+### Move the repository to a business-owned GitHub organization
+
+**Goal.** CostFlow's source lives somewhere the business controls, and
+installing a deployment app is a role rather than one person's personal account.
+
+**Reason.** The repository is owned by an individual's personal GitHub account.
+That blocks the Vercel connection (`06-known-risks.md` R13) and, far more
+importantly, means the business cannot regain administrative control of its own
+production repository if that account is lost. No one else can grant it.
+
+**Dependencies.** An organization, a Vercel Pro plan (Hobby cannot connect to
+organization-owned repositories, and forbids commercial use regardless), and the
+repository owner, who is the only account that can initiate the transfer.
+
+**Status.** Not scheduled. The full procedure — every phase, with verification
+and rollback at each step, and every owner-permission operation marked — is
+written and ready in
+[`runbooks/github-org-migration.md`](runbooks/github-org-migration.md). Zero
+downtime is achievable because no hostname, DNS record, database or Auth0
+setting is touched.
+
+---
+
 ## P1 — Learn before building
 
 ### Validate OI1 against real customer workspaces

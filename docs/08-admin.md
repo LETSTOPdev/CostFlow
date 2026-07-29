@@ -89,6 +89,12 @@ The org and project ids are not secrets and are inlined in the workflow.
 If the Vercel GitHub App is ever connected to this repository instead, **delete
 the workflow** — otherwise every push deploys twice.
 
+> **This arrangement is temporary by design.** The repository is moving to a
+> business-owned GitHub organization, which removes the cause rather than the
+> symptom. The sequenced procedure is
+> [`runbooks/github-org-migration.md`](runbooks/github-org-migration.md);
+> nothing below changes until it is executed.
+
 ### If you connect the repository to Vercel directly
 
 Use the full name and check the result:
