@@ -44,9 +44,104 @@ not downtime. It is why Phase 0 declares a freeze.
 
 ---
 
+## Verified platform constraints
+
+Checked against Vercel's current documentation rather than recalled. Quoted so a
+future reader can tell what was verified from what was assumed, and re-check it.
+
+**1. A Hobby team cannot connect an organization-owned repository.**
+[`/docs/limits`](https://vercel.com/docs/limits), § *Connecting a project to a
+Git repository*, last updated 2026-07-01:
+
+> "Vercel does not support connecting a project on your Hobby team to Git
+> repositories owned by Git organizations. You can either switch to an existing
+> Team or create a new one."
+>
+> "The same limitation applies in the Project creation flow when importing an
+> existing Git repository or when cloning a Vercel template to a new Git
+> repository as part of your Git organization."
+
+What is gated is the **built-in Git integration** — the connected repository
+that installs a webhook and gives automatic deployments on push, preview URLs
+with pull-request comments, commit statuses, and instant rollback to a previous
+commit. Not deployment itself. See constraint 3.
+
+**2. The diagnosis in R13 is Vercel's own documented behaviour, not an
+inference.** [`/docs/git/vercel-for-github`](https://vercel.com/docs/git/vercel-for-github),
+§ *Missing Git repository → Personal account repositories*:
+
+> "To import or connect a GitHub repository owned by a personal account, you
+> must be the repository **Owner**. This allows Vercel to configure a webhook
+> and automatically deploy your commits. A Collaborator on a personal repository
+> cannot create new Vercel projects from that repository or connect it to
+> existing projects."
+
+That is exactly this situation: `ddoorr1185-ctrl` is a Collaborator on a
+repository owned by a personal account. No amount of reconfiguring changes it.
+This constraint is the reason the migration exists.
+
+**3. There IS a supported way to deploy without upgrading — but not to
+*connect*.** Same page, § *Using GitHub Actions*:
+
+> "You can use GitHub Actions to build and deploy your Vercel Application. This
+> approach is necessary to enable Vercel with GitHub Enterprise Server (GHES)
+> with Vercel, as GHES cannot use Vercel's built-in Git integration."
+
+Vercel documents `vercel build` + `vercel deploy --prebuilt` from Actions as the
+supported path wherever the built-in integration cannot be used. That is exactly
+what `.github/workflows/deploy-marketing.yml` does. It deploys production and
+previews on a Hobby team, from an organization-owned repository, without
+violating anything.
+
+What it does not give you: the webhook-driven connection, Vercel-authored
+preview comments on pull requests, commit statuses, `repository_dispatch`
+events, and one-click rollback to a specific commit. Previews still exist —
+the workflow creates them — they are simply built by CI rather than by Vercel.
+
+**4. Pro is required anyway, for a reason that has nothing to do with
+organizations.** [`/docs/limits/fair-use-guidelines`](https://vercel.com/docs/limits/fair-use-guidelines),
+§ *Commercial usage*, last updated 2026-06-16:
+
+> "**Hobby teams** are restricted to non-commercial personal use only. All
+> commercial usage of the platform requires either a Pro or Enterprise plan."
+>
+> "Commercial usage is defined as any Deployment that is used for the purpose of
+> financial gain of **anyone** involved in **any part of the production** of the
+> project, including a paid employee or consultant writing the code. Examples of
+> this include, but are not limited to … Advertising the sale of a product or
+> service."
+
+CostFlow meets that definition twice over: `fbx1.com` advertises a product with
+published pricing tiers, and anyone paid to write the code triggers it on its
+own. The definition attaches to the **Deployment**, so it does not matter which
+mechanism produced it — the GitHub Actions route does not avoid this, and the
+same page notes that "circumventing or otherwise misusing Vercel's limits or
+usage guidelines is a violation".
+
+**Conclusion.** The runbook's instruction to upgrade before transferring stands,
+but the reason is now stated correctly:
+
+- Pro is **not** strictly required to *deploy* an organization-owned repository.
+  Constraint 3 is a documented, supported alternative and is already in place.
+- Pro **is** required to *connect* one, which is the arrangement this migration
+  is aiming for (constraint 1).
+- Pro **is** required for CostFlow regardless of any of the above, because it is
+  a commercial product (constraint 4). This reason does not disappear if the
+  connection question is solved another way, and it applies today, on the
+  current Hobby team.
+
+If the plan change has to be deferred, the migration can still proceed: transfer
+the repository and keep deploying through the workflow. Phase 5 then becomes
+"upgrade, connect, delete the workflow" and can happen later — **but the
+commercial-usage exposure in constraint 4 exists now and is not created or
+removed by this migration.**
+
+---
+
 ## Who must do what
 
-Three roles. Most steps cannot be delegated.
+Four roles. Most steps cannot be delegated, and the reason is documented rather
+than incidental — see *Verified platform constraints* above.
 
 | Role | Who | Needed for |
 |---|---|---|
@@ -159,8 +254,10 @@ the current content.
    domain. Free plan is sufficient.
 2. **Add at least two owners.** This is the entire point of the migration; an
    organization with one owner reproduces the problem it was created to solve.
-3. Invite `LETSTOPdev` and `ddoorr1185-ctrl` as members. `LETSTOPdev` must be an
-   **owner** to perform the transfer in Phase 2.
+3. Invite `LETSTOPdev` and `ddoorr1185-ctrl` as **Members** — not Outside
+   Collaborators. `LETSTOPdev` must be an **Owner** to perform the transfer in
+   Phase 2, and whoever will connect Vercel in Phase 5 must be an Owner or a
+   Member (Vercel cannot connect a repository for an Outside Collaborator).
 
 **Verification.**
 
@@ -215,7 +312,30 @@ at risk in either direction.
 
 ## Phase 3 — Repair what the transfer dropped
 
-1. Compare secrets against the pre-transfer list:
+1. **Convert Outside Collaborators to Members.** This is the step most likely to
+   stall the migration on the day, and it is created *by* the transfer:
+   collaborators on the old personal repository arrive in the organization as
+   **Outside Collaborators**, and Vercel documents that an Outside Collaborator
+   cannot connect a repository at all —
+
+   > "If you have access to the repository but are only an Outside Collaborator
+   > in the GitHub organization, you cannot import or connect a GitHub
+   > repository in Vercel. You need to be an Owner or a Member of the GitHub
+   > organization."
+   > — [`/docs/git/vercel-for-github`](https://vercel.com/docs/git/vercel-for-github)
+
+   🔑 Organization owner. In the org's **People** tab, invite each Outside
+   Collaborator as a **Member**, then grant repository access through a team or
+   directly. Whoever will perform the Vercel link in Phase 5 must be an
+   organization **Owner or Member** with access to the repository — not an
+   Outside Collaborator.
+
+```bash
+gh api orgs/fbx1/members --jq '.[].login'                    # must include whoever links Vercel
+gh api orgs/fbx1/outside_collaborators --jq '.[].login'      # should NOT include them
+```
+
+2. Compare secrets against the pre-transfer list:
 
 ```bash
 gh api repos/fbx1/CostFlow/actions/secrets --jq '.secrets[].name'
@@ -224,8 +344,8 @@ gh api repos/fbx1/CostFlow/actions/secrets --jq '.secrets[].name'
 At the time of writing the repository has **no** secrets, so there should be
 nothing to restore. If `VERCEL_TOKEN` was added in the interim, re-add it.
 
-2. Re-apply branch protection on `main`, if any was configured.
-3. Confirm CI still runs:
+3. Re-apply branch protection on `main`, if any was configured.
+4. Confirm CI still runs:
 
 ```bash
 gh workflow list --repo fbx1/CostFlow
@@ -234,7 +354,8 @@ gh run list --repo fbx1/CostFlow --limit 3
 
 **Verification.** `gh run list` shows both `CI` and `Deploy marketing site`
 present, and the most recent run's conclusion is not `failure` for a reason
-introduced by the transfer.
+introduced by the transfer. `gh api orgs/fbx1/outside_collaborators` does not
+list anyone who needs to connect Vercel.
 
 **Rollback.** None required — this phase only restores settings.
 
@@ -293,11 +414,20 @@ throughout, so this is a pipeline rollback, not a service rollback.
 
 🔑 Vercel team owner. Billing action in step 1.
 
-1. **Upgrade the team to Pro.** This is not optional and not merely about
-   quotas: Vercel does not support connecting a Hobby team to a repository owned
-   by a GitHub organization, and the Hobby plan is restricted to non-commercial
-   personal use, which CostFlow is not. Doing the transfer without this leaves
-   the project unable to connect at all.
+1. **Upgrade the team to Pro.** 🔑 Vercel team owner; billing action.
+
+   Two independent reasons, both verified against the documentation quoted in
+   *Verified platform constraints* above:
+
+   - A Hobby team cannot **connect** an organization-owned repository, which is
+     the arrangement this phase exists to create.
+   - Hobby is restricted to non-commercial personal use, and CostFlow does not
+     qualify. This reason stands on its own and applies to the team *today*.
+
+   If the plan change must wait, **stop after step 1 and leave the workflow in
+   place** — it deploys an organization-owned repository on Hobby by a
+   documented, supported route. Resume at step 2 when the plan changes. Do not
+   attempt to connect the repository on Hobby; it will not work.
 2. Install the Vercel GitHub App on the `fbx1` organization, granting it
    `fbx1/CostFlow`.
 3. Link the project — **by full name, never by bare repository name:**
