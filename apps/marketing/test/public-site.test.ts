@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { APP_PATH_PREFIXES, MARKETING_PATHS } from '@costflow/ui';
+import { APP_PATH_PREFIXES, CONFIDENCE_NOTE, MARKETING_PATHS } from '@costflow/ui';
 import { PRERENDERED, notFoundPage, robotsTxt, sitemapXml } from '../src/routes';
-import { renderTryReportPage } from '../src/try-pages';
+import { renderTryPage, renderTryReportPage } from '../src/try-pages';
 
 /**
  * The public site: the landing, the sample report, the trust and company
@@ -163,6 +163,24 @@ describe('SEO', () => {
     expect(robots).toContain('Sitemap: https://fbx1.com/sitemap.xml');
   });
 
+  /**
+   * `/try` is in the sitemap and a crawler reads its `<meta refresh>` as a
+   * redirect to `/try/report`, which is noindex and canonicals back to `/try`.
+   * Without a self-referencing canonical here the chain tells a crawler to
+   * index the one page it is forbidden to index.
+   */
+  it('gives the live demo entry a self-canonical, since it meta-refreshes away', () => {
+    const body = renderTryPage();
+    expect(body).toContain('<link rel="canonical" href="https://fbx1.com/try">');
+    expect(body).toContain('<meta property="og:url" content="https://fbx1.com/try">');
+    expect(body).toContain('name="description"');
+    expect(body).not.toContain('noindex');
+    // And the generated company behind it stays out of the index.
+    const report = renderTryReportPage('42');
+    expect(report).toContain('noindex');
+    expect(report).toContain('<link rel="canonical" href="https://fbx1.com/try">');
+  });
+
   it('keeps the 404 out of the index and offers a way back', () => {
     const body = notFoundPage();
     expect(body).toContain("We couldn't find that page");
@@ -272,9 +290,35 @@ describe('the public surface does not over-promise', () => {
     // The capability that decides whether ClickUp wait analysis works at all.
     expect(body).toContain('Total Time in Status');
     // What the confidence tiers mean, not just that they exist.
-    expect(body).toContain('demonstrated in your event history');
+    expect(body).toContain('rests on your own event history');
     // The refusals, which are most of what loses a reader's trust unexplained.
     expect(body).toContain('When CostFlow refuses to answer');
+  });
+
+  /**
+   * The manual must teach the same vocabulary the report speaks.
+   *
+   * It once did not. `/docs` said B meant "consistent with" while every report
+   * labels C that way (`doc 07 §1.5`: A demonstrated pattern, B supported
+   * hypothesis, C consistent with). A customer who read the manual and then
+   * read their own report would conclude their weakest grade was their middle
+   * one, on the single mechanism the product uses to earn trust.
+   *
+   * Asserting against CONFIDENCE_NOTE rather than against literals is the
+   * point: the page renders from that table, so this fails if anyone ever
+   * restates a gloss by hand again.
+   */
+  it('teaches the confidence tiers the report actually renders', () => {
+    const body = render('/docs');
+    for (const grade of ['A', 'B', 'C'] as const) {
+      const gloss = (CONFIDENCE_NOTE[grade] ?? '').toLowerCase();
+      expect(gloss, `no gloss defined for ${grade}`).not.toBe('');
+      expect(body, `/docs does not define grade ${grade} as "${gloss}"`).toContain(
+        `<strong>${grade}</strong> means ${gloss}`,
+      );
+    }
+    // The specific collision that caused the bug: C's term attached to B.
+    expect(body).not.toContain('<strong>B</strong> means consistent with');
   });
 
   it('says on the security page that assignee names are stored', () => {
@@ -309,14 +353,74 @@ describe('recommendations on the sample surfaces', () => {
   });
 
   /**
-   * The static sample is below the evidence gate, so it recommends nothing.
-   * That is correct, and on a marketing surface it is also an opportunity: the
-   * refusal is a differentiator, and the prospect should leave with somewhere
-   * to go.
+   * The static sample is three items, so the size floors bind and "smaller than
+   * the evidence threshold" is literally what happened. That is correct, and on
+   * a marketing surface it is also an opportunity: the refusal is a
+   * differentiator, and the prospect should leave with somewhere to go.
    */
   it('explains the refusal and routes to a full-size demonstration', () => {
     const body = render('/demo');
     expect(body).toContain('smaller than the evidence threshold');
     expect(body).toContain('href="/try"');
+  });
+
+  /**
+   * A generated company carries roughly a hundred items, so it is NOT bound by
+   * size. Telling that visitor their company is too small is a false statement
+   * about their own data, and pointing them at "a full-size organisation" from
+   * the page that just generated one is a dead end back to itself.
+   *
+   * Seed 5 is a 92-item company that refuses, pinned here because the whole
+   * point is that a large sample can still be declined for the right reason.
+   */
+  it('never tells a generated company it is too small, and never dead-ends', () => {
+    const body = renderTryReportPage('5');
+    expect(body).toContain('92 issues');
+    expect(body).not.toContain('smaller than the evidence threshold');
+    expect(body).not.toContain('See the recommendations on a full-size organisation');
+    expect(body).toContain('No pattern in this company cleared the evidence');
+    // Regenerating is an honest onward step; claiming this page is not full-size
+    // is not. The link may stay, the claim may not.
+    expect(body).toContain('Generate another company');
+  });
+
+  /**
+   * The refusal must not name a gate it cannot know bound.
+   *
+   * A refusal renders only when all three diagnostics return nothing, and they
+   * have ten silent-zero paths between them: concentration exits on
+   * `minStages`, `sharePercent`, `minItems` or an unmapped intervention;
+   * ownership exits when items ARE owned; gatekeeping when no review stage
+   * exists. An earlier version of this copy asserted the friction was "spread
+   * across several stages", which is the OPPOSITE of what happened on the
+   * `minItems` path, where it pooled in one stage but too thinly to call
+   * systemic. That path is reachable: across 150 seeds it bound once.
+   *
+   * The view cannot know which gate bound without reimplementing the gate order
+   * outside the engine, so the copy asserts only the class of evidence needed.
+   * This test fails if a future edit reintroduces a mechanism claim.
+   */
+  it('states no specific gate as the reason, on any generated company', () => {
+    const mechanismClaims = [
+      'spread across several stages',
+      'pooling in one',
+      'smaller than the evidence threshold',
+      'too few items',
+      'only one stage',
+    ];
+    let refusals = 0;
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const body = renderTryReportPage(String(seed));
+      if (!body.includes('No pattern in this company cleared the evidence')) continue;
+      refusals += 1;
+      for (const claim of mechanismClaims) {
+        expect(body, `seed ${seed} names a gate it cannot know bound: "${claim}"`).not.toContain(
+          claim,
+        );
+      }
+    }
+    // Guard the guard: if generation ever stops producing refusals, this test
+    // would pass vacuously and stop protecting the copy.
+    expect(refusals, 'no generated company refused, so nothing was checked').toBeGreaterThan(0);
   });
 });

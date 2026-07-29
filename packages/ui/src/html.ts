@@ -1,5 +1,5 @@
 /** Server-rendered HTML shell + premium design system (doc 09 P4.1 — no SPA build). */
-import { APP_SITE, appUrl, marketingUrl, type Site } from './site';
+import { APP_SITE, MARKETING_ORIGIN, appUrl, marketingUrl, type Site } from './site';
 
 /**
  * Brand lockup for headers/footers: the full horizontal CostFlow logo (icon +
@@ -708,6 +708,13 @@ export function loadingPage(): string {
  * pure-CSS timeline that checks off each step, then `<meta refresh>` hands off
  * to the generated report. Deliberately ~8s, not 45s: a forced no-JS blank
  * wait is anti-conversion; this feels substantial without wasting the visitor.
+ *
+ * It carries a SELF-referencing canonical, which matters more here than on a
+ * page that simply sits still. A crawler reads `<meta refresh>` as a redirect,
+ * follows it to `/try/report`, and finds a page that is `noindex` and points
+ * its canonical back here — so without this tag the chain says "index the thing
+ * I am not allowed to index". `/try` is the indexable entry to the live demo;
+ * the generated company behind it is not, because its seed space is unbounded.
  */
 export function demoAnalyzingPage(seed: number): string {
   const stages = [
@@ -738,6 +745,17 @@ export function demoAnalyzingPage(seed: number): string {
 <meta name="color-scheme" content="light">
 <meta http-equiv="refresh" content="${wait}; url=/try/report?seed=${seed}">
 <title>Analyzing a live company | CostFlow</title>
+<meta name="description" content="Watch CostFlow analyze a realistic company end to end — no account, no Jira connection. A different company every visit, run through the real engine.">
+<link rel="canonical" href="${MARKETING_ORIGIN}/try">
+<link rel="icon" href="/favicon.ico?v=2" sizes="32x32">
+<meta property="og:site_name" content="CostFlow">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${MARKETING_ORIGIN}/try">
+<meta property="og:title" content="Try CostFlow on a live company">
+<meta property="og:description" content="A realistic company, generated fresh and priced by the real CostFlow engine. No account needed.">
+<meta property="og:image" content="${MARKETING_ORIGIN}/og.jpg?v=2">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="${MARKETING_ORIGIN}/og.jpg?v=2">
 <style>
   :root{--ink:#111827;--muted:#6b7280;--faint:#9ca3af;--line:#e5e7eb;--bg:#fafafa;--surface:#ffffff;--primary:#4f46e5;--pos:#10b981;
     --grad:linear-gradient(135deg,#4f46e5,#6366f1);--sh:0 16px 36px -14px rgba(17,24,39,.14);
