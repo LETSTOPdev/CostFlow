@@ -715,3 +715,52 @@ describe('when frictions are found but none can be priced', () => {
     expect(report.body).not.toMatch(/parameters\.[a-zA-Z]/);
   });
 });
+
+/**
+ * The same defect as "nothing priced is not nothing wrong", one branch over.
+ * A design partner who picks a List that is empty, archived, or entirely done
+ * imports nothing, and the report used to congratulate them on a process it
+ * had never seen.
+ */
+describe('when the analysis imported nothing at all', () => {
+  it('says there was nothing to analyse, not that the process is healthy', async () => {
+    const t = makeApp();
+    const email = 'empty@acme.example';
+    const cookie = await signIn(t, email);
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const workspace = await t.store.createWorkspace(tenantId, {
+      provider: 'jira',
+      connectionParams: { site: 'https://acme.atlassian.net', email },
+      tokenCiphertext: 'tok',
+    });
+    await t.store.updateWorkspace(tenantId, workspace.id, { onboarding: 'ready' });
+
+    const golden = JSON.parse(
+      readFileSync(join(ROOT, 'tools/golden/expected/demo-flow/run.json'), 'utf8'),
+    ) as AnalysisRun & { batch: { items: unknown[]; events?: unknown[] } };
+    const empty = {
+      ...golden,
+      batch: { ...golden.batch, items: [], events: [] },
+      frictions: [],
+      pricing: [],
+      estimates: [],
+    };
+    await t.store.createRun({
+      id: 'r-empty',
+      tenantId,
+      workspaceId: workspace.id,
+      createdAt: '2026-07-20T00:00:00Z',
+      runJson: JSON.stringify(empty),
+      reportMd: '# report',
+      telemetryJsonl: '',
+    });
+
+    const report = await get(t, cookie, '/reports/r-empty');
+    expect(report.statusCode).toBe(200);
+    expect(report.body).toContain('There was nothing to analyse');
+    expect(report.body).toContain('imported no work items');
+    expect(report.body).not.toContain('genuinely healthy sign');
+    // And it points at the thing the reader can actually change.
+    expect(report.body).toContain('href="/scope"');
+  });
+});

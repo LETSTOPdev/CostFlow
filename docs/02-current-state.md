@@ -104,7 +104,9 @@ why its order differs.
 The lead is never empty while money is priced: with no diagnostic above its
 evidence gate it names the largest measured cost and labels it as measured, and
 a run that found frictions but priced none reads as a blocked analysis with
-confirming the assumptions as the action, never as a healthy result. Its money
+confirming the assumptions as the action, never as a healthy result. A run that
+imported no work items says there was nothing to analyse and links to the scope
+step, rather than reporting health for a process it never saw. Its money
 figure says it covers the whole stage, and how many frictions that spans, so it
 can be reconciled against the ranked list below. Durations and due dates are
 formatted for a reader; the artifact keeps full decimal precision and the

@@ -565,11 +565,16 @@ export function renderReportBody(
           Math.min(100, Math.round((Number(rf.estimate.cost.expected) / maxExpected) * 100)),
         );
   const agingDays = run.assumptions.parameters.agingThresholdDays.value;
+  // The same three-way split as the hero, and for the same reason: an empty
+  // import is not a healthy process, and this section had its own copy of the
+  // sentence that says otherwise.
   const ranked =
     model.ranked.length === 0
       ? model.unpriced.length > 0
         ? `<div class="info">Nothing here could be priced. The findings are listed under <strong>Unpriced frictions</strong> below, each with the assumption it is waiting on.</div>`
-        : `<div class="info">No friction crossed your thresholds in this import. That's a genuinely healthy sign for the work analyzed. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`
+        : run.batch.items.length === 0
+          ? `<div class="info">No work items were imported, so there was nothing to rank. Check what this workspace is set to analyse.</div>`
+          : `<div class="info">No friction crossed your thresholds in this import. That's a genuinely healthy sign for the work analyzed. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`
       : model.ranked
           .map((rf) =>
             renderRankedFriction(
@@ -725,9 +730,31 @@ export function renderReportBody(
       <p style="margin:.8rem 0 0"><a class="btn" href="/assumptions">Review assumptions</a></p>
       <p class="note" style="margin:.7rem 0 0">This is not a clean bill of health: the frictions below are real and their magnitudes are measured. Only the cost is missing.</p>
     </section>`;
+  } else if (run.batch.items.length === 0) {
+    /**
+     * Nothing was imported at all, so there was nothing to find. Reporting that
+     * as health is the same defect the branch below used to have: an absence of
+     * findings and an inability to look are different results, and a refusal
+     * must never read as a pass (`04-engineering-principles.md`).
+     *
+     * Entirely reachable on a first run — a design partner picks a List that is
+     * empty, archived, or all-done, and the product congratulates them on a
+     * process it never saw.
+     */
+    headline = 'There was nothing to analyse';
+    hero = `<section class="report-hero">
+      <p class="note" style="margin:0;text-transform:uppercase;letter-spacing:.06em;font-size:.74rem;font-weight:640;color:var(--primary)">Check what you selected</p>
+      <p class="act">This analysis imported no work items, so it found nothing.</p>
+      <p class="act-why">That is not a statement about your process. ${
+        scopes === undefined || scopes.length === 0
+          ? 'Nothing came back from what you selected'
+          : `Nothing came back from ${scopes.map((sc) => esc(sc.label)).join(', ')}`
+      }: the items may all be closed, the selection may be empty, or the connected account may not have access to them.</p>
+      <p style="margin:.8rem 0 0"><a class="btn" href="/scope">Change what is analysed</a></p>
+    </section>`;
   } else {
     headline = 'Nothing crossed your thresholds';
-    hero = `<div class="info">No friction crossed your thresholds in this analysis, and nothing was left unpriced. That is a genuinely healthy sign for the work covered. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`;
+    hero = `<div class="info">Across the ${run.batch.items.length.toLocaleString('en-US')} work items in this analysis, nothing crossed your thresholds and nothing was left unpriced. That is a genuinely healthy sign for the work covered. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`;
   }
 
   // Always rendered when diagnostics exist: even with no finding it carries

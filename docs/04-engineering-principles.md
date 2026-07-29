@@ -59,10 +59,16 @@ assumptions are unconfirmed is a **blocked** analysis whose recommended action i
 confirming them. The healthy message is reserved for a run that found nothing and
 left nothing unpriced.
 
+The same applies when there was nothing to look at. An analysis that imported no
+work items says so and points at the scope step; it never reports health for a
+process it never saw.
+
 *Why:* the report once said "no priced friction crossed your thresholds, that is
 a genuinely healthy sign" directly above eight measured frictions it had declined
 to cost, and every test passed. The rule generalises past that one surface:
 wherever the product reports an empty result, it first says whether it looked.
+The sentence then turned up a second time, in the ranked-friction section, on the
+empty-import path — which is why this is a principle and not a fix.
 
 ### Explain every calculation
 
