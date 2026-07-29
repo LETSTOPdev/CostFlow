@@ -51,6 +51,19 @@ banned.
 *Why:* a missing number is recoverable. A quietly invented one is not, and the
 reader has no way to tell them apart.
 
+### A refusal must never read as a pass
+
+Finding nothing and being unable to evaluate are different results, and the
+product always says which one it produced. A run that priced nothing because its
+assumptions are unconfirmed is a **blocked** analysis whose recommended action is
+confirming them. The healthy message is reserved for a run that found nothing and
+left nothing unpriced.
+
+*Why:* the report once said "no priced friction crossed your thresholds, that is
+a genuinely healthy sign" directly above eight measured frictions it had declined
+to cost, and every test passed. The rule generalises past that one surface:
+wherever the product reports an empty result, it first says whether it looked.
+
 ### Explain every calculation
 
 Every cost carries a formula trace: per-item terms, the assumptions used, and
@@ -121,6 +134,20 @@ problem is that the sequence had to be derived rather than read.
 
 *Why:* mechanism-shaped vocabulary grows once per platform quirk, which is a
 provider taxonomy wearing a domain name.
+
+### A recommendation carries its basis where it is made
+
+Wherever CostFlow recommends an action, that same screen states the confidence
+tier **and what the tier means**, that the finding is measured while the
+intervention is selected, and where the figures open into their formulas. Not in
+a drill-down, not in an appendix: beside the claim.
+
+*Why:* a correct recommendation nobody believes is worth nothing, and belief is a
+property of the screen rather than of the arithmetic behind it. "It is traceable
+if you open the drill-down" is not an answer. Both anchors already existed on the
+recommendation card and were silently lost when the lead took over the headline
+(D22) — the provenance line especially, without which a curated playbook match
+borrows the authority of the measurement above it.
 
 ---
 

@@ -31,7 +31,7 @@ process.
 | [`02-current-state.md`](02-current-state.md) | What is true today: shipped, deployed, in progress. |
 | [`03-roadmap.md`](03-roadmap.md) | Future work only. Finished milestones are deleted. |
 | [`04-engineering-principles.md`](04-engineering-principles.md) | What the system believes about numbers, attribution and vocabulary. |
-| [`05-decisions.md`](05-decisions.md) | Permanent decisions with reasons, tradeoffs, consequences. |
+| [`05-decisions.md`](05-decisions.md) | Permanent decisions with reasons, tradeoffs, consequences. **Rare by design.** |
 | [`06-known-risks.md`](06-known-risks.md) | Active risks only. Resolved ones are deleted. |
 | [`07-testing.md`](07-testing.md) | What the test suites are and what the gate guarantees. |
 | [`08-admin.md`](08-admin.md) | Running it: deploys, env vars, debugging production. |

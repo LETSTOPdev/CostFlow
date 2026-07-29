@@ -77,29 +77,28 @@ not to make it — and the product screenshot mirrors the real report's order:
 action, evidence, then the ranked list. The stage vocabulary shown before signup
 matches the six kinds the product actually uses.
 
-**Report structure.** Every recommendation states its basis where it is made:
-the confidence tier and what it means, that the finding is measured while the
-intervention is selected, and where the figures open into their formulas (D24).
-The report is an executive briefing: it leads with the
-single highest-leverage action, with the cost at stake beneath it as the
-evidence that acting is worth it, and the total across the analysis in the
-supporting detail (D22). The recommendation says it was chosen for strongest
-evidence rather than largest figure (D21), and the cost-ordered list below
-explains why its order differs. A run that found frictions but priced none reads as a blocked analysis with
-confirming the assumptions as the action, never as a healthy result (D23). The
-hero is never empty while money is priced —
-with no diagnostic above its evidence gate it names the largest measured cost
-and labels it as measured (D20). Durations are formatted for a reader; the
-artifact keeps full decimal precision. The statuses step explains what each of
-the six stage kinds changes, because that choice decides whether time is
-measured as work or as waiting.
+**Report structure.** The report is an executive briefing, ordered for a
+two-minute read: the single highest-leverage action, the cost at stake beneath
+it as the evidence that acting is worth it, a labelled boundary, then all
+supporting detail including the total across the analysis (D22). Every
+recommendation states its basis where it is made — the confidence tier and what
+it means, that the finding is measured while the intervention is selected, and
+where the figures open into their formulas. It says it was chosen for strongest
+evidence rather than largest figure, and the cost-ordered list below explains
+why its order differs.
+
+The lead is never empty while money is priced: with no diagnostic above its
+evidence gate it names the largest measured cost and labels it as measured, and
+a run that found frictions but priced none reads as a blocked analysis with
+confirming the assumptions as the action, never as a healthy result. Durations
+are formatted for a reader; the artifact keeps full decimal precision. The
+statuses step explains what each of the six stage kinds changes, because that
+choice decides whether time is measured as work or as waiting.
 
 The run history names what each analysis found rather than listing dollar
-amounts. The report is ordered for a two-minute executive read:
-total, then recommendations, then a labelled boundary, then supporting detail.
-The printable export and both public sample surfaces render the same body; the
-public ones mark the recommendations as computed from demonstration data. See
-D18.
+amounts. The printable export and both public sample surfaces render the same
+body; the public ones mark the recommendations as computed from demonstration
+data.
 
 **Per-origin attribution.** Friction is located at (origin, stage), so a
 workspace spanning several teams reports which team's queue is expensive rather

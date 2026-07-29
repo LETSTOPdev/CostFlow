@@ -357,7 +357,7 @@ then a real error hides in it.
 | Shipped a feature, deployed, changed production behaviour | `02-current-state.md` |
 | Finished or added planned work | `03-roadmap.md` — **delete** finished milestones |
 | Added a package, changed data flow or a core model | `01-architecture.md` |
-| Made a decision with tradeoffs worth recording | `05-decisions.md`, and an ADR if load-bearing |
+| Made a decision that will shape future architecture, product strategy or a recurring choice | `05-decisions.md` — **rare**; plus an ADR if also load-bearing and hard to reverse |
 | Adopted a rule others must follow | `04-engineering-principles.md` |
 | Discovered or resolved a risk | `06-known-risks.md` — **delete** resolved ones |
 | Added a test suite or changed the gate | `07-testing.md` |
@@ -366,6 +366,16 @@ then a real error hides in it.
 
 Some of this is enforced by `apps/cli/test/docs-sync.test.ts`. Most is not, and
 is your responsibility.
+
+**A decision record is exceptional.** `05-decisions.md` keeps its authority by
+staying short, so most good work produces none. A UX refinement or an
+implementation improvement is not a decision — the commit message, the test that
+pins the behaviour, and `02-current-state.md` already carry it. A rule others
+must follow is a principle, not a decision. Before writing a record, ask whether
+a session a year from now would be worse off without it; if the honest answer is
+no, the work is still done. Nine were written in a single session once, five of
+which were refinements of the other four, and the document was harder to trust
+for it.
 
 ---
 

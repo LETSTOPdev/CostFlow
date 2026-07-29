@@ -3,8 +3,25 @@
 Decisions that remain true. Each states what was decided, why, what it costs,
 and what follows.
 
+**A record here is exceptional.** Write one only when the decision will shape
+future architecture, product strategy, or a recurring engineering choice — the
+ADR bar without the formality. A UX refinement or an implementation improvement
+is not one: the commit, the test that pins the behaviour, and
+`02-current-state.md` carry those. A rule others must follow is a principle, in
+`04-engineering-principles.md`. This document is worth reading because it is
+short.
+
 Formal records live in `adr/` and several are cited from source code. This
 document says what each means today; the ADRs carry the full reasoning.
+
+Numbers are permanent — source code and tests cite them. A decision that is
+folded into another leaves a gap rather than renumbering everything after it.
+
+> **Collision.** `D1`–`D10` also name the *diagnostics* in
+> `reference/07-decision-engine.md`: `D3` is serial gatekeeping there and
+> "attribution is structural" here. Citations inside `packages/diagnostics` mean
+> the diagnostics; elsewhere they usually mean this document, and the
+> surrounding sentence settles it.
 
 ---
 
@@ -338,32 +355,6 @@ vendor-suggested assumptions.
 
 ---
 
-## D18 — The recommendations come second, and everything below them is detail
-
-**Decision.** The report is ordered for a reader with two minutes: total, then
-recommendations, then a labelled boundary, then all supporting detail. Every
-surface that renders a report renders the same body, including the printable
-export and the public samples.
-
-**Reason.** The five questions an executive actually has — what is the biggest
-problem, why, what to do first, what it is worth, what backs it — are all
-answered by the recommendations. Putting them after the methodology meant a
-reader who stopped at the total never reached them, and the export omitted them
-outright. Sophistication that never reaches a report is not progress.
-
-**Tradeoffs.** The decision now sits above the working that justifies it, which
-inverts how the artifact is built. The labelled boundary is what keeps that
-honest: it says where the claim ends and the evidence begins rather than hiding
-the evidence.
-
-**Consequences.** `/demo` and `/try/report` show recommendations, marked as
-computed from demonstration data (founder decision, 2026-07-28). Where the
-sample is too small to support one, the refusal is stated as what it is — the
-product declining to recommend on thin evidence — and links to a full-size
-demonstration.
-
----
-
 ## D19 — Friction is located at (origin, stage), never stage alone
 
 **Decision.** Every `WorkItem` records its origin, and every `FrictionInstance`
@@ -390,66 +381,14 @@ layers. Attribution is still structural, so ADR-0002 is untouched.
 
 ---
 
-## D20 — The top of the report always answers, even when nothing can be recommended
-
-**Decision.** When no diagnostic clears its evidence gate but the run priced
-real friction, "Where to act first" names the largest **measured** cost and says
-explicitly that it is arithmetic rather than a fitted recommendation. It is only
-silent when nothing was priced at all.
-
-**Reason.** A small workspace routinely produces real priced friction and no
-pattern strong enough to recommend against. That is a correct result, but
-rendering it as "no operational findings" at the very top of the report — above
-thousands of dollars of ranked cost — is the worst available reading of it, and
-undoes the point of promoting that section (D18). Found by walking the product
-as a first-time customer, not by reading the code.
-
-**Tradeoffs.** The section now carries two kinds of statement. The wording does
-the separating: a fitted intervention is offered only when a diagnostic earned
-it, and the fallback says which of the two the reader is looking at.
-
-**Consequences.** No threshold moved and no diagnostic was relaxed — ADR-0006 §7
-suppression is untouched, and the fallback shows figures the report already
-renders further down. The public sample surfaces keep their own empty state,
-which explains the evidence threshold and links to a full-size demonstration.
-
----
-
-## D21 — "Where to act first" names one place to start
-
-**Decision.** When any diagnostic clears its evidence gate, the section opens by
-naming the single strongest-evidenced finding as the starting point, states that
-this is the basis, and reports its implementation complexity. The caveat about
-ordering stays, scoped to the remainder of the list.
-
-**Reason.** The section was titled "Where to act first" and opened with "this is
-not a recommended sequence" — a heading and a disclaimer that cancel each other,
-in the one section the North Star depends on. An executive reading both leaves
-less confident than they arrived.
-
-The disclaimer was defending something real (D9 / ADR-0006 §5: no composite
-priority score, and a ranked list does not become a work order because it is
-ordered). But "there is no optimal sequence" and "here is where to start" are
-different claims, and only the first was ever in question.
-
-**Tradeoffs.** Naming a starting point is a stronger statement than the product
-made before. It is bounded by saying what it is chosen ON — strongest evidence,
-explicitly not largest figure — so a reader who disagrees with that basis can
-see the basis and choose differently.
-
-**Consequences.** Nothing is fused: complexity is reported and still never
-reorders anything. The ranked-friction list, which is ordered by cost, now says
-why its order differs from the section above it — two orders on one page is a
-credibility problem unless the page says why.
-
----
-
 ## D22 — The report leads with the action; the money is its evidence
 
+*(absorbs the report-ordering decisions that preceded it)*
+
 **Decision.** Every surface leads with the single highest-leverage action. The
-estimated financial impact sits beneath it as the reason to act, and the total
-across the analysis moves into the supporting detail. The report is an executive
-briefing, not a financial statement.
+estimated financial impact sits beneath it as the reason to act, then a labelled
+boundary, then all supporting detail including the total across the analysis.
+The report is an executive briefing, not a financial statement.
 
 The sentence every surface is written to answer: *"Start here. This is the
 single highest-leverage operational improvement we found, and here is the
@@ -468,69 +407,26 @@ one section below with its full range, and every figure still opens into its
 formula. A recommendation with a priced consequence attached is more persuasive
 than a number with no owner, not less.
 
-**Consequences.** The hero has three states — a fitted recommendation, the
-largest measured cost when no diagnostic cleared its gate, or an explicit
-nothing-priced result. `ADR-0006 §5` is intact: impact and complexity appear as
-separate chips on the hero and are never fused. The dashboard, the printable
-export, `/demo`, `/try/report` and the landing page all carry the same order, so
-a customer meets one product rather than two.
+The decision also now sits above the working that justifies it, inverting how
+the artifact is built. The labelled boundary is what keeps that honest: it says
+where the claim ends and the evidence begins rather than hiding the evidence.
 
----
+**Consequences.** The lead has four states and is never empty while money is
+priced: a fitted recommendation, the largest **measured** cost when no
+diagnostic cleared its evidence gate, a blocked analysis when frictions were
+found but none could be priced, or an explicit nothing-found result.
 
-## D23 — "Nothing priced" is not "nothing wrong"
+Naming a starting point is a stronger statement than the product used to make.
+It is bounded by saying what it is chosen ON — strongest evidence, explicitly
+not largest figure — so a reader who disagrees with the basis can see it and
+choose differently. Nothing is fused: `ADR-0006 §5` and D9 hold, impact and
+complexity appear as separate chips, and complexity still reorders nothing. The
+ranked list below is ordered by cost and says why its order differs, because two
+orders on one page is a credibility problem unless the page explains it.
 
-**Decision.** A run that found frictions but priced none of them is presented as
-a BLOCKED analysis with confirming the assumptions as the recommended action,
-never as a healthy result. The healthy message is reserved for a run that found
-nothing and left nothing unpriced.
-
-**Reason.** Report mode refuses to price a vendor suggestion (D4), so a customer
-who supplies values without confirming them gets zero priced findings. The
-report rendered that as *"No priced friction crossed your thresholds. That is a
-genuinely healthy sign."* — with eight measured frictions listed below it. It
-told a first-time executive their process was fine at the moment the analysis
-found eight problems and declined to cost them.
-
-Found by walking the realistic first-run path: type your own rate, ignore the
-six accept checkboxes for parameters you have no opinion about. No test caught
-it because every test either accepted everything or accepted nothing while
-asserting on the unpriced list rather than the headline.
-
-**Tradeoffs.** The blocked state now occupies the hero, which is more prominent
-than a caveat. That is correct: it is the highest-leverage action available to
-that reader, and a briefing they cannot act on is worth less than a clear
-instruction for making it actionable.
-
-**Consequences.** The unconfirmed assumptions are listed by the names the
-customer saw on the assumptions step, read from the artifact's own provenance
-rather than parsed out of the engine's skip-reason prose. The dashboard carries
-the same split. `isCustomerOwned` is the single test for both.
-
----
-
-## D24 — A recommendation carries its basis where it is made
-
-**Decision.** Wherever CostFlow recommends an action, the same screen states the
-confidence tier **and what that tier means**, that the finding is measured while
-the intervention is selected, and where the figures open into their formulas.
-Not in a drill-down, not in an appendix: beside the claim.
-
-**Reason.** The second ritual question (`09-ai-context.md` §3): *why should the
-CEO trust this recommendation?* If the answer is not obvious from the screen,
-the screen is improved before the engine. A correct recommendation nobody
-believes is worth nothing, and belief is a property of the screen rather than of
-the arithmetic behind it.
-
-Both anchors existed on the recommendation card and were lost when the hero took
-over the headline in D22. The second loss is the serious one: presenting a
-curated playbook match with no provenance line lets it borrow the authority of
-the measurement above it, which is the exact boundary doc 07 §2.1 holds.
-
-**Consequences.** `CONFIDENCE_NOTE` and `INTERVENTION_PROVENANCE` are exported
-from the diagnostics view and used by both the hero and the cards, so the two
-can never drift apart again. Applies equally to the printable export.
-
-**Noted while fixing it.** Em-dash density in product copy had roughly tripled
-in `report-view.ts` during this session, against the standing copywriting bar.
-The hero copy was corrected; the rest is pre-existing and not worth a churn pass
-on its own. Watch it when touching copy.
+Every surface renders the same body — dashboard, printable export, `/demo`,
+`/try/report` and the landing page — so a customer meets one product rather than
+two. The public samples mark the recommendations as computed from demonstration
+data (founder decision, 2026-07-28), and where the sample is too small to
+support one, the refusal is stated as what it is and links to a full-size
+demonstration.
