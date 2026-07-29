@@ -255,6 +255,21 @@ export class HttpClickUpGateway implements ConnectorGateway {
   }
 }
 
+/**
+ * The one action that unlocks wait analysis on ClickUp, written once.
+ *
+ * It is said in two moments that need different framing: on the connect page,
+ * before there is any import, where the reader needs the consequence of not
+ * doing it; and in `planGateHint`, after an import came back without status
+ * history, where the reader needs the remedy. Both are the SAME instruction,
+ * and it was written out three times — twice identically inside `planGateHint`
+ * itself. The surrounding sentence stays per-surface; the instruction does not.
+ *
+ * Plain text, deliberately: `renderUnavailable` escapes the hint before
+ * rendering it, so markup here would reach the reader as literal tags.
+ */
+const TIME_IN_STATUS_ACTION = 'ask a Workspace admin to enable the Total Time in Status ClickApp';
+
 const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
   id: 'clickup',
   name: 'ClickUp',
@@ -285,7 +300,7 @@ const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
              <li>Paste it above.</li>
            </ol>
            <p class="note"><strong>Only use Regenerate if you have no token yet.</strong> Regenerating asks for your ClickUp password and invalidates the current token, which will break any other tool already using it.</p>
-           <p class="note">For wait-time analysis, ask a Workspace admin to turn on the <strong>Total Time in Status</strong> ClickApp. Without it CostFlow can still price overdue and stale work, but not time spent waiting in a stage.</p>`,
+           <p class="note">For wait-time analysis, ${TIME_IN_STATUS_ACTION}. Without it CostFlow can still price overdue and stale work, but not time spent waiting in a stage.</p>`,
   pickerBlurb: 'ClickUp Lists: tasks, statuses, assignees, due dates, and time-in-status history.',
   // Time-in-Status DOES yield ordered transitions. Each status entry carries
   // `total_time.since`, the instant the task entered that status, so the CU1
@@ -302,10 +317,8 @@ const CLICKUP_DESCRIPTOR: ConnectorDescriptor = {
     canProvide: ['stage-snapshots', 'status-history', 'transition-history', 'due-dates'],
     planGated: ['status-history', 'transition-history'],
     planGateHint: {
-      'status-history':
-        'Ask a Workspace admin to enable the Total Time in Status ClickApp, then re-import.',
-      'transition-history':
-        'Ask a Workspace admin to enable the Total Time in Status ClickApp, then re-import.',
+      'status-history': `${TIME_IN_STATUS_ACTION}, then re-import.`,
+      'transition-history': `${TIME_IN_STATUS_ACTION}, then re-import.`,
     },
   },
 };

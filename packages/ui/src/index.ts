@@ -9,6 +9,7 @@
  */
 export * from './site';
 export * from './html';
+export * from './vocabulary';
 export * from './evidence';
 export * from './oi-view';
 export * from './report-view';

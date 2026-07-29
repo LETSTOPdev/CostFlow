@@ -6,7 +6,14 @@ import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import { assessComparability } from '@costflow/comparison';
 import type { AnalysisRun } from '@costflow/analysis';
 
-import { esc, frictionInsight, frictionSubject, parseRun, totalRange } from '@costflow/ui';
+import {
+  CONFIDENCE_NOTE,
+  esc,
+  frictionInsight,
+  frictionSubject,
+  parseRun,
+  totalRange,
+} from '@costflow/ui';
 
 /**
  * Executive dashboard. One dominant number, three plain-English decisions,
@@ -209,7 +216,14 @@ const heroNothingPriced = (input: DashboardInput, latest: RunDigest): string =>
         <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}</p>
         ${runForm(input.csrfField, 'Analyze again', safetyNote(input.providerName))}
       </section>`
-    : `<section class="dash-hero">
+    : // Deliberately NOT the report's wording. The two surfaces have always said
+      // this differently, and they are answering different questions: the report
+      // headlines the whole analysis, this hero labels the latest run in a card.
+      // The report's threshold hint stays on the report for the same reason — a
+      // reader who expected findings goes there to understand why there are
+      // none. What the dashboard was genuinely missing was the MEANING of a
+      // confidence grade, which is shared and now consumed.
+      `<section class="dash-hero">
         <p class="hero-eyebrow">Latest analysis</p>
         <p class="figure-hero quiet">No friction crossed your thresholds</p>
         <p class="hero-sub">Analysis of ${fmtWhen(input.runs[0]?.createdAt ?? '')}. Nothing was left unpriced either, so this is a clean result rather than a missing one.</p>
@@ -279,7 +293,7 @@ const insightCards = (latest: RunDigest, latestRunId: string): string => {
   const strongestCard = strongest
     ? `<div class="insight">
         <p class="k">How solid is this</p>
-        <p class="lede">Strongest evidence: ${lowerFirst(frictionSubject(strongest.instance.frictionType, strongest.instance.location.stage.name).subject)}${whoseIn(latest, strongest.instance.location)} at about <strong>${money(strongest.estimate.cost.expected, currency)}</strong>, grade&nbsp;${esc(strongest.estimate.confidence.tier)}.</p>
+        <p class="lede">Strongest evidence: ${lowerFirst(frictionSubject(strongest.instance.frictionType, strongest.instance.location.stage.name).subject)}${whoseIn(latest, strongest.instance.location)} at about <strong>${money(strongest.estimate.cost.expected, currency)}</strong>, grade&nbsp;${esc(strongest.estimate.confidence.tier)} (${esc((CONFIDENCE_NOTE[strongest.estimate.confidence.tier] ?? '').toLowerCase())}).</p>
         <p class="note">${tierPills(ranked)}</p>
       </div>`
     : '';

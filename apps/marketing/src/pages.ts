@@ -1,6 +1,9 @@
 import {
   CONFIDENCE_NOTE,
   MARKETING_SITE,
+  ROLES_SKIP_COST,
+  STAGE_KIND_GUIDE,
+  STAGE_KIND_ORDER,
   SUPPORT_EMAIL,
   appUrl,
   layout,
@@ -31,6 +34,15 @@ const MAIL = `mailto:${SUPPORT_EMAIL}`;
  * documentation or fails to compile.
  */
 const tier = (grade: 'A' | 'B' | 'C'): string => (CONFIDENCE_NOTE[grade] ?? '').toLowerCase();
+
+/**
+ * The canonical stage-kind guide writes each clause as a sentence, because the
+ * onboarding step puts it in its own table cell. `/docs` continues a sentence
+ * after an em dash, where a capital letter reads as a formatting mistake. The
+ * words stay the canonical ones; only the first letter bends to the sentence
+ * it is now inside.
+ */
+const lowerFirst = (s: string): string => s.charAt(0).toLowerCase() + s.slice(1);
 
 /** Centered eyebrow/h1/lead header used at the top of every page in this file. */
 function pageHead(eyebrow: string, h1: string, lead: string): string {
@@ -528,14 +540,12 @@ const DOCS_SECTIONS: [string, string][] = [
     'Mapping statuses and roles',
     `<p>Your status names stay exactly as they are. The stage kind tells CostFlow how to treat the time spent in that status, and it decides whether time counts as work or as waiting.</p>
      <ul>
-       <li><strong>queue</strong> &mdash; nobody has picked it up yet. Priced as waiting.</li>
-       <li><strong>review</strong> &mdash; waiting on approval or sign-off. Also priced as waiting, kept separate so approval bottlenecks are visible on their own.</li>
-       <li><strong>active</strong> &mdash; someone is working on it. Not priced as waiting; this is the work itself.</li>
-       <li><strong>blocked</strong> &mdash; stopped by something outside the team. Not priced as waiting today. Map it to <em>queue</em> if you want that time counted as wait.</li>
-       <li><strong>done</strong> &mdash; finished. Excluded from stale and overdue entirely.</li>
-       <li><strong>abandoned</strong> &mdash; dropped without finishing. Excluded, like done.</li>
+       ${STAGE_KIND_ORDER.map(
+         (kind) =>
+           `<li><strong>${kind}</strong> &mdash; ${lowerFirst(STAGE_KIND_GUIDE[kind].use)} ${STAGE_KIND_GUIDE[kind].changes}</li>`,
+       ).join('')}
      </ul>
-     <p>Roles are optional and skipping them is the fastest route to a first report. It has one cost: with nobody mapped, every item is priced at the default hourly rate, which caps every figure in the report at <strong>confidence C</strong>. Mapping the few people who do most of the work raises it.</p>`,
+     <p>${ROLES_SKIP_COST}</p>`,
   ],
   [
     'Understanding your report',

@@ -94,6 +94,11 @@ Under `apps/cli/test/`, these inspect the repository itself:
   comments.*
 - **`diagnostics-unit-coverage.test.ts`** — every magnitude unit the goldens
   contain maps to an intervention.
+- **`explanation-consistency.test.ts`** — every closed vocabulary the product
+  explains has exactly one owner in `packages/ui/src/vocabulary.ts`, and no
+  other shipped file writes its own copy. Structural, not textual: wording may
+  improve, but it may not exist twice. *Written after `/docs` and the onboarding
+  step drifted apart on what the `active` stage kind does.*
 - **`report-skip-reasons.test.ts`** — no engine skip reason reaches a customer
   verbatim, no raw assumption ref appears in report prose, and simulation mode
   is never offered. Walks every golden, so a reworded or newly added engine

@@ -107,6 +107,15 @@ are stored in workspace configuration so roles can be mapped, which
 "pseudonymized before analysis" was true of but did not cover. A test pins each
 of these, because an over-promise is a regression like any other.
 
+**The explanation layer has one owner per concept.** Every closed vocabulary the
+product explains out loud lives once, in `packages/ui/src/vocabulary.ts`, typed
+against the domain union so a new member fails the build until someone names it:
+the six stage kinds, the four provenance values, the assumption labels, what
+skipping roles costs, and the clean-result message. Each existed twice before,
+once in the onboarding step and once in `/docs`, and they had drifted. `/docs`
+described five of the six stage kinds correctly and dropped the clause telling a
+reader that `active` still counts toward stale and overdue.
+
 No rendered surface reconstructs meaning from engine prose. The one translator
 that must recognise the engine's skip reasons, so a customer never reads
 "parameters.overdueAttentionHoursPerDay" or is told to use a simulation mode the

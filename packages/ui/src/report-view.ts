@@ -9,11 +9,13 @@ import {
   type CostEstimate,
   type TraceTerm,
 } from '@costflow/cost-engine';
-import type { BatchScope, RangeSpec } from '@costflow/domain';
+import type { BatchScope, Provenance, RangeSpec } from '@costflow/domain';
 import { isCustomerOwned } from '@costflow/domain';
+import { ASSUMPTION_LABEL, NOTHING_CROSSED, PROVENANCE_LABEL } from './vocabulary';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import { compareRuns, type ChangeDirection } from '@costflow/comparison';
 import { esc } from './html';
+import { unitLabel } from '@costflow/diagnostics';
 import {
   buildActionCards,
   renderDiagnostics,
@@ -35,13 +37,7 @@ import {
  * via the engine's own range algebra.
  */
 
-const PROVENANCE_LABELS: Record<string, string> = {
-  'vendor-suggested': 'vendor-suggested (unconfirmed)',
-  'customer-accepted': 'accepted by customer',
-  'customer-customized': 'customized by customer',
-  'customer-measured': 'measured by customer',
-};
-const provLabel = (p: string): string => PROVENANCE_LABELS[p] ?? p;
+const provLabel = (p: string): string => PROVENANCE_LABEL[p as Provenance]?.report ?? p;
 
 /**
  * Why the figure on the hero can be believed. Asserting a number with no
@@ -127,6 +123,15 @@ export const confidenceBadge = (tier: string): string =>
  * Plain-language equivalents of the engine's magnitude units (buyers do not
  * speak "item-hours-waiting"). Purely a label — the number is unchanged and
  * still traces to the drill-down.
+ *
+ * The fall-through defers to the diagnostics layer's `unitLabel` rather than
+ * printing the raw unit. Both layers name the same closed set, and a unit added
+ * to the engine reaches whichever of them was updated first; falling back to
+ * the other means the worst case is a plainer sentence, not
+ * "12 item-days-blocked" in front of an executive. `report-unit-coverage`
+ * in `diagnostics-unit-coverage.test.ts`'s neighbourhood asserts every unit the
+ * goldens actually emit has a phrase here, so the fall-through stays a
+ * safety net rather than the normal path.
  */
 export const humanizeMagnitude = (value: number | string, unit: string): string => {
   const v = typeof value === 'number' ? value.toLocaleString('en-US') : esc(String(value));
@@ -139,7 +144,7 @@ export const humanizeMagnitude = (value: number | string, unit: string): string 
     case 'item-days-aging':
       return `${v} item-days sitting beyond the aging threshold`;
     default:
-      return `${v} ${esc(unit)}`;
+      return `${v} ${esc(unitLabel(unit))}`;
   }
 };
 
@@ -160,18 +165,11 @@ export const humanizeMagnitude = (value: number | string, unit: string): string 
  * parsed out of the engine's skip-reason prose, so a reworded reason cannot
  * quietly break the list.
  */
-const ASSUMPTION_LABELS: Record<string, string> = {
-  agingThresholdDays: 'the aging threshold',
-  attentionHoursPerDay: 'attention on aging items',
-  queueWaitAttentionHoursPerDay: 'follow-up attention on queued items',
-  overdueAttentionHoursPerDay: 'chasing attention on overdue items',
-};
-
 function unconfirmed(run: AnalysisRun): string[] {
   const names: string[] = [];
   if (!isCustomerOwned(run.assumptions.defaultRate.provenance))
     names.push('the default hourly rate');
-  for (const [key, label] of Object.entries(ASSUMPTION_LABELS)) {
+  for (const [key, { short: label }] of Object.entries(ASSUMPTION_LABEL)) {
     const parameter =
       run.assumptions.parameters[key as keyof AnalysisRun['assumptions']['parameters']];
     if (parameter && !isCustomerOwned(parameter.provenance)) names.push(label);
@@ -194,7 +192,7 @@ function unconfirmed(run: AnalysisRun): string[] {
 const assumptionName = (ref: string): string => {
   if (ref.startsWith('parameters.')) {
     const key = ref.slice('parameters.'.length);
-    return ASSUMPTION_LABELS[key] ?? key;
+    return ASSUMPTION_LABEL[key]?.short ?? key;
   }
   if (ref.startsWith('defaultRate')) return 'the default hourly rate';
   if (ref.startsWith('rates.')) return `the rate for ${ref.slice('rates.'.length)}`;
@@ -608,7 +606,7 @@ export function renderReportBody(
         ? `<div class="info">Nothing here could be priced. The findings are listed under <strong>Unpriced frictions</strong> below, each with the assumption it is waiting on.</div>`
         : run.batch.items.length === 0
           ? `<div class="info">No work items were imported, so there was nothing to rank. Check what this workspace is set to analyse.</div>`
-          : `<div class="info">No friction crossed your thresholds in this import. That's a genuinely healthy sign for the work analyzed. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`
+          : `<div class="info">No friction crossed your thresholds in this import. ${NOTHING_CROSSED.healthyInImport} ${NOTHING_CROSSED.hint}</div>`
       : model.ranked
           .map((rf) =>
             renderRankedFriction(
@@ -816,8 +814,8 @@ export function renderReportBody(
       <p style="margin:.8rem 0 0"><a class="btn" href="/scope">Change what is analysed</a></p>
     </section>`;
   } else {
-    headline = 'Nothing crossed your thresholds';
-    hero = `<div class="info">Across the ${run.batch.items.length.toLocaleString('en-US')} work items in this analysis, nothing crossed your thresholds and nothing was left unpriced. That is a genuinely healthy sign for the work covered. If you expected findings, your aging and queue thresholds may be set conservatively. Lower them and run again to surface smaller effects.</div>`;
+    headline = NOTHING_CROSSED.headline;
+    hero = `<div class="info">Across the ${run.batch.items.length.toLocaleString('en-US')} work items in this analysis, nothing crossed your thresholds and nothing was left unpriced. ${NOTHING_CROSSED.healthyInAnalysis} ${NOTHING_CROSSED.hint}</div>`;
   }
 
   // Always rendered when diagnostics exist: even with no finding it carries

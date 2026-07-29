@@ -23,6 +23,7 @@ import {
 import type { AnalysisRun } from '@costflow/analysis';
 import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
 import {
+  ASSUMPTION_LABEL,
   buildDiagnosticsView,
   esc,
   layout,
@@ -30,8 +31,12 @@ import {
   METHODOLOGY_APPENDIX,
   parseRun,
   printLayout,
+  PROVENANCE_LABEL,
   renderReportBody,
+  ROLES_SKIP_COST,
   runSummary,
+  STAGE_KIND_GUIDE,
+  STAGE_KIND_ORDER,
   stepsNav,
   UNKNOWN_SOURCE,
   type DiagnosticsView,
@@ -163,13 +168,6 @@ const csrfErrorBody = `<div class="empty" style="max-width:34rem;margin:2.5rem a
   safely. Nothing was saved. Go back, refresh, and try again.</p>
   <a class="btn" href="/">Back to CostFlow</a>
 </div>`;
-
-const PROVENANCE_LABEL: Record<Provenance, string> = {
-  'vendor-suggested': 'vendor suggested, not used in pricing until you accept or customize it',
-  'customer-accepted': 'accepted by you',
-  'customer-customized': 'customized by you',
-  'customer-measured': 'measured',
-};
 
 const DECIMAL = /^\d+(\.\d+)?$/;
 
@@ -2471,12 +2469,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     <p class="note" style="margin:.5rem 0 .6rem">Your status names stay exactly as they are. The stage kind tells CostFlow how to treat time spent in that status.</p>
     <div class="table-wrap"><table>
       <tr><th>Stage kind</th><th>Use it when</th><th>What it changes</th></tr>
-      <tr><td><strong>queue</strong></td><td>Nobody has picked the work up yet.</td><td>Time here is priced as <strong>waiting</strong>.</td></tr>
-      <tr><td><strong>review</strong></td><td>Waiting on someone to approve, check or sign off.</td><td>Also priced as <strong>waiting</strong>. Separate from queue so approval bottlenecks are visible on their own.</td></tr>
-      <tr><td><strong>active</strong></td><td>Someone is working on it right now.</td><td>Not priced as waiting — this is the work itself. Still counted for stale and overdue items.</td></tr>
-      <tr><td><strong>blocked</strong></td><td>Stopped by something outside the team's control.</td><td><strong>Not</strong> priced as waiting today. If you want time in this status counted as wait, map it to <em>queue</em> instead.</td></tr>
-      <tr><td><strong>done</strong></td><td>Finished.</td><td>Excluded from stale and overdue entirely.</td></tr>
-      <tr><td><strong>abandoned</strong></td><td>Dropped without finishing.</td><td>Excluded, the same as done.</td></tr>
+      ${STAGE_KIND_ORDER.map(
+        (kind) =>
+          `<tr><td><strong>${kind}</strong></td><td>${STAGE_KIND_GUIDE[kind].use}</td><td>${STAGE_KIND_GUIDE[kind].changes}</td></tr>`,
+      ).join('')}
     </table></div>
     <p class="note" style="margin:.6rem 0 0">You can change any of this later and re-run; nothing is written back to your tracker.</p>
   </details>`;
@@ -2546,7 +2542,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
              only "optional" and letting the reader discover a report graded C
              throughout is how a fast first run becomes a distrusted one.
            -->
-           <div class="info">This step is optional and skipping it is the fastest path to your first report. It has one cost: with nobody mapped, every figure is priced at the default rate, which caps the whole report at <strong>confidence C</strong>. Mapping even the few people who do most of the work raises it. You can refine roles later and re-run.</div>
+           <div class="info">${ROLES_SKIP_COST} You can refine roles later and re-run.</div>
            <div class="table-wrap"><table><tr><th>Person (from ${esc(connectorOf(workspace).descriptor.name)})</th><th>Role (blank = pseudonymize)</th></tr>
            ${workspace.observedActors
              .map(
@@ -2702,7 +2698,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       labelIsHtml = false,
     ): string =>
       `<tr><td>${labelIsHtml ? label : esc(label)}</td><td>${controls}</td>
-       <td class="note">${esc(PROVENANCE_LABEL[provenance])}<br>${acceptBox(acceptName, provenance)}</td></tr>`;
+       <td class="note">${esc(PROVENANCE_LABEL[provenance].form)}<br>${acceptBox(acceptName, provenance)}</td></tr>`;
     return reply.type('text/html').send(
       page(
         session,
@@ -2768,19 +2764,19 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
              'defaultRate',
            )}
            ${row(
-             'Aging threshold (days untouched before an item counts as aging)',
+             ASSUMPTION_LABEL['agingThresholdDays']!.field,
              current.parameters.agingThresholdDays.provenance,
              `<input name="agingThresholdDays" size="4" inputmode="numeric" pattern="\\d+" title="Whole number of days" value="${current.parameters.agingThresholdDays.value}"> days`,
              'agingThresholdDays',
            )}
            ${row(
-             'Attention on aging items (hours per day: low, expected, high)',
+             ASSUMPTION_LABEL['attentionHoursPerDay']!.field,
              current.parameters.attentionHoursPerDay.provenance,
              rangeInputs('attention', current.parameters.attentionHoursPerDay.range),
              'attention',
            )}
            ${row(
-             'Follow-up attention on queued items (hours/day)',
+             ASSUMPTION_LABEL['queueWaitAttentionHoursPerDay']!.field,
              current.parameters.queueWaitAttentionHoursPerDay?.provenance ?? 'vendor-suggested',
              rangeInputs(
                'queueWait',
@@ -2793,7 +2789,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
              'queueWait',
            )}
            ${row(
-             'Chasing attention on overdue items (hours/day)',
+             ASSUMPTION_LABEL['overdueAttentionHoursPerDay']!.field,
              current.parameters.overdueAttentionHoursPerDay?.provenance ?? 'vendor-suggested',
              rangeInputs(
                'overdue',
