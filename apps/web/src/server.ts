@@ -637,23 +637,34 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
    * The one path that exists on both hosts.
    *
    * On the marketing host it is the landing page. On the application host it is
-   * the way in: a signed-out visitor arriving from a bookmark, an old link or a
-   * shared report URL gets Sign in / Create account, not a sales pitch they
-   * have already read. Bouncing them straight to the identity provider was the
-   * alternative and it strands anyone who did not mean to sign in — no context,
-   * no way back to the marketing site.
+   * the entrance to the product: a signed-out visitor arriving from a bookmark,
+   * an old link or a shared report URL gets what CostFlow does and both ways in,
+   * not a sales pitch they have already read. Bouncing them straight to the
+   * identity provider was the alternative and it strands anyone who did not mean
+   * to sign in — no context, no way back to the marketing site.
+   *
+   * It says what the product is BEFORE it asks for anything (founder decision,
+   * 2026-07-29). A door with two buttons and a logo is a login gateway; someone
+   * who followed a colleague's report link has no idea what they are signing
+   * into, and "Create account" is a bigger ask than a wordmark can carry. The
+   * value statement is the same promise the report keeps, in the same order the
+   * report keeps it: the action first, the money as its evidence (D22).
    */
   const appEntry = (): string =>
     layout(
       'Sign in',
-      `<div class="panel" style="max-width:26rem;margin:3rem auto;text-align:center">
-         <h1 style="margin-top:0">CostFlow</h1>
-         <p class="lead">See what workflow friction is costing your team.</p>
-         <div class="hero-actions" style="justify-content:center;margin-top:1.4rem">
+      `<div class="panel" style="max-width:31rem;margin:3rem auto;text-align:center">
+         <p class="eyebrow">CostFlow</p>
+         <h1 style="margin:.45rem 0 .7rem">Know what to fix first.</h1>
+         <p class="lead" style="margin:0">CostFlow reads your Jira or ClickUp and names the single
+         highest-leverage change to make in your delivery process, with what it is costing you not to
+         make it. Every figure opens into its own formula.</p>
+         <div class="hero-actions" style="justify-content:center;margin-top:1.7rem">
            <a class="btn btn-lg" href="/login">Sign in</a>
            <a class="btn btn-ghost btn-lg" href="/signup">Create account</a>
          </div>
-         <p class="note" style="margin-top:1.4rem">New here? <a href="${marketingUrl(site, '/')}">Read what CostFlow does</a> or <a href="${marketingUrl(site, '/demo')}">open a sample report</a> without signing in.</p>
+         <p class="note" style="margin-top:1.1rem">Free during beta. Read-only, and nothing is ever written back to your tracker.</p>
+         <p class="note" style="margin:1.4rem 0 0;padding-top:1.1rem;border-top:1px solid var(--line)">New to CostFlow? <a href="${marketingUrl(site, '/')}">See what it does</a> or <a href="${marketingUrl(site, '/demo')}">open a sample report</a> without signing in.</p>
        </div>`,
       undefined,
       { noindex: true, site },

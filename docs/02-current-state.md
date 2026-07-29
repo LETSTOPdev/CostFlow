@@ -84,9 +84,13 @@ application, served by one deployment and routed on the `Host` header. Every
 sign-in and get-started CTA on the marketing site points at the application
 directly; canonical URLs, `og:url`, structured data and the sitemap resolve to
 `fbx1.com`; the application host stays crawlable so its 301s transfer the index
-entries it currently holds. A signed-out visitor at `app.fbx1.com/` gets Sign in
-/ Create account, not the landing page. Authentication never leaves the
-application host, so Auth0 needed no change. **The split is inert until
+entries it currently holds. The whole evaluation experience — the landing, the
+sample report at `/demo`, and the live demo at `/try` — sits on the marketing
+host. A signed-out visitor at `app.fbx1.com/` meets the entrance to the product
+rather than a login gateway: what CostFlow does, then Sign in / Create account,
+then what signing in commits them to, and a route back to the marketing site and
+to a report that needs no account. Authentication never leaves the application
+host, so Auth0 needed no change. **The split is inert until
 `COSTFLOW_MARKETING_URL` is set** — see `08-admin.md` for the cutover and the
 one-variable rollback.
 

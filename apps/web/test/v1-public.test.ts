@@ -313,19 +313,63 @@ describe('the marketing site and the application are separate hosts', () => {
     }
   });
 
-  it('sends a signed-out visitor on the application host to the way in, not to a pitch', async () => {
+  /**
+   * The entrance to the product, not a login gateway. Someone arriving from a
+   * colleague's shared report link has never seen the marketing site, and
+   * "Create account" is a bigger ask than a wordmark and two buttons can carry.
+   */
+  it('says what the product is before it asks a signed-out visitor for anything', async () => {
     const { makeApp, SPLIT_SITE } = await import('./helpers');
     const t = makeApp({ site: SPLIT_SITE });
     const res = await t.app.inject({ method: 'GET', url: '/', headers: { host: 'app.fbx1.com' } });
     expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Sign in');
+
+    // The value statement comes before the buttons, not under them. Anchored on
+    // the panel's own markup, because the shared header carries a "Sign in" link
+    // of its own further up the page.
+    const value = res.body.indexOf('highest-leverage change');
+    const signInButton = res.body.indexOf('class="btn btn-lg" href="/login"');
+    expect(value).toBeGreaterThan(-1);
+    expect(signInButton).toBeGreaterThan(-1);
+    expect(value).toBeLessThan(signInButton);
+    expect(res.body).toContain('Know what to fix first');
     expect(res.body).toContain('Create account');
-    // Not the landing page.
+    // What signing in commits them to, where they decide.
+    expect(res.body).toContain('nothing is ever written back');
+
+    // Not the landing page rendered twice.
     expect(res.body).not.toContain('Know the one thing to fix');
-    // And a route back to the marketing site rather than a dead end.
-    expect(res.body).toContain('https://fbx1.com/');
+    // A route back to the marketing site, and to a report needing no account.
+    expect(res.body).toContain('href="https://fbx1.com/"');
+    expect(res.body).toContain('href="https://fbx1.com/demo"');
     // Never indexed: it is an application door, not a page.
     expect(res.body).toContain('noindex');
+  });
+
+  /**
+   * Founder decision, 2026-07-29: the sample reports are part of the evaluation
+   * experience, so they live with the marketing site rather than the product.
+   * `/try/report` matters most — it is the one a prospect reaches by generating
+   * a company, and a redirect mid-evaluation is where they would drop out.
+   */
+  it('keeps the whole evaluation experience on the marketing host', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const t = makeApp({ site: SPLIT_SITE });
+    for (const path of ['/demo', '/try', '/try/report']) {
+      const onMarketing = await t.app.inject({
+        method: 'GET',
+        url: path,
+        headers: { host: 'fbx1.com' },
+      });
+      expect(onMarketing.statusCode, `fbx1.com${path}`).toBe(200);
+      const onApp = await t.app.inject({
+        method: 'GET',
+        url: path,
+        headers: { host: 'app.fbx1.com' },
+      });
+      expect(onApp.statusCode, `app.fbx1.com${path}`).toBe(301);
+      expect(onApp.headers['location']).toBe(`https://fbx1.com${path}`);
+    }
   });
 
   it('sends every sign-in and get-started CTA to the application host', async () => {
