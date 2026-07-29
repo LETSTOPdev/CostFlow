@@ -62,6 +62,22 @@ Assumptions this product rests on that no customer has yet tested are listed in
 around them.** Optimising for a guess about customer behaviour is how a roadmap
 fills up with work that turns out to have been aimed at nobody.
 
+## The build phase is over
+
+Founder directive, 2026-07-29, after the launch readiness review: focus shifts
+from building the product to **learning from real customers**.
+
+What that means for anyone picking up this file: the default answer to "what
+should I build next" is now *nothing yet — go and read what real usage says*.
+The event spine and the `/admin` funnel already record every step of every
+signup, and U1–U7 name what to look for. A milestone that begins by proposing a
+feature, rather than by reading what the first design partners actually did, is
+starting in the wrong place.
+
+Two things still gate that learning and neither is a code change: `/admin` is
+unreachable in production (R1), and no real Jira or ClickUp account has ever been
+connected to this product — every walkthrough to date has used stub gateways.
+
 The items below predate the North Star and are ordered by their old logic.
 Rank them against it as you go, not in a separate pass.
 

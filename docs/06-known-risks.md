@@ -274,3 +274,45 @@ translation they perform for their own CFO rather than the one we should lead
 with.
 
 *Settled by:* what customers repeat back and what they forward internally.
+
+---
+
+## R11 — No real provider account has ever been connected
+
+**Description.** Every walkthrough, test and golden in this project runs against
+stub gateways or recorded fixtures. The Jira and ClickUp connectors have never
+been pointed at a live account by anyone. The one real customer dataset that has
+been analysed (R3) arrived as an export, not through the connector.
+
+**Impact.** High for a first design-partner experience, and the failure would
+land at the worst possible moment: step 1, before any value has been shown.
+Live APIs differ from fixtures in pagination edges, rate limiting, permission
+scoping, custom fields, and error shapes. None of that is visible from here.
+
+**Mitigation.** None applied, and none is available from inside the codebase.
+The fix is one real connection, made by the operator, before any partner is
+invited. Connecting a personal Jira or ClickUp and running one analysis end to
+end would either confirm the path or surface the problem while there is nobody
+watching.
+
+**Status.** Open. The highest-value pre-launch action, and it is not a code
+change.
+
+---
+
+## R12 — The product cannot send email
+
+**Description.** There is no transactional email of any kind. Inviting a member
+creates a link the inviter must copy and send themselves, which the product says
+plainly. Nothing notifies anyone that a run finished, that a run failed, or that
+anything changed.
+
+**Impact.** Medium, and specific to the second analysis. A design partner who
+runs once and closes the tab has nothing bringing them back, which is also why
+U5 stays unvalidated — an absent channel is not evidence that nobody wants one.
+
+**Mitigation.** None. Deliberately not built: adding a scheduler or a digest
+would be optimising around U5 rather than testing it. Revisit once real usage
+says whether anyone returns unprompted.
+
+**Status.** Open, accepted for the design-partner phase.
