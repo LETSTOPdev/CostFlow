@@ -589,12 +589,15 @@ export function renderPrivacy(): string {
     <ul>
       <li><strong>Your account:</strong> the email from your identity provider (used to sign you in).</li>
       <li><strong>Provider data:</strong> the work items you import, used only to produce your reports.</li>
+      <li><strong>Assignee names as your tracker shows them,</strong> so you can map people to roles during
+      setup and see who a rate applies to. They are stored in your workspace configuration, never used as an
+      input to the analysis, and never rendered into a report.</li>
       <li><strong>Credentials:</strong> your provider API token, <em>encrypted at rest</em> and used only to
       read your data.</li>
     </ul>
     <h2>How we protect it</h2>
     <ul>
-      <li><strong>Individuals are pseudonymized</strong> before analysis; no report, export, or API response
+      <li><strong>Individuals are pseudonymized</strong> before analysis; no report, export or screen
       ranks or scores a named person.</li>
       <li><strong>Isolation:</strong> every organization's data is strictly scoped to that organization.</li>
       <li><strong>Operational logs</strong> record request shape only, never your data, credentials, or

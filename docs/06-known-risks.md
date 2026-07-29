@@ -139,12 +139,16 @@ provider `none`, all dates null. No webhook, no sync, no real subscription
 state.
 
 **Impact.** Medium and growing. Nothing in the product knows whether anyone is
-paying, so the console cannot answer any revenue question.
+paying, so the console cannot answer any revenue question. Nothing can be
+charged, so every plan cap on the pricing page is unenforced and every design
+partner is on the full feature set for free.
 
 **Mitigation.** The schema maps one-to-one onto Lemon Squeezy customer,
 subscription and variant records, so integrating fills fields rather than
 reshaping. No invented trial dates or payment history were ever written, so
-there is nothing false to unwind.
+there is nothing false to unwind. The pricing page now states plainly that
+billing does not exist yet and that no cap is enforced, so a design partner
+reading it is not misled about what they are getting.
 
 **Status.** Open. Candidate for the next milestone.
 

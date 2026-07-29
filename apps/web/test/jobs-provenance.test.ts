@@ -52,7 +52,11 @@ describe('job lifecycle, failure, and retry (doc 09 P4.1 plan §3/§7)', () => {
     const failedPage = await get(t, cookie, failedJobUrl);
     expect(failedPage.statusCode).toBe(200);
     expect(failedPage.body).toContain('Run failed');
-    expect(failedPage.body).toContain('auth-error');
+    // The class is what the job records for the operator; the customer gets it
+    // said in their own language, with the sanitized message still shown.
+    expect(failedPage.body).toContain('Your connection was rejected');
+    expect(failedPage.body).toContain('Jira rejected the credentials (401)');
+    expect(failedPage.body).not.toContain('auth-error');
     expect(failedPage.body).not.toContain(TOKEN);
 
     const tenantId = (await t.store.findUserByEmail('jobs@acme.example'))!.tenantId;

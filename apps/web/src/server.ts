@@ -78,6 +78,7 @@ import {
   type AdminTenantRow,
   type AdminUserRow,
   type AdminWorkspaceRow,
+  type JobErrorClass,
   type OrgRole,
   type OnboardingState,
   type RunRecord,
@@ -427,6 +428,23 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     }${fmtWhen(r.createdAt)}. Ref ${esc(r.id)}`;
     return `<li class="row"><a class="row-main" href="/reports/${esc(r.id)}"><span>${title}</span><span class="row-sub">${sub}</span></a><span class="row-go">View report →</span></li>`;
   };
+
+  /**
+   * A failed run, said in the customer's language.
+   *
+   * `import-error` and `unexpected` are the classes the job records for the
+   * operator and the audit trail. Rendered verbatim on a customer's screen they
+   * are the only moment in the product where internal vocabulary is the whole
+   * message, at the moment the customer is least inclined to be charitable.
+   */
+  const JOB_ERROR_LABELS: Record<JobErrorClass, string> = {
+    'auth-error': 'Your connection was rejected',
+    'fetch-error': "We couldn't read your data",
+    'import-error': "We couldn't make sense of what came back",
+    unexpected: 'Something went wrong on our side',
+  };
+  const jobErrorLabel = (errorClass: JobErrorClass | null): string =>
+    errorClass === null ? JOB_ERROR_LABELS.unexpected : JOB_ERROR_LABELS[errorClass];
 
   // Styled "not found" for a missing resource (job/run/member), replacing the
   // bare-text 404. Uses the public shell so it renders with or without chrome.
@@ -1938,7 +1956,11 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           scopeNounSingular: connector.descriptor.scopeNoun.singular,
           csrfField: csrfField(session),
           runs,
-          failures: failed,
+          failures: failed.map((j) => ({
+            createdAt: j.createdAt,
+            errorLabel: jobErrorLabel(j.errorClass),
+            errorMessage: j.errorMessage,
+          })),
         }),
       ),
     );
@@ -3218,14 +3240,17 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       return reply.redirect(`/reports/${job.runId}`);
     }
     if (job.status === 'failed') {
+      const workspace = await store.getWorkspace(session.tenantId, job.workspaceId);
+      const providerName = workspace ? connectorOf(workspace).descriptor.name : 'your tracker';
       return reply.type('text/html').send(
         page(
           session,
           'Run failed',
           `<div class="panel" style="max-width:38rem">
              <h1>The analysis didn't finish</h1>
-             <p class="lead">We hit a problem while importing or analyzing your project. Nothing was saved from this run.</p>
-             <div class="error"><strong>${esc(job.errorClass ?? 'unexpected')}</strong>${job.errorMessage ? `: ${esc(job.errorMessage)}` : ''}</div>
+             <p class="lead">We hit a problem while reading or analysing your data. Nothing was saved from this run, and nothing in ${esc(providerName)} was touched.</p>
+             <div class="error"><strong>${esc(jobErrorLabel(job.errorClass))}</strong>${job.errorMessage ? `: ${esc(job.errorMessage)}` : ''}</div>
+             <p class="note">If it happens again, send us this page and we will look at it: <a href="mailto:support@fbx1.com">support@fbx1.com</a>.</p>
              <div class="hero-actions" style="justify-content:flex-start;margin-top:1.25rem">
                <form method="post" action="/runs">${csrfField(session)}<button type="submit">Run again</button></form>
                <a class="btn btn-ghost" href="/connect">Check connection</a>

@@ -29,7 +29,8 @@ export interface DashboardRun {
 
 export interface DashboardFailure {
   readonly createdAt: string;
-  readonly errorClass: string | null;
+  /** Already in the customer's language — the caller owns the class-to-label map. */
+  readonly errorLabel: string;
   readonly errorMessage: string | null;
 }
 
@@ -334,7 +335,7 @@ const failureBanner = (failures: readonly DashboardFailure[]): string =>
     : `<div class="danger"><h3>Recent failures</h3><ul style="margin:0">${failures
         .map(
           (j) =>
-            `<li><span class="note">${fmtWhen(j.createdAt)}</span> <strong>${esc(j.errorClass ?? 'unexpected')}</strong>${j.errorMessage ? `: ${esc(j.errorMessage)}` : ''}</li>`,
+            `<li><span class="note">${fmtWhen(j.createdAt)}</span> <strong>${esc(j.errorLabel)}</strong>${j.errorMessage ? `: ${esc(j.errorMessage)}` : ''}</li>`,
         )
         .join('')}</ul></div>`;
 

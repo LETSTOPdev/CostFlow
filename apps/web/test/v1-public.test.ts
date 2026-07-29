@@ -307,3 +307,84 @@ describe('what the landing page promises', () => {
     expect(evidence).toBeLessThan(ranked);
   });
 });
+
+/**
+ * Launch readiness: the public surface must not promise what is not built.
+ *
+ * Every other empty page on this site says it is empty — /careers says it is
+ * not hiring, /changelog says nothing has shipped, /blog says the posts are
+ * unwritten. Pricing and Documentation were the two that did not hold that
+ * line, and they are the two a design partner reads before deciding whether to
+ * connect their company's Jira.
+ */
+describe('the public surface does not over-promise', () => {
+  it('says on the pricing page that billing does not exist yet', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/pricing' });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('billing is not built yet');
+    // The prices and tiers are unchanged; only their availability is stated.
+    expect(res.body).toContain('$20 / user / month');
+    expect(res.body).toContain('$100 / user / month');
+  });
+
+  it('marks every unbuilt plan feature as planned', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/pricing' });
+    // Each of these is listed against a paid tier and does not exist.
+    for (const feature of [
+      'CSV and raw JSON export on every report',
+      'Multiple workspaces per organization',
+      'SSO / SAML sign-in for your whole org',
+      'Audit logs across workspaces and members',
+    ]) {
+      const at = res.body.indexOf(feature);
+      expect(at, `${feature} is no longer on the pricing page`).toBeGreaterThan(-1);
+      expect(res.body.slice(at, at + 200), `${feature} is not marked planned`).toContain('planned');
+    }
+  });
+
+  it('never claims a machine-readable export it cannot produce', async () => {
+    const t = makeApp();
+    for (const url of ['/faq', '/docs']) {
+      const res = await t.app.inject({ method: 'GET', url });
+      expect(res.statusCode).toBe(200);
+      expect(res.body, `${url} offers JSON export`).not.toMatch(
+        /export any report as raw JSON|can be exported as raw JSON/,
+      );
+    }
+  });
+
+  /**
+   * /docs was eight section titles describing documents that did not exist.
+   * The check is for substance rather than exact wording: the things a stuck
+   * customer would actually be looking for.
+   */
+  it('documents the product rather than listing chapter titles', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/docs' });
+    expect(res.statusCode).toBe(200);
+    // The word the whole product is denominated in, defined.
+    expect(res.body).toContain('A <strong>friction</strong> is');
+    // The capability that decides whether ClickUp wait analysis works at all.
+    expect(res.body).toContain('Total Time in Status');
+    // What the confidence tiers mean, not just that they exist.
+    expect(res.body).toContain('demonstrated in your event history');
+    // The refusals, which are most of what loses a reader's trust unexplained.
+    expect(res.body).toContain('When CostFlow refuses to answer');
+  });
+
+  it('says on the security page that assignee names are stored', async () => {
+    const t = makeApp();
+    for (const url of ['/security', '/privacy']) {
+      const res = await t.app.inject({ method: 'GET', url });
+      expect(res.body, `${url} omits stored names`).toMatch(/assignee names/i);
+    }
+  });
+
+  it('does not imply an API that does not exist', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/privacy' });
+    expect(res.body).not.toContain('API response');
+  });
+});

@@ -37,11 +37,23 @@ function page(title: string, description: string, path: string, body: string): s
  * 1. Pricing
  * ------------------------------------------------------------------ */
 
+/**
+ * A bullet is either shipped, or explicitly marked as not built yet.
+ *
+ * The prices and tiers below are the intended commercial shape. The product is
+ * in beta with no billing, so a page that presented all of it as available
+ * would be selling four things that do not exist (export formats, SSO, a
+ * customer-visible audit log, a second workspace) to a design partner who will
+ * find out within an hour. Every other page on this site that is empty says it
+ * is empty; this one has to hold the same line.
+ */
+type Bullet = string | { text: string; planned: true };
+
 type Tier = {
   name: string;
   price: string;
   blurb: string;
-  bullets: string[];
+  bullets: Bullet[];
   cta: { label: string; href: string };
   featured?: boolean;
 };
@@ -70,8 +82,8 @@ const TIERS: Tier[] = [
       'Unlimited analysis runs',
       'Unlimited report history',
       'Unlimited team members (billed per active seat)',
-      'CSV and raw JSON export on every report',
-      'Multiple workspaces per organization',
+      { text: 'CSV and raw JSON export on every report', planned: true },
+      { text: 'Multiple workspaces per organization', planned: true },
       'Priority email support',
     ],
     cta: { label: 'Start with Pro', href: '/signup' },
@@ -84,8 +96,8 @@ const TIERS: Tier[] = [
       'For teams whose security review is the thing standing between "interested" and "connected."',
     bullets: [
       'Everything in Pro, plus:',
-      'SSO / SAML sign-in for your whole org',
-      'Audit logs across workspaces and members',
+      { text: 'SSO / SAML sign-in for your whole org', planned: true },
+      { text: 'Audit logs across workspaces and members', planned: true },
       'A signed Data Processing Agreement, not just a page about one',
       'Dedicated support contact and a real SLA',
       'Org-wide role and workspace management',
@@ -96,12 +108,16 @@ const TIERS: Tier[] = [
 
 const PRICING_FAQ: [string, string][] = [
   [
+    'What does &ldquo;free during beta&rdquo; actually mean?',
+    'There is no billing in the product yet, so nothing on this page can be charged for. Every account gets everything that is built, with no caps enforced, until we turn billing on. When we do, we will email you first and you will choose a plan then rather than find a charge.',
+  ],
+  [
     'Do I need a credit card for the Limited plan?',
     "No. It's free for as long as you want to stay on it.",
   ],
   [
     'Is Pro billed per seat or a flat rate?',
-    'Per seat. $20 for every team member with an active login that month, not a flat per-workspace fee.',
+    'Per seat, once billing exists. $20 for every team member with an active login that month, not a flat per-workspace fee.',
   ],
   [
     'Can I start on Limited and upgrade later without losing anything?',
@@ -122,7 +138,13 @@ export function renderPricing(): string {
       <p class="figure big" style="font-size:clamp(1.6rem,1.2rem + 1.5vw,2.1rem)">${t.price}</p>
       <p class="note" style="min-height:2.8em">${t.blurb}</p>
       <ul style="margin:1rem 0 1.4rem;padding-left:1.15rem;color:var(--ink-2);font-size:.92rem;display:flex;flex-direction:column;gap:.45rem">
-        ${t.bullets.map((b) => `<li>${b}</li>`).join('')}
+        ${t.bullets
+          .map((b) =>
+            typeof b === 'string'
+              ? `<li>${b}</li>`
+              : `<li style="opacity:.72">${b.text} <span style="white-space:nowrap;font-size:.78rem;border:1px solid var(--line);border-radius:999px;padding:.05rem .45rem;margin-left:.2rem">planned</span></li>`,
+          )
+          .join('')}
       </ul>
       <a class="btn btn-block${t.featured ? '' : ' btn-ghost'}" href="${t.cta.href}">${t.cta.label}</a>
     </div>`,
@@ -138,10 +160,16 @@ export function renderPricing(): string {
       'Simple, per-person pricing. Start free.',
       'One plan to see what CostFlow can do, one plan to run it for real, one plan for teams with a security review to get through first.',
     )}
-    <p class="lead" style="text-align:center;max-width:38rem;margin:0 auto 2.4rem;font-size:1rem">
+    <p class="lead" style="text-align:center;max-width:38rem;margin:0 auto 1.4rem;font-size:1rem">
       No setup fees, no annual lock-in to get started, no sales call required for the first two plans.
       Every plan connects Jira or ClickUp the same way: read-only, encrypted, revocable whenever you want.
     </p>
+    <div class="info" style="max-width:42rem;margin:0 auto 2.4rem">
+      <strong>CostFlow is in beta, and billing is not built yet.</strong> Nothing on this page can be
+      charged for today. Every account gets everything that exists, with none of these caps enforced,
+      until we turn billing on and tell you first. The prices below are what we intend to charge, and
+      anything marked <em>planned</em> is not built yet.
+    </div>
     <div class="grid grid-3">${cards}</div>
     <div class="faq-list" style="margin-top:3rem">
       <h2 style="text-align:center;margin-bottom:1.2rem">Questions</h2>
@@ -187,6 +215,11 @@ export function renderSecurity(): string {
       <p>Every individual in your imported data is pseudonymized before analysis runs. No report, export, or
       dashboard ranks or scores a named person. Cost is attributed to processes and stages, queues, delays,
       overdue work, not to whoever happened to touch the ticket.</p>
+      <p>To be precise about what that does and doesn't mean: we do store assignee names as your tracker
+      shows them, in your workspace configuration, because the setup flow asks you to map people to roles and
+      you need to recognise who you're mapping. Those names are never an input to the analysis and never
+      reach a report. A guard checks the rendered bytes of every report against the identities in your own
+      data and withholds the report rather than serve one that names somebody.</p>
 
       <h2>Your organization's data stays yours</h2>
       <p>Every organization's data is isolated from every other organization's. There's no cross-tenant
@@ -422,54 +455,101 @@ export function renderCareers(): string {
  * 8. Docs
  * ------------------------------------------------------------------ */
 
+/**
+ * The documentation, not a table of contents for documentation that does not
+ * exist. This page previously listed eight section titles with a sentence
+ * describing what each one would say, which reads as a promise everywhere else
+ * on this site is careful not to make — /careers says it is not hiring,
+ * /changelog says nothing has shipped, /blog says the posts are unwritten.
+ *
+ * Everything below is answerable from the product itself, so it is written out
+ * rather than linked to pages that would immediately go stale.
+ */
 const DOCS_SECTIONS: [string, string][] = [
   [
     'Getting started',
-    'Connecting Jira or ClickUp, choosing what to import, and running your first report: the same flow the product walks you through, written out in case you want to read ahead.',
+    `<p>Six steps, once, and about a minute of typing if your board is small. Nothing is written back to your tracker at any point.</p>
+     <ol>
+       <li><strong>Connect</strong> Jira or ClickUp with a read-only API token.</li>
+       <li><strong>Scope</strong>: pick the Lists or projects to analyse. Picking a container (a ClickUp Space or Folder) includes everything inside it, now and later.</li>
+       <li><strong>Statuses</strong>: confirm which of the six stage kinds each of your statuses is. We pre-fill a suggestion from your board.</li>
+       <li><strong>Roles</strong>: optional. Map people to roles so their work is priced at a role rate rather than the default.</li>
+       <li><strong>Assumptions</strong>: accept or change the rates and thresholds. Nothing is priced on a value you did not confirm.</li>
+       <li><strong>Run</strong>: read-only, and re-runnable whenever you want.</li>
+     </ol>
+     <p>Every step is changeable afterwards from Settings, and re-running is free and non-destructive: past reports stay exactly as they were.</p>`,
   ],
   [
     'Connecting Jira',
-    "Where to generate an API token, what scopes it needs, and what CostFlow does and doesn't do with it once it's connected.",
+    `<p>You need three things: your site URL (<code>https://your-org.atlassian.net</code>), the email you sign in to Atlassian with, and an API token from
+      <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noopener noreferrer">id.atlassian.com &rarr; API tokens</a>.
+      Create one, name it "CostFlow", and paste it in.</p>
+     <p>The token inherits your own Jira permissions, so CostFlow sees exactly the projects you see and nothing else. It is used only to read issues, statuses, assignees and changelog history. It is encrypted at rest and never displayed again after you save it. Revoke it in Atlassian and the connection stops working immediately.</p>`,
   ],
   [
     'Connecting ClickUp',
-    "Same idea, ClickUp's version: token generation, list/space selection, and the read-only guarantee.",
+    `<p>In ClickUp: avatar &rarr; <strong>Settings</strong> &rarr; <strong>ClickUp API</strong> under Integrations &amp; ClickApps &rarr; <strong>Copy</strong>. The token starts with <code>pk_</code>. Only use <em>Regenerate</em> if you have no token yet, because regenerating breaks any other tool already using it.</p>
+     <p><strong>One thing to check before you run.</strong> Time spent waiting in a status is the largest cost CostFlow usually finds, and on ClickUp it exists only if a Workspace admin has enabled the <strong>Total Time in Status</strong> ClickApp. Without it CostFlow still prices overdue and stale work, and it will tell you in the report that wait analysis was skipped and why. Turning the ClickApp on and re-running fills it in.</p>`,
   ],
   [
     'Mapping statuses and roles',
-    "How your board's statuses map to CostFlow's six stage kinds (queue, active, review, blocked, done, abandoned) and what each one changes — queue and review are priced as waiting, done and abandoned are excluded. Plus how team members map to cost categories. Why this step exists: nothing gets priced on a mapping you didn't confirm yourself.",
+    `<p>Your status names stay exactly as they are. The stage kind tells CostFlow how to treat the time spent in that status, and it decides whether time counts as work or as waiting.</p>
+     <ul>
+       <li><strong>queue</strong> &mdash; nobody has picked it up yet. Priced as waiting.</li>
+       <li><strong>review</strong> &mdash; waiting on approval or sign-off. Also priced as waiting, kept separate so approval bottlenecks are visible on their own.</li>
+       <li><strong>active</strong> &mdash; someone is working on it. Not priced as waiting; this is the work itself.</li>
+       <li><strong>blocked</strong> &mdash; stopped by something outside the team. Not priced as waiting today. Map it to <em>queue</em> if you want that time counted as wait.</li>
+       <li><strong>done</strong> &mdash; finished. Excluded from stale and overdue entirely.</li>
+       <li><strong>abandoned</strong> &mdash; dropped without finishing. Excluded, like done.</li>
+     </ul>
+     <p>Roles are optional and skipping them is the fastest route to a first report. It has one cost: with nobody mapped, every item is priced at the default hourly rate, which caps every figure in the report at <strong>confidence C</strong>. Mapping the few people who do most of the work raises it.</p>`,
   ],
   [
     'Understanding your report',
-    'What a confidence tier (A/B/C) actually means, how a range and an expected value are calculated, and how to open any number all the way down to its formula and inputs.',
+    `<p>A <strong>friction</strong> is a measurable place where your process loses money without anyone deciding to spend it: work sitting in a queue, items aging past your own threshold, commitments already past their due date. It is not a person, a project or a ticket. It is a stage, in one of your Lists or projects, with a magnitude CostFlow observed in your own data.</p>
+     <p>The report is ordered for a two-minute read. The top names <strong>one place to start</strong> and the cost at stake there. Below a labelled divider is the working: every priced friction ranked by cost, what changed since last time, what could not be priced, and how much of your data the analysis could actually see.</p>
+     <p>Every figure is a <strong>range</strong> with an expected value, never a single confident-looking number, because the inputs do not support that precision. Open <em>How this number was computed</em> on any friction to see the formula, every contributing work item, and each assumption with where it came from.</p>
+     <p><strong>Confidence</strong> caps how much of the figure was observed rather than inferred. <strong>A</strong> means demonstrated in your event history. <strong>B</strong> means consistent with it, usually because a duration was inferred from snapshot dates rather than read from transitions. <strong>C</strong> means directionally supported, most often because a default rate was applied to people who were not mapped to roles. A finding never outranks one of a higher grade, however large it is.</p>`,
   ],
   [
     'Assumptions and rates',
-    "Where hourly rates, time-allocation percentages, and cost-factor multipliers come from, which ones are vendor-suggested versus ones you've confirmed, and how to change them.",
+    `<p>Two kinds of value go into every price: rates (what an hour costs) and parameters (your aging threshold, and how much attention a waiting item consumes per day). CostFlow suggests a starting value for each one.</p>
+     <p><strong>A suggestion is never used to price anything.</strong> Until you accept a value or replace it with your own, it stays vendor-suggested and every friction that depends on it is reported as measured but <em>unpriced</em>, with the assumption it is waiting on named. That is deliberate: a number you did not agree to is a number you cannot defend in a meeting.</p>
+     <p>You can enter pay as an hourly rate or as a monthly salary, in which case CostFlow divides it into an hourly rate by exact decimal arithmetic and shows you the result. Change any assumption in Settings and re-run; old reports keep the assumptions they were computed with.</p>`,
   ],
   [
-    'Exporting your data',
-    "Every report can be exported as raw JSON or printed to PDF. What's in the export, and what it's useful for: audits, sharing outside CostFlow, your own analysis.",
+    'When CostFlow refuses to answer',
+    `<p>Some of what the product does is decline, and each refusal names its own reason.</p>
+     <ul>
+       <li><strong>Unpriced frictions.</strong> Found and measured, but resting on an assumption you have not confirmed. The fix is one click on the assumptions step.</li>
+       <li><strong>A skipped detector.</strong> Your data cannot support it, for example wait analysis without status history. The report says which capability is missing and, where you can fix it, how.</li>
+       <li><strong>No trend.</strong> Run-over-run comparison is withheld when the two runs are not measuring the same thing: the scope changed, an assumption changed, or a detector that used to skip now runs. A total moving for those reasons is not your team improving, so no arrow is drawn.</li>
+       <li><strong>No recommendation.</strong> Below a certain amount of evidence CostFlow names the largest measured cost instead of recommending an intervention, and says which of the two you are reading.</li>
+     </ul>
+     <p>A refusal is never presented as a clean result. If nothing could be priced, the report says so and tells you what is blocking it.</p>`,
   ],
   [
-    'FAQ',
-    'Short answers to the questions that come up most. See the standalone FAQ page for the full list.',
+    'Exporting your data, and deleting it',
+    `<p>Today every report has a <strong>printable version</strong> (use your browser's Print &rarr; Save as PDF) and a <strong>full itemized view</strong> containing every contributing work item and its arithmetic, including the rows the on-screen report truncates for length.</p>
+     <p>Machine-readable export &mdash; JSON and CSV &mdash; and a documented API are planned and not built. If you need the underlying data for an audit before then, email us and we will get it to you.</p>
+     <p>Deleting a workspace or your organization removes it and every report derived from it, in one transaction, with no retained copy.</p>`,
   ],
 ];
 
 export function renderDocs(): string {
   const sections = DOCS_SECTIONS.map(
-    ([h, p]) => `<div class="ws"><h4>${h}</h4><p class="note" style="margin:0">${p}</p></div>`,
+    ([h, p]) =>
+      `<section class="ws" style="margin-bottom:1.1rem"><h3 style="margin-top:0">${h}</h3><div class="note" style="margin:0">${p}</div></section>`,
   ).join('');
 
   const body = `
     ${pageHead(
       'Documentation',
-      'Everything you need to run CostFlow, in one place.',
-      "This isn't a developer API reference. CostFlow doesn't have a public API yet. It's the plain-language version of how the product actually works.",
+      'How CostFlow works, in plain language.',
+      "Not a developer API reference: CostFlow doesn't have a public API yet. This is what the product does, what it refuses to do, and why.",
     )}
-    <div style="max-width:42rem;margin:2rem auto 0">${sections}</div>
-    <p class="note" style="text-align:center;margin-top:1.5rem">Still stuck? <a href="${MAIL}">${SUPPORT_EMAIL}</a>. A real person answers.</p>`;
+    <div style="max-width:44rem;margin:2rem auto 0">${sections}</div>
+    <p class="note" style="text-align:center;margin-top:1.5rem">Not covered here? <a href="${MAIL}">${SUPPORT_EMAIL}</a>. A real person answers.</p>`;
 
   return page(
     'Documentation',
@@ -689,7 +769,7 @@ const FAQ_ALL: [string, string][] = [
   ],
   [
     'Is there a public API?',
-    'Not yet. You can export any report as raw JSON or a PDF right now. A documented API for pulling data programmatically is on the list, not built.',
+    'Not yet. Every report has a printable version you can save as a PDF, and a full itemized view with every contributing work item and its arithmetic. Machine-readable export (JSON, CSV) and a documented API are on the list, not built.',
   ],
   [
     'Do you sell or share my data with anyone?',

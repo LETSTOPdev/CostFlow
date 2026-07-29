@@ -79,6 +79,18 @@ not to make it — and the product screenshot mirrors the real report's order:
 action, evidence, then the ranked list. The stage vocabulary shown before signup
 matches the six kinds the product actually uses.
 
+**The public surface claims only what exists.** Pricing states that billing is
+not built and no plan cap is enforced, and marks the four features that do not
+exist yet — machine-readable export, a second workspace, SSO/SAML, a
+customer-visible audit log — as planned. `/docs` is the documentation rather
+than a list of chapters that were never written: the six onboarding steps, both
+connector setups, the stage kinds, what a confidence tier means, how assumption
+provenance decides what gets priced, and a section on every case where the
+product refuses to answer. Security and Privacy say that assignee display names
+are stored in workspace configuration so roles can be mapped, which
+"pseudonymized before analysis" was true of but did not cover. A test pins each
+of these, because an over-promise is a regression like any other.
+
 **Report structure.** The report is an executive briefing, ordered for a
 two-minute read: the single highest-leverage action, the cost at stake beneath
 it as the evidence that acting is worth it, a labelled boundary, then all

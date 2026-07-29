@@ -750,9 +750,19 @@ export function renderReportBody(
     ${totals}
     <section><h2>Ranked frictions</h2>
     ${
+      /*
+       * "Friction" is the product's central noun and appeared nowhere with a
+       * definition: on the landing page, on the total, in this heading, on the
+       * dashboard. A first-time executive had to infer it from context, which
+       * is a poor way to meet the word your whole report is denominated in.
+       * Defined once, where the list of them starts.
+       */
+      ''
+    }<p class="note" style="margin-top:-.3rem">A <strong>friction</strong> is a place in your process that loses money without anyone deciding to spend it: work waiting in a queue, items aging past your threshold, commitments already overdue. Each one is a stage, not a person and not a ticket.</p>
+    ${
       model.ranked.length === 0
         ? ''
-        : `<p class="note" style="margin-top:-.3rem">Ranked by expected cost, biggest first. ${
+        : `<p class="note">Ranked by expected cost, biggest first. ${
             options.diagnostics && options.diagnostics.findings.length > 0
               ? // Two orders on one page is a credibility problem unless the page says
                 // why. The most expensive finding and the best-evidenced one are
