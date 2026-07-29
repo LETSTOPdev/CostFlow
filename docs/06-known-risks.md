@@ -211,9 +211,17 @@ telemetry — it needs traffic, and then someone to read it.
 
 ## R13 — The marketing site does not deploy on push
 
-**Description.** `fbx1.com` is a Vercel project connected to nothing. Linking it
-to the repository needs the Vercel GitHub App installed on `LETSTOPdev`, which
-only the repository owner's own GitHub login can do.
+**Description.** The Vercel project `costflow-marketing` is connected to no
+repository, so `fbx1.com` only updates when someone runs the manual deploy.
+
+The cause is not what it looks like. The Vercel GitHub App **is** installed —
+on the GitHub account `ddoorr1185-ctrl` (installation `144726709`). The
+repository is owned by `LETSTOPdev`, which is a GitHub **User** account, not an
+organization. A GitHub App installation is scoped to one account and cannot
+reach another's repositories, and because `LETSTOPdev` is a user there is no
+organization-level access grant to widen. Vercel therefore sees exactly one
+namespace, `ddoorr1185-ctrl`, containing seven repositories, none of which is
+this one.
 
 **Impact.** Medium, and it grows quietly. A push updates the application and
 leaves the marketing site on whatever was last deployed by hand, so the two
@@ -221,12 +229,28 @@ drift — and they share `packages/ui`, so a shell or report change lands on one
 host and not the other. Nothing breaks; the site simply becomes stale without
 saying so.
 
-**Mitigation.** Until it is connected, every push that touches
-`apps/marketing`, `packages/ui` or the brand assets must be followed by the
-manual deploy in `08-admin.md`. Install the app at
-`https://github.com/apps/vercel`, then link the repository in the
-`costflow-marketing` project's Git settings; after that a push deploys both
-sides and pull requests get preview deployments.
+**There is a trap next to it.** `ddoorr1185-ctrl` owns a *different*, private
+repository also called `costflow`, whose `main` is frozen at 2026-07-23 —
+before the host split. Asking Vercel to link "CostFlow" within the namespace it
+can see succeeds and silently binds the project to that one. A single push
+there would replace `fbx1.com` with a six-day-old marketing site that has no
+host split. **Link by full name (`LETSTOPdev/CostFlow`) and verify the `link`
+field afterwards; never by bare repository name.**
+
+**Mitigation.** Until it is connected, every push touching `apps/marketing`,
+`packages/ui` or the brand assets must be followed by the manual deploy in
+`08-admin.md`. The fix is to install the Vercel GitHub App on the `LETSTOPdev`
+account — `https://github.com/apps/vercel`, granting it `LETSTOPdev/CostFlow` —
+and then link the project. That requires signing in to GitHub as `LETSTOPdev`,
+which no automation can do on the owner's behalf.
+
+The alternative is a GitHub Actions workflow deploying with `vercel deploy
+--prebuilt`, which needs no GitHub App. It is not in place because it needs a
+Vercel token in repository secrets, and the only token obtainable here is the
+operator's personal account-wide credential — too much authority to place in a
+public repository's CI for a project-scoped job. A **project-only** token
+created from the Vercel dashboard would be safe; the API refuses to mint one
+from a CLI-issued credential.
 
 **Status.** Open. Blocked on operator action; not a code change.
 

@@ -46,8 +46,9 @@ good release running.
 
 ### Deploying the marketing site by hand
 
-Needed when the Vercel GitHub App is not connected, and useful for a hotfix that
-should not wait for a push. `pnpm check` first, as always.
+**This is currently the only way `fbx1.com` updates** — the Vercel project is
+connected to no repository (`06-known-risks.md` R13). It is also the right tool
+for a hotfix that should not wait for a push. `pnpm check` first, as always.
 
 ```bash
 pnpm --filter @costflow/marketing build
@@ -57,6 +58,31 @@ vercel deploy --prebuilt --prod --yes      # from the repository root
 `--prebuilt` uploads exactly the directory the build just wrote — Vercel runs
 nothing. To look at it before it is public, drop `--prod`: the deployment gets
 its own URL and `fbx1.com` keeps serving the current one.
+
+**Build from a clean checkout when the working tree is dirty.** Another session
+pushes to this repository, so `git status` is often not empty, and a build in
+place publishes whatever is sitting there:
+
+```bash
+git worktree add --detach /tmp/mainwt origin/main
+cd /tmp/mainwt && pnpm install --frozen-lockfile
+pnpm --filter @costflow/marketing build
+mkdir -p .vercel && cp <repo>/.vercel/project.json .vercel/project.json
+vercel deploy --prebuilt --prod --yes
+```
+
+### Connecting the marketing site to the repository
+
+When linking the project, **use the full name and check the result**:
+
+```bash
+vercel git connect https://github.com/LETSTOPdev/CostFlow
+```
+
+`ddoorr1185-ctrl` owns a different, private repository also called `costflow`,
+stale since before the host split. Linking by bare name binds to that one
+without complaint, and the next push there would replace `fbx1.com` with it.
+Verify afterwards that the project's `link.org` reads `LETSTOPdev`.
 
 Migrations are idempotent: `schema.sql` is re-applied in full on every deploy,
 using `create table if not exists` and `create index if not exists` throughout,
