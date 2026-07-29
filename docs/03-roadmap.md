@@ -30,6 +30,21 @@ A milestone that begins by proposing a feature is starting in the wrong place.
 The cold-start ritual in `09-ai-context.md` §3 still applies to anything that
 does get built.
 
+### Development is paused, and these are the three things that resume it
+
+**Do not proactively continue development.** The current state is the baseline.
+Wait for one of:
+
+1. **Real design partner feedback.**
+2. **Production data that validates or contradicts one of U1–U7**
+   (`06-known-risks.md`).
+3. **A deliberate product decision that has to be made on that evidence.**
+
+Absent one of those, there is no next milestone to find, and looking for one is
+the mistake this section exists to prevent. When work does resume it optimises
+for evidence rather than intuition, which means every proposal names the
+observation behind it.
+
 **Two things gate the learning and neither is a code change:** `/admin` is
 unreachable in production (R1), and no real Jira or ClickUp account has ever been
 connected to this product (R11) — every walkthrough to date has used stub
