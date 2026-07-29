@@ -275,6 +275,38 @@ export interface DiagnosticsOptions {
    * sample; this says it again where the claim actually is.
    */
   readonly demo?: boolean;
+  /**
+   * True on `/try/report` only: a company generated fresh for this visit, as
+   * opposed to the fixed sample behind `/demo`.
+   *
+   * `/demo` is three items, so the size floors bind and "smaller than the
+   * evidence threshold" is literally what happened. A generated company carries
+   * roughly a hundred items and clears those floors, so telling that visitor
+   * their company is too small is a false statement about their own data, on
+   * the one screen where the product argues it never makes those. See
+   * `04-engineering-principles.md`, "A refusal must never read as a pass".
+   *
+   * The generated wording deliberately names no specific gate. A refusal
+   * renders only when ALL THREE diagnostics return nothing, and they have at
+   * least ten silent-zero paths between them: concentration alone exits on
+   * `minStages` (friction in one stage), `sharePercent` (spread across stages),
+   * `minItems` (pooled but thin) and an unmapped intervention, while ownership
+   * can exit because items ARE owned and gatekeeping because no review-kind
+   * stage exists. `sharePercent` dominates in practice but does not bind
+   * always: across 150 seeds, 83 refused and `minItems` bound once. Naming it
+   * would state the opposite of what happened in that case, since the friction
+   * had pooled.
+   *
+   * Stating the actual gate is not available here. A detector that finds
+   * nothing returns `{findings: []}` with no reason attached, so the view would
+   * have to reimplement the gate order outside the engine, which
+   * `04-engineering-principles.md` forbids under "Never re-derive engine law at
+   * the edges". The copy therefore asserts only the CLASS of evidence a
+   * recommendation needs, which holds on every path. Widening the vocabulary so
+   * a detector reports its binding gate would let this say more, and is the
+   * trigger that would make that change worth it.
+   */
+  readonly generated?: boolean;
 }
 
 /**
@@ -304,7 +336,9 @@ export function renderDiagnostics(view: DiagnosticsView, options: DiagnosticsOpt
           // more than silence: it tells the reader the list is complete.
           `<p class="note" style="margin:0">No other finding cleared the evidence threshold in this analysis.</p>`
         : options.demo
-          ? `<p class="note" style="margin:0">This sample is smaller than the evidence threshold CostFlow requires before it will recommend anything, so it recommends nothing. That refusal is the product working: a confident-sounding action drawn from a handful of items is exactly what costs an executive their trust. <a href="/try">See the recommendations on a full-size organisation →</a></p>`
+          ? options.generated === true
+            ? `<p class="note" style="margin:0">No pattern in this company cleared the evidence CostFlow requires before it will recommend an action. A recommendation needs friction that concentrates somewhere specific, with enough items behind it to call the pattern systemic, and nothing here met that bar. That refusal is the product working: a confident-sounding action the evidence does not support is exactly what costs an executive their trust. <a href="/try">Generate another company</a> to see one where a pattern does emerge.</p>`
+            : `<p class="note" style="margin:0">This sample is smaller than the evidence threshold CostFlow requires before it will recommend anything, so it recommends nothing. That refusal is the product working: a confident-sounding action drawn from a handful of items is exactly what costs an executive their trust. <a href="/try">See the recommendations on a full-size organisation →</a></p>`
           : `<p class="note" style="margin:0">No operational findings above the declared thresholds for this analysis. That is a result, not an omission: the evidence did not support a recommendation.</p>`
       : `<p class="note" style="margin:0 0 .6rem">Ordered by strength of evidence, then by how concentrated each one is — not by cost, and not as a sequence to work through. Implementation complexity is a property of each action and never changes that order; weighing impact against effort is your call.</p>
          ${rest.map((c) => renderCard(c, view.originLabels)).join('')}`;

@@ -205,3 +205,76 @@ describe('MW1: the trend is gated on comparability', () => {
     expect(res.body).not.toContain('Δ expected');
   });
 });
+
+/**
+ * The fallback lead states a CAUSE only when the artifact supports one.
+ *
+ * "No pattern cleared the evidence threshold" is Condition B: every diagnostic
+ * ran and none met its bar. Missing history is Condition A: a diagnostic could
+ * not run at all, which produces a `DiagnosticUnavailable` and renders below as
+ * "What this data cannot tell you yet".
+ *
+ * The lead used to assert Condition A's remedy unconditionally — "a workspace
+ * with more history behind each stage gives the diagnostics enough to name an
+ * intervention" — including on reports where that list was EMPTY. The page told
+ * the reader to go and enable evidence they already had, while showing nothing
+ * missing thirty lines down. On a real report that sends a customer to their
+ * workspace admin for nothing.
+ *
+ * `DiagnosticsView.unavailable` is the single source of truth and is already
+ * computed; the lead reads it rather than guessing.
+ */
+describe('the fallback lead offers a cause only when one exists', () => {
+  const OPS_RUN = readFileSync(join(ROOT, 'tools/golden/expected/demo-ops/run.json'), 'utf8');
+  const UNLOCK_HINT = 'What this data cannot tell you yet';
+
+  async function seedJson(t: TestApp, email: string, runId: string, json: string): Promise<void> {
+    const tenantId = (await t.store.findUserByEmail(email))!.tenantId;
+    const workspace =
+      (await t.store.listWorkspaces(tenantId))[0] ??
+      (await t.store.createWorkspace(tenantId, {
+        provider: 'jira',
+        connectionParams: { site: 'https://acme.atlassian.net', email },
+        tokenCiphertext: 'tok',
+      }));
+    await t.store.createRun({
+      id: runId,
+      tenantId,
+      workspaceId: workspace.id,
+      createdAt: '2026-07-20T00:00:00Z',
+      runJson: json,
+      reportMd: '',
+      telemetryJsonl: '',
+    });
+  }
+
+  it('stays silent about causes when every diagnostic ran (demo-jira)', async () => {
+    const t = await makeApp();
+    const email = 'lead-none@example.com';
+    const cookie = await signIn(t, email);
+    await seedJson(t, email, 'r-all-ran', RUN_JSON);
+
+    const res = await get(t, cookie, '/reports/r-all-ran');
+    expect(res.body).toContain('Largest measured cost');
+    expect(res.body).toContain('rather than a fitted recommendation');
+    // Nothing was unavailable, so the section that would name it is absent...
+    expect(res.body).not.toContain(UNLOCK_HINT);
+    // ...and the lead must not imply otherwise.
+    expect(res.body).not.toContain('more history behind each stage');
+    expect(res.body).not.toContain('could not be assessed at all');
+  });
+
+  it('points at the section that names what is missing (demo-ops)', async () => {
+    const t = await makeApp();
+    const email = 'lead-gap@example.com';
+    const cookie = await signIn(t, email);
+    await seedJson(t, email, 'r-gap', OPS_RUN);
+
+    const res = await get(t, cookie, '/reports/r-gap');
+    expect(res.body).toContain('Largest measured cost');
+    // This artifact carries no events, so serial gatekeeping genuinely cannot
+    // run — the one case where offering a cause is truthful.
+    expect(res.body).toContain(UNLOCK_HINT);
+    expect(res.body).toContain('could not be assessed at all');
+  });
+});

@@ -123,9 +123,11 @@ function titleMap(run: AnalysisRun): Map<string, string> {
 export const confidenceBadge = (tier: string): string =>
   `<span class="tier tier-${esc(tier)}" title="Confidence tier ${esc(tier)}">Confidence ${esc(tier)}</span>`;
 
-// Plain-language equivalents of the engine's magnitude units (buyers do not
-// speak "item-hours-waiting"). Purely a label — the number is unchanged and
-// still traces to the drill-down.
+/**
+ * Plain-language equivalents of the engine's magnitude units (buyers do not
+ * speak "item-hours-waiting"). Purely a label — the number is unchanged and
+ * still traces to the drill-down.
+ */
 export const humanizeMagnitude = (value: number | string, unit: string): string => {
   const v = typeof value === 'number' ? value.toLocaleString('en-US') : esc(String(value));
   switch (unit) {
@@ -200,24 +202,50 @@ const assumptionName = (ref: string): string => {
 };
 
 /**
- * The engine's report-mode skip reason, said in the product's own words.
+ * Every skip reason the engine can author, said in the product's own words.
  *
- * Two things are wrong with it verbatim (`packages/analysis/src/run.ts`). It
- * names raw refs, and it offers simulation mode as a remedy — a mode the web
- * app never selects (`jobs.ts` pins `mode: 'report'`), so the one instruction
- * it gives a customer is to do something the product does not let them do. The
- * engine is frozen and its artifact keeps the original string; this is the
- * display layer, which is where the translation belongs.
+ * The verbatim strings are wrong for a customer in two ways
+ * (`packages/analysis/src/run.ts`, `packages/cost-engine/src/registry.ts`).
+ * They name raw refs like `parameters.overdueAttentionHoursPerDay`, and the
+ * report-mode one offers simulation mode as the remedy — a mode the web app
+ * never selects (`jobs.ts` pins `mode: 'report'`), so its only instruction is to
+ * do something the product does not let the reader do. The engine is frozen and
+ * its artifact keeps the original string; translating it is the display layer's
+ * job.
+ *
+ * ONLY the ref is taken from the reason. The sentence around it is authored
+ * here, so a reworded engine string can change which branch matches but can
+ * never put engine prose in front of a customer: the fall-through says less
+ * rather than leaking a ref. That fall-through was reachable and live — a run
+ * missing an attention parameter rendered "Missing assumption
+ * parameters.overdueAttentionHoursPerDay" to the reader, which is the exact
+ * failure this function exists to prevent, on the one branch it did not cover.
+ *
+ * `report-skip-reasons.test.ts` pins every shape the engine actually emits
+ * against the goldens, so a new or reworded reason fails the build here rather
+ * than degrading silently in production.
  */
+const REFS_IN_REASON = /^Rests on vendor-suggested assumption\(s\): (.+?) — /;
+const MISSING_IN_REASON = /^Missing assumption (\S+) — /;
+
+const nameList = (names: readonly string[]): string =>
+  names.length === 1
+    ? (names[0] as string)
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] as string}`;
+
 const unpricedReason = (reason: string): string => {
-  const m = /^Rests on vendor-suggested assumption\(s\): (.+?) — /.exec(reason);
-  if (!m) return displayText(reason);
-  const names = (m[1] ?? '').split(', ').map(assumptionName);
-  const list =
-    names.length === 1
-      ? (names[0] as string)
-      : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1] as string}`;
-  return `Waiting on ${list}. Confirm ${names.length === 1 ? 'it' : 'them'} on the assumptions step and run again to price this.`;
+  const rests = REFS_IN_REASON.exec(reason);
+  if (rests) {
+    const names = (rests[1] ?? '').split(', ').map(assumptionName);
+    return `Waiting on ${nameList(names)}. Confirm ${names.length === 1 ? 'it' : 'them'} on the assumptions step and run again to price this.`;
+  }
+  const missing = MISSING_IN_REASON.exec(reason);
+  if (missing) {
+    return `Waiting on ${assumptionName(missing[1] ?? '')}. Set it on the assumptions step and run again to price this.`;
+  }
+  // Unknown shape. Say only what is certainly true rather than forwarding a
+  // string written for an engineer reading an artifact.
+  return 'This friction could not be priced. Review your assumptions and run again.';
 };
 
 const unconfirmedCount = (run: AnalysisRun): number => unconfirmed(run).length;
@@ -513,6 +541,12 @@ export function renderReportBody(
     diagnostics?: DiagnosticsView | null;
     /** Marks the recommendations as computed from generated data. */
     demo?: boolean;
+    /**
+     * `/try/report` only: a company generated fresh for this visit rather than
+     * the fixed `/demo` sample. Decides which reason the refusal states, since
+     * the two are bound by different gates. See `DiagnosticsOptions.generated`.
+     */
+    generated?: boolean;
   } = { runId: '' },
 ): string {
   const model = buildReportModel(run);
@@ -631,6 +665,35 @@ export function renderReportBody(
   const largest = model.ranked[0];
 
   /**
+   * Whether the fallback lead may suggest that more evidence would unlock a
+   * recommendation — decided by the artifact, never asserted.
+   *
+   * This sentence used to be unconditional: "a workspace with more history
+   * behind each stage gives the diagnostics enough to name an intervention".
+   * Missing history is a CAPABILITY failure, and a capability failure produces a
+   * `DiagnosticUnavailable`, which renders below as "What this data cannot tell
+   * you yet". When that list is empty every diagnostic ran on complete evidence
+   * and nothing was missing — so the page was telling the reader to go and
+   * enable something they already had, while showing nothing missing thirty
+   * lines down. On a public sample that is embarrassing; on a real report it
+   * sends a customer to their workspace admin for nothing, and the credibility
+   * lost when the next run also recommends nothing is not recoverable.
+   *
+   * `unavailable` is the single source of truth and is already computed. The
+   * hero reads it rather than guessing. When it is empty the honest answer is
+   * shorter: the evidence did not support a recommendation, with no cause
+   * offered, for the same reason the demo refusal names no gate — a detector
+   * that finds nothing reports no reason, and reconstructing one here would
+   * re-derive engine law at the edge.
+   */
+  const unlockableNote =
+    options.diagnostics !== null &&
+    options.diagnostics !== undefined &&
+    options.diagnostics.unavailable.length > 0
+      ? ' Some diagnostics could not be assessed at all; <em>What this data cannot tell you yet</em> below names what each one needs.'
+      : '';
+
+  /**
    * What sits at one (origin, stage) — the money that backs THIS action.
    *
    * It is the sum of EVERY priced friction at that location, not just the one
@@ -707,7 +770,7 @@ export function renderReportBody(
         stake,
         `<span class="chip">Confidence ${esc(largest.estimate.confidence.tier)} (${esc((CONFIDENCE_NOTE[largest.estimate.confidence.tier] ?? '').toLowerCase())})</span>`,
       )}
-      <p class="note" style="margin:.7rem 0 0">${TRACE_NOTE} No pattern in this analysis cleared the evidence threshold, so this is the largest <strong>measured</strong> cost rather than a fitted recommendation. A workspace with more history behind each stage gives the diagnostics enough to name an intervention as well.</p>
+      <p class="note" style="margin:.7rem 0 0">${TRACE_NOTE} No pattern in this analysis cleared the evidence threshold, so this is the largest <strong>measured</strong> cost rather than a fitted recommendation.${unlockableNote}</p>
     </section>`;
   } else if (model.unpriced.length > 0) {
     /**
@@ -763,6 +826,7 @@ export function renderReportBody(
     ? renderDiagnostics(options.diagnostics, {
         omitTop: topAction !== undefined,
         ...(options.demo === true ? { demo: true } : {}),
+        ...(options.generated === true ? { generated: true } : {}),
       })
     : '';
   const detailDivider = `<hr style="margin:2.2rem 0 1.4rem">

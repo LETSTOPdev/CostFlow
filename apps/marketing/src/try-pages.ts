@@ -60,6 +60,9 @@ export function renderTryReportPage(rawSeed: string | undefined): string {
       runId: `demo-${demo.seed}`,
       diagnostics: buildDiagnosticsView(demo.run, JIRA_SAMPLE_SOURCE),
       demo: true,
+      // Generated fresh per visit, so a refusal here is about concentration and
+      // never about size. `/demo` deliberately does not set this.
+      generated: true,
     })}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
     undefined,
     // Infinite seed space — canonicalise crawlers to /try, don't index each.

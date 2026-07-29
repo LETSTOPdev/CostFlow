@@ -107,6 +107,23 @@ are stored in workspace configuration so roles can be mapped, which
 "pseudonymized before analysis" was true of but did not cover. A test pins each
 of these, because an over-promise is a regression like any other.
 
+No rendered surface reconstructs meaning from engine prose. The one translator
+that must recognise the engine's skip reasons, so a customer never reads
+"parameters.overdueAttentionHoursPerDay" or is told to use a simulation mode the
+web app never offers, is pinned by `apps/cli/test/report-skip-reasons.test.ts`
+against every golden. A reworded reason fails the build there. Removing that
+recognition entirely needs the artifact to carry the refs structurally, which is
+engine work and is not done. `apps/cli/test/explanation-consistency.test.ts`
+asserts the one-owner rule structurally, so a reintroduced copy fails rather
+than drifting.
+
+The confidence tiers `/docs` teaches are rendered from `CONFIDENCE_NOTE`, the
+same table the report prints beside every figure, rather than restated in prose.
+They were restated once and drifted a full tier: the manual said B meant
+"consistent with" while every report labels C that way, so a customer who read
+the manual and then read their own report would conclude their weakest grade was
+their middle one. The vocabulary is `doc 07 §1.5` and is not ours to paraphrase.
+
 **Report structure.** The report is an executive briefing, ordered for a
 two-minute read: the single highest-leverage action, the cost at stake beneath
 it as the evidence that acting is worth it, a labelled boundary, then all
@@ -118,8 +135,16 @@ evidence rather than largest figure, and the cost-ordered list below explains
 why its order differs.
 
 The lead is never empty while money is priced: with no diagnostic above its
-evidence gate it names the largest measured cost and labels it as measured, and
-a run that found frictions but priced none reads as a blocked analysis with
+evidence gate it names the largest measured cost and labels it as measured. It
+offers a cause for that only when the artifact carries one. A diagnostic that
+could not run at all is a capability failure and appears in `unavailable`, which
+the report renders as *What this data cannot tell you yet*; the lead reads that
+same list and points at it when it is populated, and says nothing about causes
+when it is empty. It previously asserted that more stage history would unlock an
+intervention on every such report, including the ones where nothing was missing,
+which sent a customer to enable evidence they already had.
+
+A run that found frictions but priced none reads as a blocked analysis with
 confirming the assumptions as the action, never as a healthy result. A run that
 imported no work items says there was nothing to analyse and links to the scope
 step, rather than reporting health for a process it never saw. Its money
@@ -138,6 +163,27 @@ The run history names what each analysis found rather than listing dollar
 amounts. The printable export and both public sample surfaces render the same
 body; the public ones mark the recommendations as computed from demonstration
 data.
+
+When a public sample has no recommendation to make, the two samples do not say
+the same thing. `/demo` is three items, so the size floors genuinely bind and it
+reads as too small. A generated `/try` company carries roughly a hundred items
+and clears those floors, so it says instead that no pattern cleared the evidence
+a recommendation needs. Telling that visitor their company was too small was a
+false statement about their own data on the screen where the product argues it
+never makes those, and the remedy link sent them to the page that had just
+generated it.
+
+The generated wording names no specific gate, deliberately. A refusal renders
+only when all three diagnostics return nothing, and they have ten silent-zero
+paths between them: concentration alone exits on stage count, share, item count
+or an unmapped intervention, ownership can exit because items *are* owned, and
+gatekeeping because no review stage exists. Share dominates but does not always
+bind, so naming it would sometimes state the opposite of what happened. A
+detector that finds nothing returns no reason, and reconstructing one in the
+renderer would re-derive engine law at the edge
+(`04-engineering-principles.md`), so the copy asserts only the class of evidence
+a recommendation needs. A detector that reported its own binding gate is what
+would let this say more.
 
 **Per-origin attribution.** Friction is located at (origin, stage), so a
 workspace spanning several teams reports which team's queue is expensive rather

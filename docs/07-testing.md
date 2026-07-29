@@ -94,6 +94,11 @@ Under `apps/cli/test/`, these inspect the repository itself:
   comments.*
 - **`diagnostics-unit-coverage.test.ts`** — every magnitude unit the goldens
   contain maps to an intervention.
+- **`report-skip-reasons.test.ts`** — no engine skip reason reaches a customer
+  verbatim, no raw assumption ref appears in report prose, and simulation mode
+  is never offered. Walks every golden, so a reworded or newly added engine
+  reason fails here. *Written after a live path rendered
+  "Missing assumption parameters.overdueAttentionHoursPerDay" into the report.*
 - **`docs-sync.test.ts`** — the documentation and the codebase have not drifted
   apart in ways a test can see: every package and application is described in
   the architecture document, the project brief still fits its five-minute

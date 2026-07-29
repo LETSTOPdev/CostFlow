@@ -1,4 +1,5 @@
 import {
+  CONFIDENCE_NOTE,
   MARKETING_SITE,
   SUPPORT_EMAIL,
   appUrl,
@@ -17,6 +18,19 @@ import {
  */
 
 const MAIL = `mailto:${SUPPORT_EMAIL}`;
+
+/**
+ * What a confidence letter means, taken from the same table the product renders
+ * beside every figure rather than restated here.
+ *
+ * These were once written out by hand and drifted a full tier: the manual said
+ * B meant "consistent with" while the report labelled C that way, so a customer
+ * who read this page and then read their own report concluded their weakest
+ * grade was their middle one. The vocabulary is `doc 07 §1.5` and it is not
+ * ours to paraphrase. Importing it means a change to the tiers reaches the
+ * documentation or fails to compile.
+ */
+const tier = (grade: 'A' | 'B' | 'C'): string => (CONFIDENCE_NOTE[grade] ?? '').toLowerCase();
 
 /** Centered eyebrow/h1/lead header used at the top of every page in this file. */
 function pageHead(eyebrow: string, h1: string, lead: string): string {
@@ -528,7 +542,7 @@ const DOCS_SECTIONS: [string, string][] = [
     `<p>A <strong>friction</strong> is a measurable place where your process loses money without anyone deciding to spend it: work sitting in a queue, items aging past your own threshold, commitments already past their due date. It is not a person, a project or a ticket. It is a stage, in one of your Lists or projects, with a magnitude CostFlow observed in your own data.</p>
      <p>The report is ordered for a two-minute read. The top names <strong>one place to start</strong> and the cost at stake there. Below a labelled divider is the working: every priced friction ranked by cost, what changed since last time, what could not be priced, and how much of your data the analysis could actually see.</p>
      <p>Every figure is a <strong>range</strong> with an expected value, never a single confident-looking number, because the inputs do not support that precision. Open <em>How this number was computed</em> on any friction to see the formula, every contributing work item, and each assumption with where it came from.</p>
-     <p><strong>Confidence</strong> caps how much of the figure was observed rather than inferred. <strong>A</strong> means demonstrated in your event history. <strong>B</strong> means consistent with it, usually because a duration was inferred from snapshot dates rather than read from transitions. <strong>C</strong> means directionally supported, most often because a default rate was applied to people who were not mapped to roles. A finding never outranks one of a higher grade, however large it is.</p>`,
+     <p><strong>Confidence</strong> caps how much of the figure was observed rather than inferred. <strong>A</strong> means ${tier('A')}: the figure rests on your own event history. <strong>B</strong> means ${tier('B')}, usually because a duration was inferred from snapshot dates rather than read from transitions. <strong>C</strong> means ${tier('C')}, most often because a default rate was applied to people who were not mapped to roles. A finding never outranks one of a higher grade, however large it is.</p>`,
   ],
   [
     'Assumptions and rates',
@@ -538,12 +552,12 @@ const DOCS_SECTIONS: [string, string][] = [
   ],
   [
     'When CostFlow refuses to answer',
-    `<p>Some of what the product does is decline, and each refusal names its own reason.</p>
+    `<p>Some of what the product does is decline, and it says which kind of refusal you are reading.</p>
      <ul>
        <li><strong>Unpriced frictions.</strong> Found and measured, but resting on an assumption you have not confirmed. The fix is one click on the assumptions step.</li>
        <li><strong>A skipped detector.</strong> Your data cannot support it, for example wait analysis without status history. The report says which capability is missing and, where you can fix it, how.</li>
        <li><strong>No trend.</strong> Run-over-run comparison is withheld when the two runs are not measuring the same thing: the scope changed, an assumption changed, or a detector that used to skip now runs. A total moving for those reasons is not your team improving, so no arrow is drawn.</li>
-       <li><strong>No recommendation.</strong> Below a certain amount of evidence CostFlow names the largest measured cost instead of recommending an intervention, and says which of the two you are reading.</li>
+       <li><strong>No recommendation.</strong> A recommendation needs friction that concentrates somewhere specific, with enough items behind it to call the pattern systemic. Where nothing meets that bar, CostFlow names the largest measured cost instead of recommending an intervention, and says which of the two you are reading. A large board can still fall short of it: the bar is about concentration, not size.</li>
      </ul>
      <p>A refusal is never presented as a clean result. If nothing could be priced, the report says so and tells you what is blocking it.</p>`,
   ],
