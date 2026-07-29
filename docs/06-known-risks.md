@@ -209,6 +209,29 @@ The instrument already exists: the event spine and the onboarding funnel in
 `/admin` record every step of every real signup. Nothing here needs new
 telemetry — it needs traffic, and then someone to read it.
 
+## R13 — The marketing site does not deploy on push
+
+**Description.** `fbx1.com` is a Vercel project connected to nothing. Linking it
+to the repository needs the Vercel GitHub App installed on `LETSTOPdev`, which
+only the repository owner's own GitHub login can do.
+
+**Impact.** Medium, and it grows quietly. A push updates the application and
+leaves the marketing site on whatever was last deployed by hand, so the two
+drift — and they share `packages/ui`, so a shell or report change lands on one
+host and not the other. Nothing breaks; the site simply becomes stale without
+saying so.
+
+**Mitigation.** Until it is connected, every push that touches
+`apps/marketing`, `packages/ui` or the brand assets must be followed by the
+manual deploy in `08-admin.md`. Install the app at
+`https://github.com/apps/vercel`, then link the repository in the
+`costflow-marketing` project's Git settings; after that a push deploys both
+sides and pull requests get preview deployments.
+
+**Status.** Open. Blocked on operator action; not a code change.
+
+---
+
 ## U1 — That an executive wants one action, not a ranked list
 
 The report, the dashboard, the export and the landing page were all rebuilt

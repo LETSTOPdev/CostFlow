@@ -16,7 +16,7 @@ import handler from './try-function';
  * the deployment does.
  */
 
-const STATIC = fileURLToPath(new URL('../.vercel/output/static/', import.meta.url));
+const STATIC = fileURLToPath(new URL('../../../.vercel/output/static/', import.meta.url));
 const PORT = Number(process.env['PORT'] ?? 4321);
 
 const TYPES: Readonly<Record<string, string>> = {

@@ -16,12 +16,18 @@ import { PRERENDERED, notFoundPage, robotsTxt, sitemapXml } from './routes';
  * can read. There is no framework, no bundler config to reverse-engineer, and
  * nothing that behaves differently in production than it does locally.
  *
- *   .vercel/output/static/**            every page, as a file
- *   .vercel/output/functions/**       the two pages that run
- *   .vercel/output/config.json          headers, redirects, 404
+ *   .vercel/output/static/**       every page, as a file
+ *   .vercel/output/functions/**    the two pages that run
+ *   .vercel/output/config.json     headers, redirects, 404
+ *
+ * The directory is at the REPOSITORY root, which is where Vercel looks for it
+ * and where the CLI uploads it from. Writing it inside `apps/marketing` instead
+ * would mean two different paths for the same artifact depending on whether a
+ * push or a person deployed it, and that difference is only ever discovered
+ * during an incident.
  */
 
-const OUT = fileURLToPath(new URL('../.vercel/output/', import.meta.url));
+const OUT = fileURLToPath(new URL('../../../.vercel/output/', import.meta.url));
 const STATIC = join(OUT, 'static');
 
 function write(relativePath: string, body: string | Buffer): void {
@@ -128,6 +134,9 @@ async function main(): Promise<void> {
         continue: true,
       },
       { src: `^/(${appPaths})(/.*)?$`, status: 301, headers: { Location: `${APP_ORIGIN}/$1$2` } },
+      // One URL per page. `/pricing/` and `/pricing` both answering 200 is two
+      // URLs for one page, and the canonical tag is a hint rather than a rule.
+      { src: '^/(.+)/$', status: 308, headers: { Location: '/$1' } },
       { handle: 'filesystem' },
       { handle: 'error' },
       { src: '/(.*)', status: 404, dest: '/404.html' },

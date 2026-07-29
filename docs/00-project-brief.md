@@ -152,10 +152,14 @@ rather than what to build. **Ask before starting.**
    variable does not include the operator's email, so the console is
    inaccessible. This is an operator action in Railway, not a code change. See
    `08-admin.md`.
-2. **Get OI1 in front of real customers.** It is built and live but unexercised.
+2. **Connect the marketing site to GitHub.** `fbx1.com` deploys by hand until
+   the Vercel GitHub App is installed, so it drifts from the application on
+   every push that touches shared code. Operator action; see `06-known-risks.md`
+   R13.
+3. **Get OI1 in front of real customers.** It is built and live but unexercised.
    The founder explicitly wants evidence from real workspaces before building
    the layer above it.
-3. **Confirm the next milestone.** See `03-roadmap.md` for the candidates.
+4. **Confirm the next milestone.** See `03-roadmap.md` for the candidates.
 
 ## The rest of the documentation
 

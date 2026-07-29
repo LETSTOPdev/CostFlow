@@ -12,7 +12,7 @@ Deploying, configuring, and debugging production.
 | Application | https://app.fbx1.com |
 | Health | https://app.fbx1.com/healthz |
 | Repository | https://github.com/LETSTOPdev/CostFlow (`origin`, the only remote) |
-| Marketing hosting | Vercel, project `costflow-marketing`, prerendered static + one function |
+| Marketing hosting | Vercel, team `dors-projects-ceb7e8c1`, project `costflow-marketing` |
 | Application hosting | Railway, 2 replicas |
 | Database | PostgreSQL on Railway |
 | DNS | Namecheap (`dns1/dns2.registrar-servers.com`) |
@@ -33,15 +33,30 @@ Railway builds the application, runs `pnpm --filter @costflow/web migrate` in a
 healthcheck.
 
 Vercel builds the marketing site with
-`pnpm --filter @costflow/marketing build`, which writes Vercel's Build Output
-API v3 directory — every page as a file, two functions for `/try` and
-`/try/report`, and a generated `config.json` holding the headers, the redirects
-to the application, and the 404. Pull requests get a preview deployment at their
-own URL; nothing but `main` reaches `fbx1.com`.
+`pnpm --filter @costflow/marketing build`, which writes `.vercel/output` at the
+repository root — Vercel's Build Output API v3 directory. Every page is a file,
+`/try` and `/try/report` are functions, and the generated `config.json` holds
+the security headers, the redirects to the application, and the 404. Pull
+requests get a preview deployment at their own URL; nothing but `main` reaches
+`fbx1.com`.
 
 Either side can fail without the other: a broken marketing build leaves the last
 good CDN deployment serving, and a failed Railway healthcheck leaves the last
 good release running.
+
+### Deploying the marketing site by hand
+
+Needed when the Vercel GitHub App is not connected, and useful for a hotfix that
+should not wait for a push. `pnpm check` first, as always.
+
+```bash
+pnpm --filter @costflow/marketing build
+vercel deploy --prebuilt --prod --yes      # from the repository root
+```
+
+`--prebuilt` uploads exactly the directory the build just wrote — Vercel runs
+nothing. To look at it before it is public, drop `--prod`: the deployment gets
+its own URL and `fbx1.com` keeps serving the current one.
 
 Migrations are idempotent: `schema.sql` is re-applied in full on every deploy,
 using `create table if not exists` and `create index if not exists` throughout,
@@ -87,14 +102,23 @@ site can break sign-in.
 
 ### DNS
 
-| Record | Host | Value |
-|---|---|---|
-| `A` | `@` | `216.198.79.1` (Vercel) |
-| `CNAME` | `www` | `cname.vercel-dns.com` |
-| `CNAME` | `app` | `lklcoo55.up.railway.app` (Railway, unchanged) |
+Namecheap → Domain List → `fbx1.com` → **Advanced DNS**.
 
-The apex uses an `A` record because Namecheap's BasicDNS cannot `CNAME` an apex.
-`app` is untouched by any of this: the application's DNS never moved.
+| Type | Host | Value | TTL |
+|---|---|---|---|
+| `A Record` | `@` | `216.198.79.1` | Automatic |
+| `CNAME Record` | `www` | `7a8540b873b95166.vercel-dns-017.com.` | Automatic |
+| `CNAME Record` | `app` | `lklcoo55.up.railway.app.` | *(existing — do not touch)* |
+
+The apex is an `A` record because Namecheap's BasicDNS cannot `CNAME` an apex.
+The `www` value is issued per Vercel project; read the current one from the
+project's Domains settings rather than copying it from anywhere else. `app` is
+untouched by any of this — the application's DNS never moved, which is why none
+of this could interrupt a signed-in customer.
+
+Certificates issue automatically once the records resolve, usually within a
+minute. `www.fbx1.com` redirects to the apex with a 308, configured on the
+Vercel domain rather than in code.
 
 ### Verifying both hosts
 
