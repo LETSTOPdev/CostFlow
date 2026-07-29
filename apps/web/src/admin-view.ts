@@ -1,4 +1,4 @@
-import { esc } from './html';
+import { esc } from '@costflow/ui';
 import type { AdminAuditRow, AdminCounts } from './store/contract';
 
 /**

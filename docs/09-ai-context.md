@@ -120,8 +120,9 @@ every UX issue to be named. Each milestone runs:
 
 ### The cold-start walkthrough — a permanent ritual
 
-**Before every milestone**, run `pnpm preview` and go through the whole product
-as though seeing it for the first time.
+**Before every milestone**, run the product locally and go through the whole
+thing as though seeing it for the first time — the marketing site *and* the
+application, in that order, because that is the order a customer meets them.
 
 **Do not look for bugs.** Look for the moments where an executive would
 hesitate, misunderstand something, stop reading, lose confidence, or fail to
@@ -190,9 +191,19 @@ what I need to do next*.
 
 ### How to actually see it
 
+Two servers, because there are two deployments.
+
 ```
-pnpm preview
+pnpm --filter @costflow/marketing build && pnpm --filter @costflow/marketing serve
+COSTFLOW_MARKETING_URL=http://localhost:4321 pnpm preview
 ```
+
+The first serves the built marketing site on `http://localhost:4321` exactly as
+the CDN will — files first, `/try` to its function, application paths 301 out,
+everything else the branded 404. The second is the application, told where the
+local marketing site is so every link between them resolves. Without that
+variable the application's marketing links point at production `fbx1.com`, which
+is right for a quick look at the app alone and wrong for walking the whole path.
 
 There is also a `costflow-preview` entry in `.claude/launch.json` pointing at the
 same script, so a preview tool that reads launch configurations opens the stub

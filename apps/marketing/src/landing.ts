@@ -1,5 +1,4 @@
-import { SUPPORT_EMAIL, layout } from './html';
-import { SAME_ORIGIN, appUrl, type Site } from './site';
+import { MARKETING_SITE, SUPPORT_EMAIL, appUrl, layout, type Site } from '@costflow/ui';
 
 /**
  * Public, unauthenticated pages for the free beta (v1): the marketing landing,
@@ -531,7 +530,7 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:var(--primary-2)}
  * ------------------------------------------------------------------ */
 
 /** Marketing landing, served at `/` on the marketing host. */
-export function renderLanding(site: Site = SAME_ORIGIN): string {
+export function renderLanding(site: Site = MARKETING_SITE): string {
   const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero(site)}${how}${traceable}${midCta(site)}${trust}${faq()}${ctaBand(site)}</div>`;
   return layout('CostFlow: see what workflow friction costs your team', body, undefined, {
     bleed: true,
@@ -550,7 +549,7 @@ function legalPage(site: Site, title: string, inner: string, path: string): stri
   });
 }
 
-export function renderTerms(site: Site = SAME_ORIGIN): string {
+export function renderTerms(site: Site = MARKETING_SITE): string {
   return legalPage(
     site,
     'Terms of Service',
@@ -584,7 +583,7 @@ export function renderTerms(site: Site = SAME_ORIGIN): string {
   );
 }
 
-export function renderPrivacy(site: Site = SAME_ORIGIN): string {
+export function renderPrivacy(site: Site = MARKETING_SITE): string {
   return legalPage(
     site,
     'Privacy',

@@ -1,13 +1,10 @@
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
 import { describeSelection, hasSelection, selectionNames, sortSelection } from './scopes';
-import { SAME_ORIGIN, appUrl, marketingUrl, type Site } from './site';
+import { APP_SITE, marketingUrl, type Site } from '@costflow/ui';
 import { marked } from 'marked';
-import type { AssumptionSet, BatchScope, Provenance, RangeSpec, StageKind } from '@costflow/domain';
+import type { AssumptionSet, Provenance, RangeSpec, StageKind } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
 import { dec, decToString } from '@costflow/cost-engine';
 import { countProvenance, nextProvenance, vendorSeededAssumptions } from './assumptions';
@@ -26,33 +23,21 @@ import {
 import type { AnalysisRun } from '@costflow/analysis';
 import { decryptSecret, encryptSecret, newId, signValue } from './crypto';
 import {
-  demoAnalyzingPage,
+  buildDiagnosticsView,
   esc,
   layout,
   loadingPage,
   METHODOLOGY_APPENDIX,
+  parseRun,
   printLayout,
+  renderReportBody,
+  runSummary,
   stepsNav,
-} from './html';
-import { randomDemoSeed, renderDemoCompany } from './demo-live';
-import { renderLanding, renderPrivacy, renderTerms } from './landing';
-import {
-  renderAbout,
-  renderAccessibility,
-  renderBlog,
-  renderCareers,
-  renderChangelog,
-  renderContact,
-  renderCookies,
-  renderDocs,
-  renderFaq,
-  renderPricing,
-  renderSecurity,
-  renderSitemap,
-  renderSubprocessors,
-} from './marketing';
+  UNKNOWN_SOURCE,
+  type DiagnosticsView,
+} from '@costflow/ui';
+import { brandLogoSvg, PUBLIC_ASSETS, readAsset } from '@costflow/ui/assets';
 import { renderDashboard } from './dashboard-view';
-import { parseRun, renderReportBody, runSummary } from './report-view';
 import { executeJob } from './jobs';
 import {
   GatewayError,
@@ -117,17 +102,6 @@ import { conversionPct, dropOffPct, formatDuration } from './funnel';
 import { CUSTOMER_SCAN_CAP } from './store/pg';
 import { type TelemetrySink } from './telemetry-web';
 import { shouldTouchLastSeen, storeEventRecorder, tracker, type EventContext } from './events';
-import {
-  CONCENTRATION_SIGNAL,
-  GATEKEEPING_SIGNAL,
-  OWNERSHIP_SIGNAL,
-  detectConcentration,
-  detectMissingOwnership,
-  detectSerialGatekeeping,
-  type DiagnosticSignalMeta,
-} from '@costflow/diagnostics';
-import { assessEvidence, inheritedCapsFor } from './evidence';
-import { type DiagnosticsView } from './oi-view';
 
 /**
  * The web application shell (doc 09 P4.1): server-rendered onboarding wizard
@@ -173,34 +147,13 @@ export interface ServerDeps {
   readonly maxScopes?: number;
 }
 
-// Committed snapshot of the demo-jira golden run.json, shipped in the image
-// (Docker copies apps/, not tools/). Public /demo renders it so a visitor
-// understands the product before connecting Jira. A static sample is fine — it
-// never needs to match the live engine byte-for-byte.
-const DEMO_RUN_JSON = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), 'demo', 'demo-run.json'),
-  'utf8',
-);
-
-// Brand + social-sharing assets (committed binaries, served with long-lived
-// caching): the official CostFlow logo set (icon + full wordmark logo, one
-// variant per theme), the favicon set, the 1200×630 Open Graph card and the
-// iOS home-screen icon. All derived from the official logo masters.
-const ASSETS_DIR = join(dirname(fileURLToPath(import.meta.url)), 'assets');
-const OG_IMAGE = readFileSync(join(ASSETS_DIR, 'og.jpg'));
-const APPLE_TOUCH_ICON = readFileSync(join(ASSETS_DIR, 'apple-touch-icon.png'));
-const FAVICON_ICO = readFileSync(join(ASSETS_DIR, 'favicon.ico'));
-const ICON_192 = readFileSync(join(ASSETS_DIR, 'icon-192.png'));
-const ICON_512 = readFileSync(join(ASSETS_DIR, 'icon-512.png'));
-const LOGO_DARK = readFileSync(join(ASSETS_DIR, 'logo-dark.png'));
-const LOGO_LIGHT = readFileSync(join(ASSETS_DIR, 'logo-light.png'));
-const WEB_MANIFEST = readFileSync(join(ASSETS_DIR, 'site.webmanifest'));
-
-// The official icon wrapped as SVG. `/brand/logo.svg` is a public URL contract
-// (Auth0 Universal Login renders it, and it serves as the scalable favicon), so
-// the path and content type stay stable while the artwork inside is the new
-// official mark. The icon is theme-neutral (no white), safe on any background.
-const BRAND_LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" role="img" aria-label="CostFlow"><image width="192" height="192" href="data:image/png;base64,${ICON_192.toString('base64')}"/></svg>`;
+// Brand + social-sharing assets, read once at boot from the shared UI package
+// and served with long-lived caching. Both deployments serve them at the same
+// paths: the marketing site puts them in its static output, this one answers
+// from memory, and the identity provider's login page fetches `/brand/logo.svg`
+// from here because that is the origin it is configured with.
+const BRAND_LOGO_SVG = brandLogoSvg();
+const ASSET_BODIES = PUBLIC_ASSETS.map((a) => ({ ...a, body: readAsset(a.name) }));
 
 // Styled body for a CSRF mismatch (stale tab, expired session): explains what
 // happened instead of a bare "Invalid CSRF token." line.
@@ -233,17 +186,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const formActionOrigins =
     auth.mode === 'oidc' && auth.oidc ? [new URL(auth.oidc.issuer).origin] : [];
 
-  /**
-   * Which hosts serve what. `SAME_ORIGIN` — one host, relative links, today's
-   * behaviour — unless the deployment configures a marketing origin.
-   */
-  const site = deps.site ?? SAME_ORIGIN;
-  /** True when this request arrived on the marketing host (always, unsplit). */
-  const onMarketingHost = (request: FastifyRequest): boolean => {
-    if (!site.split) return true;
-    const host = (request.headers.host ?? '').toLowerCase().split(':')[0] ?? '';
-    return host === new URL(site.marketingOrigin).hostname.toLowerCase();
-  };
+  /** Where the marketing site is, so every link out of the app resolves to it. */
+  const site = deps.site ?? APP_SITE;
 
   registerSecurity(app, {
     production: deps.production === true,
@@ -634,14 +578,14 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // ---------- home / dashboard ----------
 
   /**
-   * The one path that exists on both hosts.
+   * The one path that exists on both hosts: the landing page on the marketing
+   * site, the entrance to the product here.
    *
-   * On the marketing host it is the landing page. On the application host it is
-   * the entrance to the product: a signed-out visitor arriving from a bookmark,
-   * an old link or a shared report URL gets what CostFlow does and both ways in,
-   * not a sales pitch they have already read. Bouncing them straight to the
-   * identity provider was the alternative and it strands anyone who did not mean
-   * to sign in — no context, no way back to the marketing site.
+   * A signed-out visitor arriving from a bookmark, an old link or a shared
+   * report URL gets what CostFlow does and both ways in, not a sales pitch they
+   * have already read. Bouncing them straight to the identity provider was the
+   * alternative and it strands anyone who did not mean to sign in — no context,
+   * no way back to the marketing site.
    *
    * It says what the product is BEFORE it asks for anything (founder decision,
    * 2026-07-29). A door with two buttons and a logo is a login gateway; someone
@@ -673,12 +617,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/', async (request, reply) => {
     const session = sessionFrom(request, auth.sessionKey);
     if (!session) {
-      // Split: the marketing host lands, the application host signs you in.
-      // Unsplit: one host, and it still lands — which is what `pnpm preview`
-      // and every existing test walk through.
-      return reply
-        .type('text/html')
-        .send(onMarketingHost(request) ? renderLanding(site) : appEntry());
+      return reply.type('text/html').send(appEntry());
     }
     const user = await currentUser(session);
     // Members don't onboard — they land on the runs they can see.
@@ -688,156 +627,44 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     return reply.redirect(nextStepPath(workspace));
   });
 
-  // Public pages (no session): sample report, Terms, Privacy.
-  app.get('/demo', async (_request, reply) => {
-    const banner =
-      '<div class="info">This is a <strong>sample report</strong> built from demo data. ' +
-      `<a href="${appUrl(site, '/login')}">Sign in</a> to run one on your own Jira or ClickUp.</div>`;
-    let body: string;
-    try {
-      const demoRun = parseRun(DEMO_RUN_JSON);
-      body = renderReportBody(demoRun, {
-        runId: 'demo',
-        diagnostics: diagnosticsFor(demoRun, null),
-        demo: true,
-      });
-    } catch {
-      body = '<p class="error">The sample report is temporarily unavailable.</p>';
-    }
-    const cta =
-      '<div class="cta-band" style="margin-top:2.5rem">' +
-      '<h2>Ready to see your own?</h2>' +
-      '<p class="lead">Connect Jira or ClickUp and get a report like this for your own team in about a minute. Free while in beta.</p>' +
-      `<div class="hero-actions"><a class="btn btn-lg" href="${appUrl(site, '/login')}">Get started free</a></div>` +
-      '</div>';
-    return reply
-      .type('text/html')
-      .send(
-        layout(
-          'Sample report',
-          `${banner}${body}${cta}<p style="margin-top:1.5rem"><a href="${marketingUrl(site, '/')}">← Home</a></p>`,
-          undefined,
-          { canonical: `${site.canonicalOrigin}/demo`, site },
-        ),
-      );
-  });
-
-  // ---------- Interactive Demo Mode (no signup, no Jira, no auth) ----------
-  // "Try CostFlow" → an animated analysis of a RANDOM realistic company, run
-  // through the real engine. Every visit generates a different company.
-
-  app.get('/try', async (_request, reply) => {
-    const seed = randomDemoSeed();
-    return reply
-      .type('text/html')
-      .header('cache-control', 'no-store')
-      .send(demoAnalyzingPage(seed));
-  });
-
-  app.get('/try/report', async (request, reply) => {
-    const raw = (request.query as { seed?: string }).seed;
-    // Seed is a bounded positive integer that only feeds a PRNG — no injection
-    // surface. An invalid/absent seed just gets a fresh random company.
-    const parsed = raw !== undefined && /^\d{1,10}$/.test(raw) ? Number(raw) : randomDemoSeed();
-    const seed = parsed >= 1 && parsed <= 2_147_483_646 ? parsed : randomDemoSeed();
-    let demo;
-    try {
-      demo = renderDemoCompany(seed);
-    } catch {
-      return reply
-        .type('text/html')
-        .send(
-          layout(
-            'Demo',
-            '<div class="empty" style="max-width:34rem;margin:2.5rem auto"><h3>The demo hiccuped</h3><p>Please <a href="/try">try another company</a>.</p></div>',
-            undefined,
-            { site },
-          ),
-        );
-    }
-    const banner = `<div class="info">You just analyzed <strong>${esc(demo.companyName)}</strong>, a simulated ${esc(demo.industry)} with ${demo.issueCount} issues and a ${demo.teamSize}-person team, generated fresh for this demo and run through the real CostFlow engine. <a href="/try">Generate a different company →</a></div>`;
-    const cta =
-      '<div class="cta-band" style="margin-top:2.5rem">' +
-      '<h2>Now do it for your own team.</h2>' +
-      '<p class="lead">Connect Jira or ClickUp in about a minute and get this report on your real board. Free and read-only.</p>' +
-      `<div class="hero-actions"><a class="btn btn-lg lp-cta-btn" href="${appUrl(site, '/signup')}">Get started free</a>` +
-      '<a class="lp-cta-link" href="/try">or try another company →</a></div>' +
-      '</div>';
-    return reply
-      .type('text/html')
-      .header('cache-control', 'public, max-age=1800')
-      .send(
-        layout(
-          `Demo: ${demo.companyName}`,
-          `${banner}${renderReportBody(demo.run, {
-            runId: `demo-${demo.seed}`,
-            diagnostics: diagnosticsFor(demo.run, null),
-            demo: true,
-          })}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
-          undefined,
-          // Infinite seed space — canonicalise crawlers to /try, don't index each.
-          { canonical: `${site.canonicalOrigin}/try`, noindex: true, site },
-        ),
-      );
-  });
-
-  // Public brand logo — served so Auth0 Universal Login can render the same
-  // CostFlow mark the app header uses (one identity across product + sign-in).
+  // ---------- Shared brand assets ----------
+  // Served on both hosts at the same paths. `/brand/logo.svg` in particular is
+  // a public URL contract: Auth0's Universal Login renders the CostFlow mark
+  // from THIS origin, so the path, the content type and the origin all stay
+  // stable. Redirecting these to the marketing site would break the sign-in
+  // page's logo and the platform's health probes, which arrive without a
+  // recognisable Host — which is why `ownerOf` marks them shared.
   app.get('/brand/logo.svg', async (_request, reply) =>
     reply
       .type('image/svg+xml')
       .header('cache-control', 'public, max-age=86400')
       .send(BRAND_LOGO_SVG),
   );
-
-  // The official logo set: standalone icon (favicon/manifest/compact nav) and
-  // the full horizontal logo, one variant per theme (the wordmark is white on
-  // dark, ink on light; the icon itself is theme-neutral).
-  const brandPng: ReadonlyArray<readonly [string, Buffer]> = [
-    ['/brand/icon-192.png', ICON_192],
-    ['/brand/icon-512.png', ICON_512],
-    ['/brand/logo-dark.png', LOGO_DARK],
-    ['/brand/logo-light.png', LOGO_LIGHT],
-  ];
-  for (const [path, body] of brandPng) {
-    app.get(path, async (_request, reply) =>
-      reply.type('image/png').header('cache-control', 'public, max-age=86400').send(body),
+  for (const asset of ASSET_BODIES) {
+    app.get(asset.path, async (_request, reply) =>
+      reply.type(asset.type).header('cache-control', 'public, max-age=86400').send(asset.body),
     );
   }
-  app.get('/favicon.ico', async (_request, reply) =>
-    reply.type('image/x-icon').header('cache-control', 'public, max-age=86400').send(FAVICON_ICO),
-  );
-  app.get('/site.webmanifest', async (_request, reply) =>
-    reply
-      .type('application/manifest+json')
-      .header('cache-control', 'public, max-age=86400')
-      .send(WEB_MANIFEST),
-  );
 
-  // Social preview card (absolute HTTPS URL in og:image) + iOS icon. Served
-  // from memory; crawlers (WhatsApp/X/LinkedIn/Slack/…) fetch these directly.
-  app.get('/og.jpg', async (_request, reply) =>
-    reply.type('image/jpeg').header('cache-control', 'public, max-age=86400').send(OG_IMAGE),
-  );
-  app.get('/apple-touch-icon.png', async (_request, reply) =>
-    reply.type('image/png').header('cache-control', 'public, max-age=86400').send(APPLE_TOUCH_ICON),
-  );
-
-  // ---------- SEO: robots + sitemap ----------
+  // ---------- SEO ----------
   /**
-   * `robots.txt` differs per host, and the application host's version is the
-   * one that needs thought.
+   * `robots.txt` for the application host, and it is the version that needed
+   * thought.
    *
-   * The instinct is `Disallow: /` on app.fbx1.com — it is an application, none
-   * of it should be indexed. That would be a mistake during the move: a crawler
-   * that is forbidden to fetch a URL cannot see the 301 pointing at its new
-   * home, so every marketing URL currently indexed under app.fbx1.com would sit
-   * there stale instead of transferring. The application host therefore stays
+   * The instinct is `Disallow: /` — this is an application, none of it should
+   * be indexed. That would be a mistake: a crawler forbidden to fetch a URL
+   * cannot see the 301 pointing at its new home, so every marketing URL indexed
+   * under `app.fbx1.com` while this host served the public site would sit there
+   * stale instead of transferring to `fbx1.com`. The host therefore stays
    * crawlable at the paths that now redirect, and disallows only what is
    * genuinely private — which was already auth-gated and unlinked anyway.
+   *
+   * No `Sitemap:` line. The sitemap describes the public site and is published
+   * by the public site; naming it from here would invite a crawler to treat
+   * this host as an alternate home for those URLs, which is the confusion the
+   * 301s exist to remove.
    */
   const PRIVATE_PATHS = [
-    '/try/report',
     '/dashboard',
     '/runs',
     '/reports',
@@ -854,90 +681,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     '/signup',
     '/invite',
   ];
-  const robotsFor = (marketingHost: boolean): string => {
-    const disallow = PRIVATE_PATHS.map((p) => `Disallow: ${p}`).join('\n');
-    if (!marketingHost && site.split) {
-      return `User-agent: *\n${disallow}\n`;
-    }
-    return `User-agent: *
-Allow: /$
-Allow: /demo
-Allow: /try$
-Allow: /terms
-Allow: /privacy
-${disallow}
-
-Sitemap: ${site.canonicalOrigin}/sitemap.xml
-`;
-  };
-  app.get('/robots.txt', async (request, reply) =>
-    reply
-      .type('text/plain')
-      .header('cache-control', 'public, max-age=86400')
-      .send(robotsFor(onMarketingHost(request))),
+  const ROBOTS_TXT = `User-agent: *\n${PRIVATE_PATHS.map((p) => `Disallow: ${p}`).join('\n')}\n`;
+  app.get('/robots.txt', async (_request, reply) =>
+    reply.type('text/plain').header('cache-control', 'public, max-age=86400').send(ROBOTS_TXT),
   );
-
-  app.get('/sitemap.xml', async (_request, reply) => {
-    const urls: [string, string][] = [
-      ['/', '1.0'],
-      ['/try', '0.9'],
-      ['/demo', '0.8'],
-      ['/pricing', '0.8'],
-      ['/security', '0.6'],
-      ['/about', '0.5'],
-      ['/contact', '0.5'],
-      ['/docs', '0.5'],
-      ['/faq', '0.5'],
-      ['/changelog', '0.4'],
-      ['/blog', '0.4'],
-      ['/careers', '0.3'],
-      ['/privacy', '0.3'],
-      ['/terms', '0.3'],
-      ['/cookies', '0.2'],
-      ['/dpa', '0.2'],
-      ['/accessibility', '0.2'],
-      ['/sitemap', '0.2'],
-    ];
-    const body =
-      `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-      urls
-        .map(
-          ([loc, pri]) =>
-            `  <url><loc>${site.canonicalOrigin}${loc}</loc><changefreq>weekly</changefreq><priority>${pri}</priority></url>`,
-        )
-        .join('\n') +
-      `\n</urlset>\n`;
-    return reply
-      .type('application/xml')
-      .header('cache-control', 'public, max-age=86400')
-      .send(body);
-  });
-
-  app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms(site)));
-  app.get('/privacy', async (_request, reply) => reply.type('text/html').send(renderPrivacy(site)));
-
-  // ===== Marketing / trust / company pages (no auth, no client JS) =====
-  app.get('/pricing', async (_request, reply) => reply.type('text/html').send(renderPricing(site)));
-  app.get('/security', async (_request, reply) =>
-    reply.type('text/html').send(renderSecurity(site)),
-  );
-  app.get('/about', async (_request, reply) => reply.type('text/html').send(renderAbout(site)));
-  app.get('/contact', async (_request, reply) => reply.type('text/html').send(renderContact(site)));
-  app.get('/changelog', async (_request, reply) =>
-    reply.type('text/html').send(renderChangelog(site)),
-  );
-  app.get('/blog', async (_request, reply) => reply.type('text/html').send(renderBlog(site)));
-  app.get('/careers', async (_request, reply) => reply.type('text/html').send(renderCareers(site)));
-  app.get('/docs', async (_request, reply) => reply.type('text/html').send(renderDocs(site)));
-  app.get('/cookies', async (_request, reply) => reply.type('text/html').send(renderCookies(site)));
-  app.get('/dpa', async (_request, reply) =>
-    reply.type('text/html').send(renderSubprocessors(site)),
-  );
-  app.get('/accessibility', async (_request, reply) =>
-    reply.type('text/html').send(renderAccessibility(site)),
-  );
-  app.get('/sitemap', async (_request, reply) => reply.type('text/html').send(renderSitemap(site)));
-  app.get('/faq', async (_request, reply) => reply.type('text/html').send(renderFaq(site)));
 
   // ===== Internal operations console (COSTFLOW_ADMIN_EMAILS only) =====
   // Cross-tenant, a deliberate + audited exception to the tenancy law, gated by
@@ -3457,49 +3204,20 @@ Sitemap: ${site.canonicalOrigin}/sitemap.xml
    * OI1 (ADR-0006). The diagnostics layer is connector-blind, so this is where
    * a platform's limits become evidence capabilities: the connector declares
    * what it can expose, the artifact says what this import actually carried,
-   * and `assessEvidence` reconciles the two into a profile plus a customer
-   * -facing explanation for anything missing.
+   * and the shared builder reconciles the two.
    *
-   * Computed from the stored artifact at render time, so no pure package
-   * changes and no golden regenerates.
-   */
-  /**
-   * Recommendations for one run. The provider is taken from the workspace when
-   * there is one and from the artifact otherwise, so the public sample surfaces
-   * — which have no workspace — still get a truthful capability assessment
-   * rather than a blank one that would report every diagnostic as unavailable.
+   * The provider is taken from the workspace when there is one and from the
+   * artifact otherwise, so a run whose workspace has since been deleted still
+   * gets a truthful capability assessment rather than a blank one that would
+   * report every diagnostic as unavailable.
    */
   const diagnosticsFor = (run: AnalysisRun, workspace: WorkspaceRecord | null): DiagnosticsView => {
     const providerId = workspace?.provider ?? run.batch.provider;
     const descriptor = connectors.get(providerId)?.descriptor;
-    // No connector (legacy or CSV-era workspace): claim nothing on its behalf.
-    // The artifact still says what it contained, so snapshot-only diagnostics
-    // run and the rest report honestly as unavailable.
-    const provides = descriptor?.provides ?? {
-      canProvide: [],
-      planGated: [],
-      planGateHint: {},
-    };
-    const assessment = assessEvidence(
-      { name: descriptor?.name ?? 'This connection', provides },
-      run.batch,
+    return buildDiagnosticsView(
+      run,
+      descriptor ? { name: descriptor.name, provides: descriptor.provides } : UNKNOWN_SOURCE,
     );
-    // Evidence-quality caps (doc 21) are handed to each diagnostic scoped to the
-    // capabilities it actually draws on, so a weakness in the event stream does
-    // not downgrade a finding computed purely from snapshots.
-    const caps = (meta: DiagnosticSignalMeta) => inheritedCapsFor(run.batch, meta.requires);
-    const results = [
-      detectConcentration(run, assessment.profile, caps(CONCENTRATION_SIGNAL)),
-      detectMissingOwnership(run, assessment.profile, caps(OWNERSHIP_SIGNAL)),
-      detectSerialGatekeeping(run, assessment.profile, caps(GATEKEEPING_SIGNAL)),
-    ];
-    const scopes = (run.batch.scopes as readonly BatchScope[] | undefined) ?? [];
-    return {
-      findings: results.flatMap((r) => r.findings),
-      unavailable: results.flatMap((r) => (r.unavailable ? [r.unavailable] : [])),
-      assessment,
-      originLabels: Object.fromEntries(scopes.map((sc) => [sc.id, sc.label])),
-    };
   };
 
   // Primary: the structured, explorable report view (P5) built from run.json.

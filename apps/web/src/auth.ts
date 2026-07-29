@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { decryptSecret, encryptSecret, newId, newSalt, signValue, verifyValue } from './crypto';
-import { esc, layout } from './html';
+import { esc, layout } from '@costflow/ui';
 import { authProviderFromSub } from './events';
 import type { IdentityObservation, OrgRole, Store } from './store/contract';
 

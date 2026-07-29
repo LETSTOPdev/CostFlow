@@ -4,7 +4,7 @@ import type {
   PseudonymizationContext,
   StageKind,
 } from '@costflow/domain';
-import type { ConnectorEvidence } from '../evidence';
+import type { ConnectorEvidence } from '@costflow/ui';
 
 /**
  * Web connector contract (ADR-0005). A connector is the product-layer face of

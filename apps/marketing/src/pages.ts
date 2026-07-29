@@ -1,5 +1,11 @@
-import { SUPPORT_EMAIL, layout } from './html';
-import { SAME_ORIGIN, appUrl, marketingUrl, type Site } from './site';
+import {
+  MARKETING_SITE,
+  SUPPORT_EMAIL,
+  appUrl,
+  layout,
+  marketingUrl,
+  type Site,
+} from '@costflow/ui';
 
 /**
  * The marketing/trust/company pages beyond the landing, Terms, and Privacy:
@@ -136,7 +142,7 @@ const PRICING_FAQ: [string, string][] = [
   ],
 ];
 
-export function renderPricing(site: Site = SAME_ORIGIN): string {
+export function renderPricing(site: Site = MARKETING_SITE): string {
   const cards = TIERS.map(
     (
       t,
@@ -200,7 +206,7 @@ export function renderPricing(site: Site = SAME_ORIGIN): string {
  * 2. Security
  * ------------------------------------------------------------------ */
 
-export function renderSecurity(site: Site = SAME_ORIGIN): string {
+export function renderSecurity(site: Site = MARKETING_SITE): string {
   const body = `
     ${pageHead(
       'Security',
@@ -266,7 +272,7 @@ export function renderSecurity(site: Site = SAME_ORIGIN): string {
  * 3. About
  * ------------------------------------------------------------------ */
 
-export function renderAbout(site: Site = SAME_ORIGIN): string {
+export function renderAbout(site: Site = MARKETING_SITE): string {
   const body = `
     ${pageHead(
       'About',
@@ -311,7 +317,7 @@ export function renderAbout(site: Site = SAME_ORIGIN): string {
  * 4. Contact
  * ------------------------------------------------------------------ */
 
-export function renderContact(site: Site = SAME_ORIGIN): string {
+export function renderContact(site: Site = MARKETING_SITE): string {
   const body = `
     ${pageHead(
       'Contact',
@@ -349,7 +355,7 @@ export function renderContact(site: Site = SAME_ORIGIN): string {
  * 5. Changelog
  * ------------------------------------------------------------------ */
 
-export function renderChangelog(site: Site = SAME_ORIGIN): string {
+export function renderChangelog(site: Site = MARKETING_SITE): string {
   const body = `
     ${pageHead(
       'Changelog',
@@ -396,7 +402,7 @@ const BLOG_TOPICS = [
   ],
 ] as const;
 
-export function renderBlog(site: Site = SAME_ORIGIN): string {
+export function renderBlog(site: Site = MARKETING_SITE): string {
   const topics = BLOG_TOPICS.map(
     ([t, d]) => `<div class="feature is-static"><h3>${t}</h3><p>${d}</p></div>`,
   ).join('');
@@ -432,7 +438,7 @@ export function renderBlog(site: Site = SAME_ORIGIN): string {
  * 7. Careers
  * ------------------------------------------------------------------ */
 
-export function renderCareers(site: Site = SAME_ORIGIN): string {
+export function renderCareers(site: Site = MARKETING_SITE): string {
   const body = `
     ${pageHead(
       'Careers',
@@ -549,7 +555,7 @@ const DOCS_SECTIONS: [string, string][] = [
   ],
 ];
 
-export function renderDocs(site: Site = SAME_ORIGIN): string {
+export function renderDocs(site: Site = MARKETING_SITE): string {
   const sections = DOCS_SECTIONS.map(
     ([h, p]) =>
       `<section class="ws" style="margin-bottom:1.1rem"><h3 style="margin-top:0">${h}</h3><div class="note" style="margin:0">${p}</div></section>`,
@@ -577,7 +583,7 @@ export function renderDocs(site: Site = SAME_ORIGIN): string {
  * 9. Cookies
  * ------------------------------------------------------------------ */
 
-export function renderCookies(site: Site = SAME_ORIGIN): string {
+export function renderCookies(site: Site = MARKETING_SITE): string {
   const body = `
     ${pageHead(
       'Cookies',
@@ -617,7 +623,7 @@ export function renderCookies(site: Site = SAME_ORIGIN): string {
  * 10. Data processing / Subprocessors
  * ------------------------------------------------------------------ */
 
-export function renderSubprocessors(site: Site = SAME_ORIGIN): string {
+export function renderSubprocessors(site: Site = MARKETING_SITE): string {
   const body = `
     ${pageHead(
       'Data processing',
@@ -659,7 +665,7 @@ export function renderSubprocessors(site: Site = SAME_ORIGIN): string {
  * 11. Accessibility
  * ------------------------------------------------------------------ */
 
-export function renderAccessibility(site: Site = SAME_ORIGIN): string {
+export function renderAccessibility(site: Site = MARKETING_SITE): string {
   const body = `
     ${pageHead(
       'Accessibility',
@@ -737,7 +743,7 @@ const SITEMAP_GROUPS: [string, [string, string][]][] = [
   ],
 ];
 
-export function renderSitemap(site: Site = SAME_ORIGIN): string {
+export function renderSitemap(site: Site = MARKETING_SITE): string {
   const groups = SITEMAP_GROUPS.map(
     ([heading, links]) => `<div class="ws" style="text-align:left">
       <h4>${heading}</h4>
@@ -802,7 +808,7 @@ const FAQ_ALL: [string, string][] = [
   ],
 ];
 
-export function renderFaq(site: Site = SAME_ORIGIN): string {
+export function renderFaq(site: Site = MARKETING_SITE): string {
   const items = FAQ_ALL.map(
     ([q, a]) => `<details><summary>${q}</summary><p class="note">${a}</p></details>`,
   ).join('');

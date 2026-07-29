@@ -104,6 +104,22 @@ module.exports = {
       to: { path: '^apps/' },
     },
     {
+      name: 'ui-renders-artifacts-and-nothing-else',
+      comment:
+        'packages/ui is the layer both deployments share: the design system, the page shell, ' +
+        'the report view and the diagnostics on top of a run artifact. It reads the artifact ' +
+        'and the pure packages, and nothing else — no store, no connector, no session, no ' +
+        'telemetry. That is what lets the marketing site import it without importing the ' +
+        'application. `assets.ts` is the one exception and reads the file system, which is why ' +
+        'it is reached through its own subpath and never from the package barrel.',
+      severity: 'error',
+      from: { path: '^packages/ui/', pathNot: '^packages/ui/src/assets\\.ts$' },
+      to: {
+        pathNot:
+          '^(packages/(domain|analysis|cost-engine|reporting|comparison|diagnostics|ui)/|node_modules/)',
+      },
+    },
+    {
       name: 'pure-packages-no-node-builtins',
       comment: 'Pure packages perform no I/O; node builtins are the tell (doc 05 §3 rule 2).',
       severity: 'error',

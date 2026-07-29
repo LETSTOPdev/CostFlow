@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { runSummary } from '../src/report-view';
+import { runSummary } from '@costflow/ui';
 import { ROOT, get, makeApp, signIn, type TestApp } from './helpers';
 
 /**

@@ -15,6 +15,8 @@ export default defineConfig({
       '@costflow/diagnostics': p('./packages/diagnostics/src/index.ts'),
       '@costflow/reporting': p('./packages/reporting/src/index.ts'),
       '@costflow/telemetry': p('./packages/telemetry/src/index.ts'),
+      '@costflow/ui/assets': p('./packages/ui/src/assets.ts'),
+      '@costflow/ui': p('./packages/ui/src/index.ts'),
     },
   },
   test: {

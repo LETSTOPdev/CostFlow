@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { encryptSecret, signValue } from '../src/crypto';
 import { forbiddenJiraSite } from '../src/connectors/jira';
-import { frictionInsight, humanizeMagnitude } from '../src/report-view';
+import { frictionInsight, humanizeMagnitude } from '@costflow/ui';
 import { POOL_CONFIG } from '../src/store/pg';
 import { gracefulShutdown } from '../src/main';
 import { MemoryStore } from '../src/store/memory';

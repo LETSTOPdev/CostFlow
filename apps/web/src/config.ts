@@ -1,5 +1,5 @@
 import { requireKey } from './crypto';
-import { SAME_ORIGIN, splitSite, type Site } from './site';
+import { APP_SITE, siteWith, type Site } from '@costflow/ui';
 import type { AuthConfig } from './auth';
 
 /**
@@ -23,7 +23,7 @@ export interface AppConfig {
   readonly maxIssues: number | undefined;
   /** Max scopes one workspace may select (COSTFLOW_MAX_SCOPES); undefined → server default. */
   readonly maxScopes: number | undefined;
-  /** The marketing/application host split. `SAME_ORIGIN` until it is configured. */
+  /** Where the marketing site lives, so links out of the app resolve to it. */
   readonly site: Site;
 }
 
@@ -56,48 +56,44 @@ export function derivePostLogoutRedirectUri(
 }
 
 /**
- * Resolve the two-host model from the environment.
+ * Where the marketing site lives.
  *
- * `COSTFLOW_MARKETING_URL` is the switch: absent, one host serves everything
- * and every link stays relative, which is exactly today's behaviour. Present,
- * the router separates the two hosts and cross-site links become absolute.
+ * `https://fbx1.com` is the answer in every real deployment, so it is the
+ * default rather than a required variable: an origin the application has to be
+ * told about is an origin it can be told wrong, and getting it wrong sends every
+ * "Pricing" link and every 301 to a host that does not exist.
  *
- * The application origin is not configured separately — it is wherever this
- * app already tells the identity provider it lives, via `COSTFLOW_PUBLIC_URL`
- * or the callback URL's origin. Deriving it rather than accepting a second
- * variable means the auth flow and the marketing CTAs cannot disagree about
- * where the application is, which is the one inconsistency that would strand a
- * visitor mid-signup.
+ * `COSTFLOW_MARKETING_URL` overrides it, which is what a preview deployment or a
+ * local pair of ports needs. It must not name this application's own origin, or
+ * `/pricing` here would redirect to `/pricing` here, forever.
  */
 export function resolveSite(env: Env, production: boolean): Site {
   const marketing = env['COSTFLOW_MARKETING_URL'];
-  if (!marketing) return SAME_ORIGIN;
-  const appBase = env['COSTFLOW_PUBLIC_URL'] ?? env['COSTFLOW_OIDC_REDIRECT_URI'];
-  if (!appBase) {
-    throw new Error(
-      'COSTFLOW_MARKETING_URL requires COSTFLOW_PUBLIC_URL (or COSTFLOW_OIDC_REDIRECT_URI) so the application origin is known.',
-    );
-  }
+  if (!marketing) return APP_SITE;
   let marketingOrigin: string;
-  let appOrigin: string;
   try {
     marketingOrigin = new URL(marketing).origin;
-    appOrigin = new URL(appBase).origin;
   } catch {
-    throw new Error('COSTFLOW_MARKETING_URL and the application base URL must be absolute URLs.');
+    throw new Error('COSTFLOW_MARKETING_URL must be an absolute URL.');
   }
-  if (marketingOrigin === appOrigin) {
-    throw new Error(
-      'COSTFLOW_MARKETING_URL must differ from the application origin, or every request would redirect to itself.',
-    );
+  const appBase = env['COSTFLOW_PUBLIC_URL'] ?? env['COSTFLOW_OIDC_REDIRECT_URI'];
+  if (appBase !== undefined) {
+    let appOrigin: string;
+    try {
+      appOrigin = new URL(appBase).origin;
+    } catch {
+      throw new Error('The application base URL must be an absolute URL.');
+    }
+    if (marketingOrigin === appOrigin) {
+      throw new Error(
+        'COSTFLOW_MARKETING_URL must differ from the application origin, or every marketing URL would redirect to itself.',
+      );
+    }
   }
-  if (
-    production &&
-    (!marketingOrigin.startsWith('https://') || !appOrigin.startsWith('https://'))
-  ) {
-    throw new Error('Both the marketing and application origins must be https in production.');
+  if (production && !marketingOrigin.startsWith('https://')) {
+    throw new Error('COSTFLOW_MARKETING_URL must be https in production.');
   }
-  return splitSite(marketingOrigin, appOrigin);
+  return siteWith(APP_SITE, { marketingOrigin, canonicalOrigin: marketingOrigin });
 }
 
 export function loadConfig(env: Env): AppConfig {

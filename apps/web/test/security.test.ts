@@ -12,12 +12,13 @@ describe('tenancy, sessions, CSRF, and step gating (doc 09 P4.1 plan §1/§4)', 
     }
   });
 
-  it('the public landing serves logged-out visitors at / (v1 beta)', async () => {
+  it('the entrance serves logged-out visitors at / rather than bouncing them', async () => {
     const t = makeApp();
     const response = await t.app.inject({ method: 'GET', url: '/' });
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain('Get started free');
-    expect(response.body).toContain('/demo'); // sample-report CTA
+    expect(response.body).toContain('Sign in');
+    expect(response.body).toContain('Create account');
+    expect(response.body).toContain('https://fbx1.com/demo'); // sample-report route out
   });
 
   it('cross-tenant ids resolve to not-found, never to another tenant’s rows', async () => {

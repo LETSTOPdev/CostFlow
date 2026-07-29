@@ -321,32 +321,57 @@ preference.
   gateway with the pure ingestion transform. Adding a platform is a new
   connector module plus one line in the composition root.
 
-### Two hostnames, one deployment
+### Two hostnames, two deployments
 
 `fbx1.com` is the marketing site and `app.fbx1.com` is the application. They are
-the same Fastify instance, routed on the `Host` header by `site.ts`, which owns
-both the path classification and the cross-host link helpers. A second service
-would have duplicated the design system, the shell and the deploy for no gain at
-this size.
+separate deployments on separate platforms, and they share `packages/ui`.
 
-The decision that makes it cheap: **authentication never leaves the application
-host.** `/login`, `/signup`, `/auth/callback` and `/logged-out` are application
-paths, the session cookie is host-only (no `Domain` attribute), and the identity
-provider's registered URLs are untouched. Nothing about auth is cross-origin, so
-nothing about auth changed.
+| | `fbx1.com` | `app.fbx1.com` |
+|---|---|---|
+| What | The public site | The product |
+| Where | Vercel | Railway |
+| Shape | 17 prerendered HTML files on a CDN, plus one function for `/try` | One long-lived Fastify process, 2 replicas, next to its database |
+| Has | No session, no database, no secrets | Everything else |
+
+The shapes differ because the workloads do. Every public page is the same bytes
+for every visitor, so a request that reaches a server is a request that could
+have been a file. The application is the opposite: a session per request, a
+connection pool, and analysis jobs that outlive the response that started them.
+Putting both on either platform would have made one of them worse. Why the
+application stays on a long-lived server is recorded in [`05-decisions.md`](05-decisions.md).
+
+**`packages/ui` is what stops that being two products.** It holds the design
+system and page shell, the report view, the evidence and diagnostics views, the
+two-host model, and the brand assets. Both deployments import it, so there is
+one logo, one stylesheet, one report renderer. It reads a run artifact and the
+pure packages and nothing else — no store, no connector, no session — which is
+what lets the marketing site import it without importing the application. A
+dependency-cruiser rule enforces that.
+
+The decision that makes the split cheap: **authentication never leaves the
+application host.** `/login`, `/signup`, `/auth/callback` and `/logged-out` are
+application paths, the session cookie is host-only (no `Domain` attribute), and
+the identity provider's registered URLs name `app.fbx1.com` alone. Nothing about
+auth is cross-origin, so nothing about auth changed.
 
 Each host 301s away only the paths it does *not* own. That asymmetry is what
 makes a loop impossible — a redirect always moves a request toward the host that
-will serve it, and that host has no rule sending it back. `/` is the single path
-both hosts own: the landing on one, the sign-in screen on the other, redirected
-by neither. Shared assets and health probes answer on any host, because the
-identity provider's login page loads the logo and the platform health-checks by
-an internal name.
+will serve it, and that host has no rule sending it back. Both rules are defined
+once, in `packages/ui/src/site.ts`: the application redirects whatever `ownerOf`
+calls marketing, the marketing site redirects whatever matches
+`APP_PATH_PREFIXES`. An invariant test checks the two lists against each other,
+which is the only way to prove the loop is impossible — testing one deployment
+could not.
 
-The split is off unless `COSTFLOW_MARKETING_URL` is set, so one origin serving
-everything with relative links remains a first-class configuration — it is what
-`pnpm preview` and every test run against. Cutover and rollback are in
-`08-admin.md`.
+`/` is the single path both hosts own: the landing on one, the entrance to the
+product on the other, redirected by neither. Shared brand assets and health
+probes answer on any host, because the identity provider's login page loads the
+logo from `app.fbx1.com` and the platform health-checks by an internal name.
+
+The marketing site cannot use the application's "anything unrecognised belongs
+to the app" rule. It is the front door, so an unknown URL there is a typo and
+404s like one; the explicit `APP_PATH_PREFIXES` list is what keeps old
+`fbx1.com/login`-style links working.
 
 ### The attribution guard
 

@@ -24,7 +24,9 @@
       "@costflow/comparison": ["packages/comparison/src/index.ts"],
       "@costflow/diagnostics": ["packages/diagnostics/src/index.ts"],
       "@costflow/reporting": ["packages/reporting/src/index.ts"],
-      "@costflow/telemetry": ["packages/telemetry/src/index.ts"]
+      "@costflow/telemetry": ["packages/telemetry/src/index.ts"],
+      "@costflow/ui": ["packages/ui/src/index.ts"],
+      "@costflow/ui/assets": ["packages/ui/src/assets.ts"]
     }
   },
   "include": ["packages/**/*.ts", "apps/**/*.ts", "vitest.config.ts"]

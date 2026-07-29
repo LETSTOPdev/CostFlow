@@ -27,7 +27,7 @@ import { buildJiraConnector } from '../src/connectors/jira';
 import { buildClickUpConnector } from '../src/connectors/clickup';
 import { buildConnectorRegistry } from '../src/connectors/registry';
 import { buildServer } from '../src/server';
-import { SAME_ORIGIN, splitSite } from '../src/site';
+import { APP_SITE, siteWith } from '@costflow/ui';
 import { MemoryStore } from '../src/store/memory';
 import {
   CLICKUP_FIXTURE_HISTORY,
@@ -73,18 +73,24 @@ clickup.lists = [
 ];
 
 /**
- * Walk the two-host split locally:
+ * Marketing links point at production `fbx1.com` unless a local marketing site
+ * is running:
  *
- *     COSTFLOW_MARKETING_URL=http://marketing.localhost:3901 pnpm preview
+ *     pnpm --filter @costflow/marketing build
+ *     pnpm --filter @costflow/marketing serve
+ *     COSTFLOW_MARKETING_URL=http://localhost:4321 pnpm preview
  *
- * then send a Host header (`curl -H 'Host: marketing.localhost' …`) to see what
- * each hostname serves. Unset, one origin serves everything, which is the
- * walkthrough the cold-start ritual describes.
+ * With both up, the whole customer path — landing, sample report, sign in,
+ * connect, run, report, sign out — is walkable end to end across the two hosts,
+ * which is what the cold-start ritual asks for.
  */
 const marketing = process.env['COSTFLOW_MARKETING_URL'];
 const site = marketing
-  ? splitSite(new URL(marketing).origin, `http://app.localhost:${PORT}`)
-  : SAME_ORIGIN;
+  ? siteWith(APP_SITE, {
+      marketingOrigin: new URL(marketing).origin,
+      canonicalOrigin: new URL(marketing).origin,
+    })
+  : APP_SITE;
 
 const app = buildServer({
   site,

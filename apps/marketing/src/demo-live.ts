@@ -1,8 +1,8 @@
 import type { StageKind } from '@costflow/domain';
 import { transformJira, type JiraMapping } from '@costflow/ingestion';
 import { runAnalysis, type AnalysisRun } from '@costflow/analysis';
-import { buildPseudonymizationContext } from './crypto';
-import { renderReportBody } from './report-view';
+import { renderReportBody } from '@costflow/ui';
+import { buildPseudonymizationContext } from './pseudonymize';
 import type { AssumptionSet } from '@costflow/domain';
 
 /**

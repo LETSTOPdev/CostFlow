@@ -5,8 +5,8 @@ import type { BatchScope, RangeSpec } from '@costflow/domain';
 import { buildReportModel, type RankedFriction } from '@costflow/reporting';
 import { assessComparability } from '@costflow/comparison';
 import type { AnalysisRun } from '@costflow/analysis';
-import { esc } from './html';
-import { frictionInsight, frictionSubject, parseRun, totalRange } from './report-view';
+
+import { esc, frictionInsight, frictionSubject, parseRun, totalRange } from '@costflow/ui';
 
 /**
  * Executive dashboard. One dominant number, three plain-English decisions,

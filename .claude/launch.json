@@ -22,6 +22,12 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["tsx", "apps/web/test/preview.ts"],
       "port": 3901
+    },
+    {
+      "name": "costflow-marketing",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "apps/marketing/src/serve.ts"],
+      "port": 4321
     }
   ]
 }

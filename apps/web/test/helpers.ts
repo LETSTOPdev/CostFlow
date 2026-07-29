@@ -14,7 +14,6 @@ import { buildJiraConnector, type JiraRawFetch } from '../src/connectors/jira';
 import { buildClickUpConnector, type ClickUpRawFetch } from '../src/connectors/clickup';
 import { buildConnectorRegistry } from '../src/connectors/registry';
 import { MemoryStore } from '../src/store/memory';
-import { splitSite } from '../src/site';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 export const NOW = '2026-07-20T00:00:00Z';
@@ -187,12 +186,6 @@ export interface TestApp {
   events: TelemetryEvent[];
   logs: Record<string, unknown>[];
 }
-
-/**
- * The two-host production shape, for tests that drive both hostnames.
- * `makeApp({ site: SPLIT_SITE })` turns the host router on.
- */
-export const SPLIT_SITE = splitSite('https://fbx1.com', 'https://app.fbx1.com');
 
 export function makeApp(overrides: Partial<ServerDeps> = {}): TestApp {
   const store = new MemoryStore();

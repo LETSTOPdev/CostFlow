@@ -5,7 +5,7 @@ work-tracker data and answers three questions: what is going wrong, what it
 costs, and where attention should go — with every figure traceable to the
 assumption that produced it.
 
-Live at **https://app.fbx1.com**.
+Live at **https://app.fbx1.com**. The public site is **https://fbx1.com**.
 
 ---
 
@@ -48,7 +48,9 @@ pnpm check      # typecheck, lint, format, boundaries, tests
 ```
 
 `pnpm check` is the gate. It runs before any deploy, and **deploy is a push to
-`main`** — there is no separate deploy step and no staging environment.
+`main`** — there is no separate deploy step and no staging environment. One push
+deploys both sides: Railway builds the application, Vercel builds the marketing
+site.
 
 Run an analysis from the command line against a fixture:
 

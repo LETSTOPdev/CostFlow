@@ -10,7 +10,8 @@ import {
   assessEvidence,
   inheritedCapsFor,
   type ConnectorEvidence,
-} from '../src/evidence';
+  JIRA_SAMPLE_SOURCE,
+} from '@costflow/ui';
 import { buildJiraConnector } from '../src/connectors/jira';
 import { buildClickUpConnector } from '../src/connectors/clickup';
 import type { ConnectorGateway } from '../src/connectors/types';
@@ -322,5 +323,21 @@ describe('evidence-quality caps (doc 21)', () => {
     expect(caps[0]!.reason).toContain('predates evidence-quality recording');
     // …but a diagnostic drawing on no mapped subject is still uncapped.
     expect(inheritedCapsFor(legacy, ['dependency-graph'])).toEqual([]);
+  });
+});
+
+/**
+ * The public sample reports live on the marketing site, which cannot import a
+ * connector — connectors belong to the application. So `@costflow/ui` carries a
+ * copy of what Jira can expose, and this pins the copy to the original.
+ *
+ * If they drift, the sample claims capabilities a real Jira customer will not
+ * get, which is exactly the kind of promise this product exists to stop making.
+ */
+describe('the sample reports assess against the real Jira declaration', () => {
+  it('matches the Jira connector capability for capability', () => {
+    const jira = buildJiraConnector({} as unknown as ConnectorGateway);
+    expect(JIRA_SAMPLE_SOURCE.name).toBe(jira.descriptor.name);
+    expect(JIRA_SAMPLE_SOURCE.provides).toEqual(jira.descriptor.provides);
   });
 });

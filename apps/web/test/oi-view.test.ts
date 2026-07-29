@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { ROOT, get, makeApp, signIn, type TestApp } from './helpers';
-import { buildActionCards } from '../src/oi-view';
+import { buildActionCards } from '@costflow/ui';
 import type { DiagnosticFinding } from '@costflow/diagnostics';
 
 /**
@@ -319,23 +319,12 @@ describe('OI1 — the operational layer on the report', () => {
  * generated data for one computed from their own.
  */
 describe('recommendations on the public sample surfaces', () => {
-  it('shows them on /demo, marked as generated from demonstration data', async () => {
-    const t = await makeApp();
-    const res = await t.app.inject({ method: 'GET', url: '/demo' });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Generated from demonstration data');
-  });
-
-  it('shows them on the interactive demo too, with the same provenance line', async () => {
-    const t = await makeApp();
-    const res = await t.app.inject({ method: 'GET', url: '/try/report?seed=42' });
-    expect(res.statusCode).toBe(200);
-    expect(res.body).toContain('Highest-leverage action');
-    expect(res.body).toContain('Generated from demonstration data');
-    expect(res.body).toContain('not from any real organisation');
-  });
-
-  /** A real customer's own report must never carry the demo disclaimer. */
+  /**
+   * The sample surfaces themselves live on the marketing site and are tested
+   * there. What has to hold HERE is the other half of the condition.
+   *
+   * A real customer's own report must never carry the demo disclaimer.
+   */
   it('never marks a real report as demonstration data', async () => {
     const t = await makeApp();
     const email = 'real@example.com';
@@ -347,18 +336,11 @@ describe('recommendations on the public sample surfaces', () => {
 });
 
 /**
- * The static sample is below the evidence gate, so it recommends nothing. That
- * is correct, and on a marketing surface it is also an opportunity: the refusal
- * is a differentiator, and the prospect should leave with somewhere to go.
+ * The static sample is below the evidence gate and says so on the marketing
+ * site. The wording it uses there is a marketing surface's wording; a real
+ * customer's report must not inherit it.
  */
 describe('the sample report with nothing to recommend', () => {
-  it('explains the refusal and routes to a full-size demonstration', async () => {
-    const t = await makeApp();
-    const res = await t.app.inject({ method: 'GET', url: '/demo' });
-    expect(res.body).toContain('smaller than the evidence threshold');
-    expect(res.body).toContain('href="/try"');
-  });
-
   it('keeps the plain wording on a real customer report', async () => {
     const t = await makeApp();
     const email = 'quiet@example.com';

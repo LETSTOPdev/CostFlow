@@ -430,3 +430,53 @@ two. The public samples mark the recommendations as computed from demonstration
 data (founder decision, 2026-07-28), and where the sample is too small to
 support one, the refusal is stated as what it is and links to a full-size
 demonstration.
+
+---
+
+## D23 — The public site and the product are two deployments, on two platforms
+
+**Decision.** `fbx1.com` is a prerendered static site on Vercel; `app.fbx1.com`
+is the Fastify application on Railway, next to its database. They share
+`packages/ui` — the design system, the page shell, the report view and the brand
+assets — so there is one product, rendered by one renderer, on two hosts.
+
+**Reason.** The two workloads have opposite shapes. Every public page is the same
+bytes for every visitor, so a request that reaches a server is a request that
+could have been a file: no session, no database, no secrets, no cold start, no
+attack surface. The application is the opposite — a session per request, a
+connection pool, and analysis jobs that deliberately outlive the response that
+started them.
+
+Serving both from one Fastify process (the previous arrangement, live for one
+commit) meant every marketing page carried the application's dependency graph
+and its blast radius. Serving both from Vercel would have meant the reverse and
+worse: `POST /runs` returns a redirect and lets the import keep running in the
+same process, which a serverless function cannot do — it is terminated when the
+response is sent, and `waitUntil` is capped well below what a 50,000-issue
+import can need. `markInterruptedJobs()` at boot has no meaning without a boot,
+and Vercel's Hobby plan forbids commercial use. Fixing all of that means a queue,
+a worker, a cron and an external managed Postgres: **more** moving parts than
+one container.
+
+**Tradeoffs.** Two platforms to operate, two build pipelines, and one shared
+package that both must stay compatible with. Rollback is no longer a single
+environment variable — reverting to one host means reverting the split, because
+the marketing pages live in `apps/marketing` and the application no longer holds
+a copy. In exchange, each side rolls back on its own and neither can take the
+other down.
+
+The marketing site also cannot import a connector, so its sample reports carry a
+copy of what Jira can expose. A test in the application pins the copy to the
+connector so it cannot drift.
+
+**Consequences.** Authentication never leaves `app.fbx1.com` — application paths,
+a host-only cookie, and Auth0 URLs naming one origin — which is what made the
+split reversible at every step and left nothing to reconfigure in Auth0.
+
+`packages/ui` is fenced by a dependency-cruiser rule: it may read a run artifact
+and the pure packages and nothing else. That rule is what keeps the marketing
+site from acquiring the store, a connector or a session by accident.
+
+Neither host may claim a path the other also claims. Both rules are derived from
+one file, and an invariant test checks them against each other — a redirect loop
+across two deployments cannot be found by testing either one alone.

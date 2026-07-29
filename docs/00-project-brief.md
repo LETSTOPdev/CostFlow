@@ -22,7 +22,8 @@ questions in order:
 It connects to Jira, ClickUp, or a CSV export, and produces an executive report
 plus a set of recommended actions.
 
-Live at **https://app.fbx1.com**, free public beta.
+Live at **https://app.fbx1.com**, free public beta. The public site is
+**https://fbx1.com**.
 
 ## The North Star
 
@@ -112,7 +113,8 @@ is the first section of `03-roadmap.md`.
 statuses, set assumptions, run an analysis, read a priced report with
 recommended actions, and compare against the previous run.
 
-- Nine pure packages, two applications (CLI and web).
+- Nine pure packages, a shared rendering package, three applications (CLI, web,
+  and the marketing site).
 - A test suite gated on every change (`pnpm check`).
 - 100% server-rendered, zero client JavaScript, strict CSP.
 - Multi-tenant with an internal operations console and customer database.

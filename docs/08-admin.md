@@ -8,12 +8,15 @@ Deploying, configuring, and debugging production.
 
 | | |
 |---|---|
+| Marketing site | https://fbx1.com (and `www.` → apex) |
 | Application | https://app.fbx1.com |
 | Health | https://app.fbx1.com/healthz |
 | Repository | https://github.com/LETSTOPdev/CostFlow (`origin`, the only remote) |
-| Hosting | Railway, 2 replicas |
+| Marketing hosting | Vercel, project `costflow-marketing`, prerendered static + one function |
+| Application hosting | Railway, 2 replicas |
 | Database | PostgreSQL on Railway |
-| Auth | Auth0 (OIDC) |
+| DNS | Namecheap (`dns1/dns2.registrar-servers.com`) |
+| Auth | Auth0 (OIDC), on `app.fbx1.com` only |
 
 `/healthz` returns `{"status":"ok","commit":"<full sha>"}` — the deployed commit,
 which is how you confirm a deploy landed.
@@ -23,11 +26,22 @@ which is how you confirm a deploy landed.
 ## Deploying
 
 **Deploy is `git push origin main`.** There is no separate deploy step and no
-staging environment.
+staging environment. One push deploys both sides, in parallel and independently.
 
-Railway then builds, runs `pnpm --filter @costflow/web migrate` in a
+Railway builds the application, runs `pnpm --filter @costflow/web migrate` in a
 **pre-deploy phase** (never chained with start), and gates the release on the
 healthcheck.
+
+Vercel builds the marketing site with
+`pnpm --filter @costflow/marketing build`, which writes Vercel's Build Output
+API v3 directory — every page as a file, two functions for `/try` and
+`/try/report`, and a generated `config.json` holding the headers, the redirects
+to the application, and the 404. Pull requests get a preview deployment at their
+own URL; nothing but `main` reaches `fbx1.com`.
+
+Either side can fail without the other: a broken marketing build leaves the last
+good CDN deployment serving, and a failed Railway healthcheck leaves the last
+good release running.
 
 Migrations are idempotent: `schema.sql` is re-applied in full on every deploy,
 using `create table if not exists` and `create index if not exists` throughout,
@@ -51,48 +65,50 @@ The checklists for before and after a push are in
 | `COSTFLOW_STORE` | `memory` for a throwaway demo. Never in production. |
 | `COSTFLOW_MAX_ISSUES` | Optional item ceiling, counted across the whole scope selection. Default 50,000. |
 | `COSTFLOW_MAX_SCOPES` | Optional cap on how many scopes one workspace may select. Default 25. |
-| `COSTFLOW_MARKETING_URL` | **The marketing/application split.** Unset, one host serves everything. Set to `https://fbx1.com`, the marketing site and the application separate. See below. |
+| `COSTFLOW_MARKETING_URL` | Optional override for where the marketing site lives. Unset — which is what production uses — it is `https://fbx1.com`. Set it only to point a deployment at a preview or a local marketing site. |
 
-## Splitting the marketing site from the application
+The marketing site needs **no environment variables at all**. It has no session,
+no database and no secrets, and both origins are constants in
+`packages/ui/src/site.ts` — an origin only one of the two deployments knows
+about is an origin the two can disagree on.
 
-`https://fbx1.com` is the marketing site; `https://app.fbx1.com` is the
-application. One Railway service serves both, routed on the `Host` header.
+## The two hostnames
 
-**Nothing about authentication changes.** `/login`, `/signup`, `/auth/callback`
-and `/logged-out` are application paths, the session cookie is host-only, and
-the Auth0 callback and post-logout URLs stay exactly as they are. There is no
-cross-origin auth, so there is nothing in Auth0 to reconfigure.
+`https://fbx1.com` is the marketing site, on Vercel. `https://app.fbx1.com` is
+the application, on Railway. `www.fbx1.com` redirects to the apex, configured on
+the Vercel domain rather than in code, so there is one canonical marketing
+origin rather than two competing for the same index entry.
 
-`COSTFLOW_MARKETING_URL` is the whole switch. Unset, the split is inert and the
-app behaves exactly as it did before the code shipped. That is deliberate: the
-code can go out ahead of the DNS change, and unsetting one variable rolls the
-whole thing back without a deploy.
+**Nothing about authentication is cross-origin.** `/login`, `/signup`,
+`/auth/callback` and `/logged-out` are application paths, the session cookie is
+host-only, and the Auth0 callback and post-logout URLs name `app.fbx1.com`
+alone. There is nothing in Auth0 to reconfigure, and nothing about the marketing
+site can break sign-in.
 
-### Cutover
+### DNS
 
-1. **Add the domains.** In Railway, add `fbx1.com` and `www.fbx1.com` to the
-   same service that already serves `app.fbx1.com`, and point DNS at the
-   records Railway gives you. Wait for certificates to issue.
-2. **Check they reach the app.** Both should serve the site as it is today,
-   because the split is still off:
-   `curl -sI https://fbx1.com/pricing` → `200`.
-3. **Turn it on.** Set `COSTFLOW_MARKETING_URL=https://fbx1.com` and redeploy.
-4. **Verify both hosts**, below.
-5. **Tell Google.** Submit `https://fbx1.com/sitemap.xml` in Search Console and
-   add `fbx1.com` as a property. The application host stays crawlable on
-   purpose so the 301s transfer the existing index entries; do not add
-   `Disallow: /` to it.
+| Record | Host | Value |
+|---|---|---|
+| `A` | `@` | `216.198.79.1` (Vercel) |
+| `CNAME` | `www` | `cname.vercel-dns.com` |
+| `CNAME` | `app` | `lklcoo55.up.railway.app` (Railway, unchanged) |
 
-### Verifying the cutover
+The apex uses an `A` record because Namecheap's BasicDNS cannot `CNAME` an apex.
+`app` is untouched by any of this: the application's DNS never moved.
+
+### Verifying both hosts
 
 ```bash
 curl -sI https://fbx1.com/pricing | head -1                 # 200
 curl -sI https://app.fbx1.com/pricing | grep -i location    # → https://fbx1.com/pricing
 curl -sI https://fbx1.com/dashboard | grep -i location      # → https://app.fbx1.com/dashboard
 curl -sI https://www.fbx1.com/docs | grep -i location       # → https://fbx1.com/docs
+curl -sI https://fbx1.com/nothing-here | head -1            # 404, branded
 curl -s https://fbx1.com/ | grep -c 'https://app.fbx1.com/signup'   # CTAs point at the app
 curl -s https://app.fbx1.com/ | grep -c 'Create account'    # the way in, not the landing
 curl -sI https://fbx1.com/ https://app.fbx1.com/ | grep -c '301'    # 0 — the root never moves
+curl -s https://fbx1.com/robots.txt | grep Sitemap          # one sitemap, on the public host
+curl -s https://app.fbx1.com/robots.txt | grep -c Sitemap   # 0 — it does not claim one
 ```
 
 Then sign in, run an analysis and sign out on `app.fbx1.com`. Sessions,
@@ -101,10 +117,32 @@ breakage would be worst, so it is the one to walk.
 
 ### Rolling back
 
-Unset `COSTFLOW_MARKETING_URL` and redeploy. Both hostnames go back to serving
-everything, no redirects, no code change. Leave the DNS in place.
+The two sides roll back independently, and neither takes the other down.
 
-### Getting a ClickUp API token
+**The marketing site** — `vercel rollback <previous-deployment-url>`, or
+promote a previous deployment from the Vercel dashboard. Seconds, no DNS change,
+no code change. The application is unaffected.
+
+**The application** — revert the commit and push, as with any other release.
+
+**Both hostnames at once**, if the marketing site had to disappear entirely:
+point the apex `A` record back to nothing and set `COSTFLOW_MARKETING_URL` in
+Railway to `https://app.fbx1.com`… which the config refuses, deliberately,
+because it would redirect every marketing URL to itself. There is no
+one-variable way back to a single host, and that is the trade the split makes:
+the marketing pages live in `apps/marketing` now and the application no longer
+carries a copy. Restoring one host means reverting the split commit.
+
+### Search Console
+
+`fbx1.com` and `app.fbx1.com` are separate properties. Submit
+`https://fbx1.com/sitemap.xml` under the `fbx1.com` property. The application
+host stays crawlable on purpose so its 301s transfer the index entries it holds
+from when it served the public site — **do not add `Disallow: /` to it.**
+
+---
+
+## Getting a ClickUp API token
 
 Verified against the live ClickUp UI, July 2026. **ClickUp's own developer
 documentation is stale** and still gives the old "Settings → Apps" path.

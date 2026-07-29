@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { layout } from './html';
-import { SAME_ORIGIN, ownerOf, type Site } from './site';
+
+import { APP_SITE, layout, ownerOf, type Site } from '@costflow/ui';
 import type { Store } from './store/contract';
 
 /**
@@ -77,50 +77,31 @@ export function securityHeaders(
 }
 
 /**
- * Route a request to the host that owns its path.
+ * Send a marketing URL to the marketing site.
  *
- * Marketing paths belong to `fbx1.com`, application paths to `app.fbx1.com`,
- * and each host 301s away only the paths it does NOT own. That asymmetry is
- * what makes a loop impossible: a redirect always moves a request to the host
- * that will serve it, and that host has no rule that would send it back.
+ * This deployment is the application. It no longer renders `/pricing`,
+ * `/demo`, `/try` or any other public page — those are a separate deployment at
+ * `fbx1.com` — but those URLs were served here for months, so they are indexed,
+ * bookmarked and pasted into chat threads. A 301 transfers every one of them.
  *
- * Three exceptions, all deliberate:
- *  - `/` exists on both (the landing on one, the sign-in screen on the other)
- *    and is never redirected;
+ * The rule is one-directional by construction, which is what makes a redirect
+ * loop impossible: this host redirects only paths it does not own, toward a
+ * host that has no rule sending them back. Two exceptions, both deliberate:
+ *  - `/` exists on both (the landing there, the sign-in screen here) and is
+ *    never redirected;
  *  - shared assets and health probes answer identically on both, so redirecting
  *    them would break the identity provider's login-page logo and the
- *    platform's health checks, which arrive without a recognisable Host;
- *  - an unrecognised Host (the platform's internal `*.railway.app` name, a
- *    probe by IP) is served as-is rather than redirected somewhere it may not
- *    be able to follow.
+ *    platform's health checks, which arrive without a recognisable Host.
  *
- * `www` folds into the apex first, so there is one canonical marketing origin
- * rather than two competing for the same search index entry.
- *
- * Entirely inert until the split is configured, which is what lets the code
- * ship ahead of the DNS change and roll back by unsetting one variable.
+ * No Host header is examined. This process only ever answers on the
+ * application host and on the platform's internal name, and the rule is the
+ * same for both — reading the Host was how the previous single-deployment
+ * router got a chance to be wrong.
  */
 export function registerHostRouter(app: FastifyInstance, site: Site): void {
-  if (!site.split) return;
-  // `hostname`, not `host`: the Host header is compared with its port stripped,
-  // and a URL's `host` keeps one. Comparing the two forms means the router
-  // silently never fires on any origin that names a port.
-  const marketingHost = new URL(site.marketingOrigin).hostname.toLowerCase();
-  const appHost = new URL(site.appOrigin).hostname.toLowerCase();
-
   app.addHook('onRequest', async (request, reply) => {
-    const host = (request.headers.host ?? '').toLowerCase().split(':')[0] ?? '';
-    if (host === `www.${marketingHost}`) {
-      return reply.code(301).redirect(`${site.marketingOrigin}${request.url}`);
-    }
-    const owner = ownerOf(request.url);
-    if (owner === 'root' || owner === 'shared') return;
-    if (host === marketingHost && owner === 'app') {
-      return reply.code(301).redirect(`${site.appOrigin}${request.url}`);
-    }
-    if (host === appHost && owner === 'marketing') {
-      return reply.code(301).redirect(`${site.marketingOrigin}${request.url}`);
-    }
+    if (ownerOf(request.url) !== 'marketing') return;
+    return reply.code(301).redirect(`${site.marketingOrigin}${request.url}`);
   });
 }
 
@@ -128,7 +109,7 @@ export function registerSecurity(app: FastifyInstance, context: SecurityContext)
   const log = context.logSink ?? ((line) => console.log(JSON.stringify(line)));
   const headers = securityHeaders(context.production, context.formActionOrigins ?? []);
 
-  registerHostRouter(app, context.site ?? SAME_ORIGIN);
+  registerHostRouter(app, context.site ?? APP_SITE);
 
   app.addHook('onSend', async (request, reply, payload) => {
     for (const [name, value] of Object.entries(headers)) {

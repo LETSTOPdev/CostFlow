@@ -443,9 +443,7 @@
       "currency": "USD",
       "confidence": {
         "tier": "B",
-        "reasons": [
-          "B: Durations inferred from snapshot dates, not event history."
-        ]
+        "reasons": ["B: Durations inferred from snapshot dates, not event history."]
       },
       "assumptionSetId": "demo-jira-assumptions",
       "assumptionSetVersion": "1",
@@ -489,9 +487,7 @@
           }
         ],
         "inputs": {
-          "workItemIds": [
-            "OPS-3"
-          ]
+          "workItemIds": ["OPS-3"]
         }
       }
     },
@@ -602,11 +598,7 @@
           }
         ],
         "inputs": {
-          "workItemIds": [
-            "OPS-3",
-            "OPS-2",
-            "OPS-1"
-          ]
+          "workItemIds": ["OPS-3", "OPS-2", "OPS-1"]
         }
       }
     },
@@ -622,9 +614,7 @@
       "currency": "USD",
       "confidence": {
         "tier": "B",
-        "reasons": [
-          "B: Includes open stage intervals measured to the analysis time."
-        ]
+        "reasons": ["B: Includes open stage intervals measured to the analysis time."]
       },
       "assumptionSetId": "demo-jira-assumptions",
       "assumptionSetVersion": "1",
@@ -666,9 +656,7 @@
           }
         ],
         "inputs": {
-          "workItemIds": [
-            "OPS-1"
-          ]
+          "workItemIds": ["OPS-1"]
         }
       }
     },
@@ -724,9 +712,7 @@
           }
         ],
         "inputs": {
-          "workItemIds": [
-            "OPS-3"
-          ]
+          "workItemIds": ["OPS-3"]
         }
       }
     },
@@ -782,9 +768,7 @@
           }
         ],
         "inputs": {
-          "workItemIds": [
-            "OPS-1"
-          ]
+          "workItemIds": ["OPS-1"]
         }
       }
     }

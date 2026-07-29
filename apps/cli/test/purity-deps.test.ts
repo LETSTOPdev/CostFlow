@@ -8,7 +8,12 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 /**
  * R-15: depcruise bans node builtins in pure packages, but nothing else stops
  * a third-party I/O package (e.g. fs-extra) from sneaking in. This allowlist
- * makes adding any dependency to a pure package a deliberate, reviewed act.
+ * makes adding any dependency to a shared package a deliberate, reviewed act.
+ *
+ * `ui` is the one package here that is not pure: it reads the brand assets off
+ * disk. It is listed with an empty allowlist for the same reason as the others
+ * — a new third-party dependency in the layer both deployments share should
+ * never arrive unnoticed — while what it may IMPORT is fenced by depcruise.
  */
 const ALLOWED_EXTERNAL: Record<string, string[]> = {
   domain: [],
@@ -20,6 +25,7 @@ const ALLOWED_EXTERNAL: Record<string, string[]> = {
   reporting: [],
   telemetry: [],
   diagnostics: [],
+  ui: [],
 };
 
 describe('pure packages carry no unreviewed external dependencies (R-15)', () => {

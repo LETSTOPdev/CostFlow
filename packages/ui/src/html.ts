@@ -1,5 +1,5 @@
 /** Server-rendered HTML shell + premium design system (doc 09 P4.1 — no SPA build). */
-import { SAME_ORIGIN, appUrl, marketingUrl, type Site } from './site';
+import { APP_SITE, appUrl, marketingUrl, type Site } from './site';
 
 /**
  * Brand lockup for headers/footers: the full horizontal CostFlow logo (icon +
@@ -477,7 +477,7 @@ const marketingNav = (site: Site): { left: string; right: string; mobile: string
  * site should arrive at the application directly — an extra hop through a
  * redirect is a hop that can be cached, logged or lost.
  */
-function renderHeader(csrf?: string, site: Site = SAME_ORIGIN): string {
+function renderHeader(csrf?: string, site: Site = APP_SITE): string {
   const loggedOut = csrf === undefined;
   const nav = marketingNav(site);
   const signIn = appUrl(site, '/login');
@@ -564,7 +564,7 @@ const FOOTER_COLUMNS: readonly (readonly [string, readonly (readonly [string, st
  * page heading depth before the footer varies, so a fixed h-level here would
  * skip a level on some pages and break screen-reader heading navigation.
  */
-function renderFooter(site: Site = SAME_ORIGIN): string {
+function renderFooter(site: Site = APP_SITE): string {
   const cols = FOOTER_COLUMNS.map(
     ([heading, links]) =>
       `<div class="sf-col"><p class="sf-col-h">${heading}</p><nav aria-label="${heading}">${links
@@ -605,7 +605,7 @@ export function layout(
   // Social/canonical URLs resolve to whichever host owns the public site: the
   // marketing origin once the split is live, app.fbx1.com until then. SEO tags
   // stay opt-in per page so authenticated pages never enter the index.
-  const og = (opts.site ?? SAME_ORIGIN).canonicalOrigin;
+  const og = (opts.site ?? APP_SITE).canonicalOrigin;
   const description =
     opts.description ??
     'See what workflow friction is costing your team. Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.';

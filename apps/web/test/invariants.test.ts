@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildServer } from '../src/server';
 import { MemoryStore } from '../src/store/memory';
-import {
-  SESSION_KEY,
-  CREDENTIAL_KEY,
-  SPLIT_SITE,
-  makeApp,
-  signIn,
-  post,
-  stubConnectors,
-} from './helpers';
-import { renderDemoCompany } from '../src/demo-live';
+import { SESSION_KEY, CREDENTIAL_KEY, makeApp, signIn, post, stubConnectors } from './helpers';
+import { APP_PATH_PREFIXES, MARKETING_PATHS, ownerOf } from '@costflow/ui';
+import { renderDemoCompany } from '../../marketing/src/demo-live';
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
@@ -244,98 +237,86 @@ describe('INVARIANT: provider-aware copy (never name a platform the customer is 
 });
 
 /**
- * The marketing site and the application are two hostnames served by one
- * process. The invariant that matters is not which way a given path goes — it
- * is that following the redirects always terminates. Each host redirects only
- * the paths it does not own, to the host that does, and that host has no rule
- * that would send them back.
+ * The marketing site and the application are two deployments. The invariant
+ * that matters is not which way a given path goes — it is that following the
+ * redirects always terminates. Each host redirects only the paths it does not
+ * own, to the host that does, and that host has no rule that would send them
+ * back.
+ *
+ * Both hosts' rules are defined once, in `@costflow/ui`: this host redirects
+ * whatever `ownerOf` calls marketing, the marketing site redirects whatever
+ * matches `APP_PATH_PREFIXES`. Testing the two rule sets against each other is
+ * what proves the loop is impossible — testing one deployment could not.
  */
 describe('INVARIANT: two hosts, and no request can bounce between them', () => {
-  const MARKETING = 'fbx1.com';
-  const APP = 'app.fbx1.com';
+  /** The marketing site's rule, as its build writes it into the CDN config. */
+  const marketingRedirects = (path: string): boolean =>
+    APP_PATH_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
 
-  it('sends each path to the host that owns it, preserving path and query', async () => {
-    const t = makeApp({ site: SPLIT_SITE });
-    const appPathOnMarketing = await t.app.inject({
-      method: 'GET',
-      url: '/dashboard?x=1',
-      headers: { host: MARKETING },
-    });
-    expect(appPathOnMarketing.statusCode).toBe(301);
-    expect(appPathOnMarketing.headers['location']).toBe('https://app.fbx1.com/dashboard?x=1');
+  /** This host's rule, as `registerHostRouter` applies it. */
+  const appRedirects = (path: string): boolean => ownerOf(path) === 'marketing';
 
-    const marketingPathOnApp = await t.app.inject({
-      method: 'GET',
-      url: '/pricing?y=2',
-      headers: { host: APP },
-    });
-    expect(marketingPathOnApp.statusCode).toBe(301);
-    expect(marketingPathOnApp.headers['location']).toBe('https://fbx1.com/pricing?y=2');
+  it('lets no path be claimed, or disowned, by both hosts', () => {
+    for (const path of [...MARKETING_PATHS, ...APP_PATH_PREFIXES, '/', '/robots.txt']) {
+      expect(
+        appRedirects(path) && marketingRedirects(path),
+        `${path} would bounce between both hosts`,
+      ).toBe(false);
+    }
   });
 
-  /**
-   * Follow every redirect to its end. A loop shows up as a request that never
-   * arrives at a host willing to serve it — which is what a 301 pointing back
-   * at the origin it came from would produce, and the failure mode a customer
-   * experiences as a browser error rather than as a page.
-   */
-  it('terminates for every path on both hosts', async () => {
-    const t = makeApp({ site: SPLIT_SITE });
+  it('terminates for every path on both hosts, in at most one hop', () => {
     const paths = [
       '/',
       '/pricing',
       '/docs',
       '/demo',
       '/try',
+      '/try/report',
       '/terms',
+      '/sitemap.xml',
       '/login',
       '/signup',
+      '/logged-out',
+      '/auth/callback',
       '/dashboard',
       '/runs',
+      '/reports/abc',
       '/robots.txt',
       '/brand/logo.svg',
       '/healthz',
       '/nothing-here',
     ];
     for (const start of paths) {
-      for (const startHost of [MARKETING, APP, 'www.fbx1.com']) {
+      for (const startHost of ['marketing', 'app'] as const) {
         let host = startHost;
-        let url = start;
         let hops = 0;
         for (;;) {
-          const res = await t.app.inject({ method: 'GET', url, headers: { host } });
-          if (res.statusCode !== 301) break;
-          const next = new URL(res.headers['location'] as string);
-          host = next.host;
-          url = `${next.pathname}${next.search}`;
+          const redirects = host === 'app' ? appRedirects(start) : marketingRedirects(start);
+          if (!redirects) break;
+          host = host === 'app' ? 'marketing' : 'app';
           hops += 1;
-          expect(hops, `${startHost}${start} keeps redirecting`).toBeLessThanOrEqual(2);
+          expect(hops, `${startHost}${start} keeps redirecting`).toBeLessThanOrEqual(1);
         }
       }
     }
   });
 
-  it('folds www into the apex rather than letting two marketing origins exist', async () => {
-    const t = makeApp({ site: SPLIT_SITE });
-    const res = await t.app.inject({
-      method: 'GET',
-      url: '/pricing',
-      headers: { host: 'www.fbx1.com' },
-    });
+  it('sends each marketing path off this host, preserving path and query', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/pricing?y=2' });
     expect(res.statusCode).toBe(301);
-    expect(res.headers['location']).toBe('https://fbx1.com/pricing');
+    expect(res.headers['location']).toBe('https://fbx1.com/pricing?y=2');
   });
 
   /**
    * `/` is the one path both hosts own — the landing on one, the way in on the
    * other. If either redirected it, the two would trade a visitor forever.
    */
-  it('never redirects the root, on either host', async () => {
-    const t = makeApp({ site: SPLIT_SITE });
-    for (const host of [MARKETING, APP]) {
-      const res = await t.app.inject({ method: 'GET', url: '/', headers: { host } });
-      expect(res.statusCode, `${host}/ should be served, not redirected`).toBe(200);
-    }
+  it('never redirects the root', async () => {
+    const t = makeApp();
+    const res = await t.app.inject({ method: 'GET', url: '/' });
+    expect(res.statusCode).toBe(200);
   });
 
   /**
@@ -344,20 +325,12 @@ describe('INVARIANT: two hosts, and no request can bounce between them', () => {
    * redirect on either is an outage that looks like a DNS problem.
    */
   it('serves shared assets and health probes on any host, unredirected', async () => {
-    const t = makeApp({ site: SPLIT_SITE });
-    for (const host of [MARKETING, APP, 'costflow.up.railway.app']) {
-      for (const url of ['/healthz', '/brand/logo.svg', '/favicon.ico']) {
+    const t = makeApp();
+    for (const host of ['app.fbx1.com', 'costflow.up.railway.app', 'localhost']) {
+      for (const url of ['/healthz', '/brand/logo.svg', '/favicon.ico', '/robots.txt']) {
         const res = await t.app.inject({ method: 'GET', url, headers: { host } });
         expect(res.statusCode, `${host}${url}`).toBe(200);
       }
-    }
-  });
-
-  it('does nothing at all until the split is configured', async () => {
-    const t = makeApp();
-    for (const host of ['fbx1.com', 'app.fbx1.com', 'localhost']) {
-      const res = await t.app.inject({ method: 'GET', url: '/pricing', headers: { host } });
-      expect(res.statusCode, host).toBe(200);
     }
   });
 });

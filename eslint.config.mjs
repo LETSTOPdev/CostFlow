@@ -41,7 +41,18 @@ const purityRestrictions = {
 };
 
 export default tseslint.config(
-  { ignores: ['node_modules/**', 'dist/**', 'out/**', 'tools/golden/expected/**', '.claude/**'] },
+  {
+    ignores: [
+      'node_modules/**',
+      'dist/**',
+      'out/**',
+      'tools/golden/expected/**',
+      '.claude/**',
+      // Generated deployment output: the bundled marketing function and the
+      // pages it is built alongside. Written by `@costflow/marketing build`.
+      '**/.vercel/**',
+    ],
+  },
   ...tseslint.configs.recommended,
   {
     files: ['packages/**/*.ts', 'apps/**/*.ts'],

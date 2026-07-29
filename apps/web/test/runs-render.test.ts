@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { esc } from '../src/html';
+import { esc } from '@costflow/ui';
 import { toIso } from '../src/store/pg';
 import { MemoryStore } from '../src/store/memory';
 import type { RunRecord } from '../src/store/contract';
