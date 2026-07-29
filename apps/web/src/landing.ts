@@ -1,4 +1,5 @@
 import { SUPPORT_EMAIL, layout } from './html';
+import { SAME_ORIGIN, appUrl, type Site } from './site';
 
 /**
  * Public, unauthenticated pages for the free beta (v1): the marketing landing,
@@ -111,7 +112,7 @@ const perspectiveGrid = (): string => {
   </div>`;
 };
 
-const hero = `
+const hero = (site: Site): string => `
 <section class="lp-hero">
   ${perspectiveGrid()}
   <div class="container lp-hero-inner">
@@ -120,7 +121,7 @@ const hero = `
     <p class="lp-sub">Connect Jira or ClickUp and get a two-minute briefing: the highest-leverage change, and what it is costing you not to make it.
       Every figure traces back to its formula.</p>
     <div class="lp-cta">
-      <a class="btn btn-lg" href="/signup">Get started free</a>
+      <a class="btn btn-lg" href="${appUrl(site, '/signup')}">Get started free</a>
       <a class="btn btn-ghost btn-lg" href="/try">Try a live demo</a>
     </div>
     <div class="lp-trust">
@@ -199,9 +200,9 @@ const traceable = `
   </div>
 </section>`;
 
-const midCta = `
+const midCta = (site: Site): string => `
 <section class="lp-midcta"><div class="container">
-  <a class="btn btn-lg" href="/signup">See what it's costing my team</a>
+  <a class="btn btn-lg" href="${appUrl(site, '/signup')}">See what it's costing my team</a>
   <p class="lp-midcta-fine">Your first report takes about a minute. No credit card. Read-only access.</p>
 </div></section>`;
 
@@ -262,36 +263,37 @@ function faq(): string {
 }
 
 /** Structured data for the landing (SoftwareApplication + Organization + FAQ + WebSite). */
-function landingJsonLd(): string {
+function landingJsonLd(site: Site): string {
+  const O = site.canonicalOrigin;
   const strip = (html: string): string => html.replace(/<[^>]+>/g, '');
   const graph = {
     '@context': 'https://schema.org',
     '@graph': [
       {
         '@type': 'Organization',
-        '@id': 'https://app.fbx1.com/#org',
+        '@id': `${O}/#org`,
         name: 'CostFlow',
-        url: 'https://app.fbx1.com/',
-        logo: 'https://app.fbx1.com/brand/icon-512.png',
+        url: `${O}/`,
+        logo: `${O}/brand/icon-512.png`,
         description: 'CostFlow prices the cost of workflow friction from Jira or ClickUp data.',
       },
       {
         '@type': 'WebSite',
-        '@id': 'https://app.fbx1.com/#website',
-        url: 'https://app.fbx1.com/',
+        '@id': `${O}/#website`,
+        url: `${O}/`,
         name: 'CostFlow',
-        publisher: { '@id': 'https://app.fbx1.com/#org' },
+        publisher: { '@id': `${O}/#org` },
       },
       {
         '@type': 'SoftwareApplication',
         name: 'CostFlow',
         applicationCategory: 'BusinessApplication',
         operatingSystem: 'Web',
-        url: 'https://app.fbx1.com/',
+        url: `${O}/`,
         description:
           'Connect Jira or ClickUp and CostFlow tells you the highest-leverage change to make in your delivery process, and what it is costing you not to make it. Every figure traces back to its formula.',
         offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-        publisher: { '@id': 'https://app.fbx1.com/#org' },
+        publisher: { '@id': `${O}/#org` },
       },
       {
         '@type': 'FAQPage',
@@ -308,13 +310,13 @@ function landingJsonLd(): string {
   return JSON.stringify(graph).replace(/</g, '\\u003c');
 }
 
-const ctaBand = `
+const ctaBand = (site: Site): string => `
 <section class="lp-section"><div class="container">
   <div class="lp-cta-band">
     <div class="lp-cta-glow" aria-hidden="true"></div>
     <div class="lp-cta-inner">
       <h2 class="lp-cta-h">Find out what your delays <br>are really costing you.</h2>
-      <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>
+      <div class="lp-cta-actions"><a class="btn btn-lg lp-cta-btn" href="${appUrl(site, '/signup')}">Get started free</a>
         <a class="lp-cta-link" href="/try">or try a live demo →</a></div>
       <p class="lp-cta-fine">No credit card. Read-only access. Delete your data at any time.</p>
     </div>
@@ -528,26 +530,29 @@ a.lp-cta-btn:hover,.lp-cta-btn:hover{background:#fff;color:var(--primary-2)}
  * Render
  * ------------------------------------------------------------------ */
 
-/** Marketing landing shown to logged-out visitors at `/`. */
-export function renderLanding(): string {
-  const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero}${how}${traceable}${midCta}${trust}${faq()}${ctaBand}</div>`;
+/** Marketing landing, served at `/` on the marketing host. */
+export function renderLanding(site: Site = SAME_ORIGIN): string {
+  const body = `<style>${LANDING_STYLE}</style><div class="lp">${hero(site)}${how}${traceable}${midCta(site)}${trust}${faq()}${ctaBand(site)}</div>`;
   return layout('CostFlow: see what workflow friction costs your team', body, undefined, {
     bleed: true,
-    canonical: 'https://app.fbx1.com/',
-    jsonLd: landingJsonLd(),
+    canonical: `${site.canonicalOrigin}/`,
+    jsonLd: landingJsonLd(site),
+    site,
   });
 }
 
 /** Shared shell for the legal/long-form pages (Terms, Privacy). */
-function legalPage(title: string, inner: string, path: string): string {
+function legalPage(site: Site, title: string, inner: string, path: string): string {
   const body = `<article class="panel" style="max-width:46rem;margin-inline:auto">${inner}</article>`;
   return layout(title, body, undefined, {
-    canonical: `https://app.fbx1.com${path}`,
+    canonical: `${site.canonicalOrigin}${path}`,
+    site,
   });
 }
 
-export function renderTerms(): string {
+export function renderTerms(site: Site = SAME_ORIGIN): string {
   return legalPage(
+    site,
     'Terms of Service',
     `<h1>Terms of Service</h1>
     <p class="note">Free public beta. Last updated 2026-07-22.</p>
@@ -579,8 +584,9 @@ export function renderTerms(): string {
   );
 }
 
-export function renderPrivacy(): string {
+export function renderPrivacy(site: Site = SAME_ORIGIN): string {
   return legalPage(
+    site,
     'Privacy',
     `<h1>Privacy</h1>
     <p class="note">Free public beta. Last updated 2026-07-22.</p>

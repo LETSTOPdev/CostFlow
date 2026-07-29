@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import fastifyCookie from '@fastify/cookie';
 import fastifyFormbody from '@fastify/formbody';
 import { describeSelection, hasSelection, selectionNames, sortSelection } from './scopes';
+import { SAME_ORIGIN, appUrl, marketingUrl, type Site } from './site';
 import { marked } from 'marked';
 import type { AssumptionSet, BatchScope, Provenance, RangeSpec, StageKind } from '@costflow/domain';
 import { STAGE_KINDS } from '@costflow/domain';
@@ -151,6 +152,8 @@ export interface ServerDeps {
   readonly logSink?: (line: Record<string, unknown>) => void;
   /** Emails allowed to view the founder analytics page (v1). */
   readonly adminEmails?: string[];
+  /** Marketing/application host split. Defaults to one origin serving both. */
+  readonly site?: Site;
   /**
    * Reliability ceiling: max issues imported per project. A single very large
    * analysis holds the whole batch + traces in memory (~1GB heap and a ~165MB
@@ -230,10 +233,23 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   const formActionOrigins =
     auth.mode === 'oidc' && auth.oidc ? [new URL(auth.oidc.issuer).origin] : [];
 
+  /**
+   * Which hosts serve what. `SAME_ORIGIN` — one host, relative links, today's
+   * behaviour — unless the deployment configures a marketing origin.
+   */
+  const site = deps.site ?? SAME_ORIGIN;
+  /** True when this request arrived on the marketing host (always, unsplit). */
+  const onMarketingHost = (request: FastifyRequest): boolean => {
+    if (!site.split) return true;
+    const host = (request.headers.host ?? '').toLowerCase().split(':')[0] ?? '';
+    return host === new URL(site.marketingOrigin).hostname.toLowerCase();
+  };
+
   registerSecurity(app, {
     production: deps.production === true,
     store,
     formActionOrigins,
+    site,
     ...(deps.logSink ? { logSink: deps.logSink } : {}),
   });
 
@@ -617,10 +633,42 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
 
   // ---------- home / dashboard ----------
 
+  /**
+   * The one path that exists on both hosts.
+   *
+   * On the marketing host it is the landing page. On the application host it is
+   * the way in: a signed-out visitor arriving from a bookmark, an old link or a
+   * shared report URL gets Sign in / Create account, not a sales pitch they
+   * have already read. Bouncing them straight to the identity provider was the
+   * alternative and it strands anyone who did not mean to sign in — no context,
+   * no way back to the marketing site.
+   */
+  const appEntry = (): string =>
+    layout(
+      'Sign in',
+      `<div class="panel" style="max-width:26rem;margin:3rem auto;text-align:center">
+         <h1 style="margin-top:0">CostFlow</h1>
+         <p class="lead">See what workflow friction is costing your team.</p>
+         <div class="hero-actions" style="justify-content:center;margin-top:1.4rem">
+           <a class="btn btn-lg" href="/login">Sign in</a>
+           <a class="btn btn-ghost btn-lg" href="/signup">Create account</a>
+         </div>
+         <p class="note" style="margin-top:1.4rem">New here? <a href="${marketingUrl(site, '/')}">Read what CostFlow does</a> or <a href="${marketingUrl(site, '/demo')}">open a sample report</a> without signing in.</p>
+       </div>`,
+      undefined,
+      { noindex: true, site },
+    );
+
   app.get('/', async (request, reply) => {
     const session = sessionFrom(request, auth.sessionKey);
-    // Logged-out visitors get the public marketing landing (v1 free beta).
-    if (!session) return reply.type('text/html').send(renderLanding());
+    if (!session) {
+      // Split: the marketing host lands, the application host signs you in.
+      // Unsplit: one host, and it still lands — which is what `pnpm preview`
+      // and every existing test walk through.
+      return reply
+        .type('text/html')
+        .send(onMarketingHost(request) ? renderLanding(site) : appEntry());
+    }
     const user = await currentUser(session);
     // Members don't onboard — they land on the runs they can see.
     if (!isManager(user)) return reply.redirect('/runs');
@@ -633,7 +681,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.get('/demo', async (_request, reply) => {
     const banner =
       '<div class="info">This is a <strong>sample report</strong> built from demo data. ' +
-      '<a href="/login">Sign in</a> to run one on your own Jira or ClickUp.</div>';
+      `<a href="${appUrl(site, '/login')}">Sign in</a> to run one on your own Jira or ClickUp.</div>`;
     let body: string;
     try {
       const demoRun = parseRun(DEMO_RUN_JSON);
@@ -649,14 +697,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       '<div class="cta-band" style="margin-top:2.5rem">' +
       '<h2>Ready to see your own?</h2>' +
       '<p class="lead">Connect Jira or ClickUp and get a report like this for your own team in about a minute. Free while in beta.</p>' +
-      '<div class="hero-actions"><a class="btn btn-lg" href="/login">Get started free</a></div>' +
+      `<div class="hero-actions"><a class="btn btn-lg" href="${appUrl(site, '/login')}">Get started free</a></div>` +
       '</div>';
     return reply
       .type('text/html')
       .send(
         layout(
           'Sample report',
-          `${banner}${body}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
+          `${banner}${body}${cta}<p style="margin-top:1.5rem"><a href="${marketingUrl(site, '/')}">← Home</a></p>`,
+          undefined,
+          { canonical: `${site.canonicalOrigin}/demo`, site },
         ),
       );
   });
@@ -689,6 +739,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
           layout(
             'Demo',
             '<div class="empty" style="max-width:34rem;margin:2.5rem auto"><h3>The demo hiccuped</h3><p>Please <a href="/try">try another company</a>.</p></div>',
+            undefined,
+            { site },
           ),
         );
     }
@@ -697,7 +749,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
       '<div class="cta-band" style="margin-top:2.5rem">' +
       '<h2>Now do it for your own team.</h2>' +
       '<p class="lead">Connect Jira or ClickUp in about a minute and get this report on your real board. Free and read-only.</p>' +
-      '<div class="hero-actions"><a class="btn btn-lg lp-cta-btn" href="/signup">Get started free</a>' +
+      `<div class="hero-actions"><a class="btn btn-lg lp-cta-btn" href="${appUrl(site, '/signup')}">Get started free</a>` +
       '<a class="lp-cta-link" href="/try">or try another company →</a></div>' +
       '</div>';
     return reply
@@ -713,7 +765,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
           })}${cta}<p style="margin-top:1.5rem"><a href="/">← Home</a></p>`,
           undefined,
           // Infinite seed space — canonicalise crawlers to /try, don't index each.
-          { canonical: 'https://app.fbx1.com/try', noindex: true },
+          { canonical: `${site.canonicalOrigin}/try`, noindex: true, site },
         ),
       );
   });
@@ -760,40 +812,58 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     reply.type('image/png').header('cache-control', 'public, max-age=86400').send(APPLE_TOUCH_ICON),
   );
 
-  // ---------- SEO: robots + sitemap (canonical host app.fbx1.com) ----------
-  // Crawl the public marketing/demo surface; keep the app and per-seed demo
-  // reports out of the index (auth-gated or infinite seed space).
-  app.get('/robots.txt', async (_request, reply) =>
-    reply
-      .type('text/plain')
-      .header('cache-control', 'public, max-age=86400')
-      .send(
-        `User-agent: *
+  // ---------- SEO: robots + sitemap ----------
+  /**
+   * `robots.txt` differs per host, and the application host's version is the
+   * one that needs thought.
+   *
+   * The instinct is `Disallow: /` on app.fbx1.com — it is an application, none
+   * of it should be indexed. That would be a mistake during the move: a crawler
+   * that is forbidden to fetch a URL cannot see the 301 pointing at its new
+   * home, so every marketing URL currently indexed under app.fbx1.com would sit
+   * there stale instead of transferring. The application host therefore stays
+   * crawlable at the paths that now redirect, and disallows only what is
+   * genuinely private — which was already auth-gated and unlinked anyway.
+   */
+  const PRIVATE_PATHS = [
+    '/try/report',
+    '/dashboard',
+    '/runs',
+    '/reports',
+    '/jobs',
+    '/connect',
+    '/scope',
+    '/mapping',
+    '/assumptions',
+    '/org',
+    '/settings',
+    '/admin',
+    '/auth',
+    '/login',
+    '/signup',
+    '/invite',
+  ];
+  const robotsFor = (marketingHost: boolean): string => {
+    const disallow = PRIVATE_PATHS.map((p) => `Disallow: ${p}`).join('\n');
+    if (!marketingHost && site.split) {
+      return `User-agent: *\n${disallow}\n`;
+    }
+    return `User-agent: *
 Allow: /$
 Allow: /demo
 Allow: /try$
 Allow: /terms
 Allow: /privacy
-Disallow: /try/report
-Disallow: /dashboard
-Disallow: /runs
-Disallow: /reports
-Disallow: /jobs
-Disallow: /connect
-Disallow: /scope
-Disallow: /mapping
-Disallow: /assumptions
-Disallow: /org
-Disallow: /settings
-Disallow: /admin
-Disallow: /auth
-Disallow: /login
-Disallow: /signup
-Disallow: /invite
+${disallow}
 
-Sitemap: https://app.fbx1.com/sitemap.xml
-`,
-      ),
+Sitemap: ${site.canonicalOrigin}/sitemap.xml
+`;
+  };
+  app.get('/robots.txt', async (request, reply) =>
+    reply
+      .type('text/plain')
+      .header('cache-control', 'public, max-age=86400')
+      .send(robotsFor(onMarketingHost(request))),
   );
 
   app.get('/sitemap.xml', async (_request, reply) => {
@@ -822,7 +892,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       urls
         .map(
           ([loc, pri]) =>
-            `  <url><loc>https://app.fbx1.com${loc}</loc><changefreq>weekly</changefreq><priority>${pri}</priority></url>`,
+            `  <url><loc>${site.canonicalOrigin}${loc}</loc><changefreq>weekly</changefreq><priority>${pri}</priority></url>`,
         )
         .join('\n') +
       `\n</urlset>\n`;
@@ -832,25 +902,31 @@ Sitemap: https://app.fbx1.com/sitemap.xml
       .send(body);
   });
 
-  app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms()));
-  app.get('/privacy', async (_request, reply) => reply.type('text/html').send(renderPrivacy()));
+  app.get('/terms', async (_request, reply) => reply.type('text/html').send(renderTerms(site)));
+  app.get('/privacy', async (_request, reply) => reply.type('text/html').send(renderPrivacy(site)));
 
   // ===== Marketing / trust / company pages (no auth, no client JS) =====
-  app.get('/pricing', async (_request, reply) => reply.type('text/html').send(renderPricing()));
-  app.get('/security', async (_request, reply) => reply.type('text/html').send(renderSecurity()));
-  app.get('/about', async (_request, reply) => reply.type('text/html').send(renderAbout()));
-  app.get('/contact', async (_request, reply) => reply.type('text/html').send(renderContact()));
-  app.get('/changelog', async (_request, reply) => reply.type('text/html').send(renderChangelog()));
-  app.get('/blog', async (_request, reply) => reply.type('text/html').send(renderBlog()));
-  app.get('/careers', async (_request, reply) => reply.type('text/html').send(renderCareers()));
-  app.get('/docs', async (_request, reply) => reply.type('text/html').send(renderDocs()));
-  app.get('/cookies', async (_request, reply) => reply.type('text/html').send(renderCookies()));
-  app.get('/dpa', async (_request, reply) => reply.type('text/html').send(renderSubprocessors()));
-  app.get('/accessibility', async (_request, reply) =>
-    reply.type('text/html').send(renderAccessibility()),
+  app.get('/pricing', async (_request, reply) => reply.type('text/html').send(renderPricing(site)));
+  app.get('/security', async (_request, reply) =>
+    reply.type('text/html').send(renderSecurity(site)),
   );
-  app.get('/sitemap', async (_request, reply) => reply.type('text/html').send(renderSitemap()));
-  app.get('/faq', async (_request, reply) => reply.type('text/html').send(renderFaq()));
+  app.get('/about', async (_request, reply) => reply.type('text/html').send(renderAbout(site)));
+  app.get('/contact', async (_request, reply) => reply.type('text/html').send(renderContact(site)));
+  app.get('/changelog', async (_request, reply) =>
+    reply.type('text/html').send(renderChangelog(site)),
+  );
+  app.get('/blog', async (_request, reply) => reply.type('text/html').send(renderBlog(site)));
+  app.get('/careers', async (_request, reply) => reply.type('text/html').send(renderCareers(site)));
+  app.get('/docs', async (_request, reply) => reply.type('text/html').send(renderDocs(site)));
+  app.get('/cookies', async (_request, reply) => reply.type('text/html').send(renderCookies(site)));
+  app.get('/dpa', async (_request, reply) =>
+    reply.type('text/html').send(renderSubprocessors(site)),
+  );
+  app.get('/accessibility', async (_request, reply) =>
+    reply.type('text/html').send(renderAccessibility(site)),
+  );
+  app.get('/sitemap', async (_request, reply) => reply.type('text/html').send(renderSitemap(site)));
+  app.get('/faq', async (_request, reply) => reply.type('text/html').send(renderFaq(site)));
 
   // ===== Internal operations console (COSTFLOW_ADMIN_EMAILS only) =====
   // Cross-tenant, a deliberate + audited exception to the tenancy law, gated by
@@ -940,7 +1016,7 @@ Sitemap: https://app.fbx1.com/sitemap.xml
           body,
         }),
         session.csrf,
-        { bleed: true, noindex: true },
+        { bleed: true, noindex: true, site },
       ),
     );
 

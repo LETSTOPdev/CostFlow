@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { buildServer } from '../src/server';
 import { MemoryStore } from '../src/store/memory';
-import { SESSION_KEY, CREDENTIAL_KEY, makeApp, signIn, post, stubConnectors } from './helpers';
+import {
+  SESSION_KEY,
+  CREDENTIAL_KEY,
+  SPLIT_SITE,
+  makeApp,
+  signIn,
+  post,
+  stubConnectors,
+} from './helpers';
 import { renderDemoCompany } from '../src/demo-live';
 
 /**
@@ -235,21 +243,121 @@ describe('INVARIANT: provider-aware copy (never name a platform the customer is 
   });
 });
 
-describe('INVARIANT: canonical host (apex → app, no loop)', () => {
-  it('redirects fbx1.com to app.fbx1.com but never loops on the canonical host', async () => {
+/**
+ * The marketing site and the application are two hostnames served by one
+ * process. The invariant that matters is not which way a given path goes — it
+ * is that following the redirects always terminates. Each host redirects only
+ * the paths it does not own, to the host that does, and that host has no rule
+ * that would send them back.
+ */
+describe('INVARIANT: two hosts, and no request can bounce between them', () => {
+  const MARKETING = 'fbx1.com';
+  const APP = 'app.fbx1.com';
+
+  it('sends each path to the host that owns it, preserving path and query', async () => {
+    const t = makeApp({ site: SPLIT_SITE });
+    const appPathOnMarketing = await t.app.inject({
+      method: 'GET',
+      url: '/dashboard?x=1',
+      headers: { host: MARKETING },
+    });
+    expect(appPathOnMarketing.statusCode).toBe(301);
+    expect(appPathOnMarketing.headers['location']).toBe('https://app.fbx1.com/dashboard?x=1');
+
+    const marketingPathOnApp = await t.app.inject({
+      method: 'GET',
+      url: '/pricing?y=2',
+      headers: { host: APP },
+    });
+    expect(marketingPathOnApp.statusCode).toBe(301);
+    expect(marketingPathOnApp.headers['location']).toBe('https://fbx1.com/pricing?y=2');
+  });
+
+  /**
+   * Follow every redirect to its end. A loop shows up as a request that never
+   * arrives at a host willing to serve it — which is what a 301 pointing back
+   * at the origin it came from would produce, and the failure mode a customer
+   * experiences as a browser error rather than as a page.
+   */
+  it('terminates for every path on both hosts', async () => {
+    const t = makeApp({ site: SPLIT_SITE });
+    const paths = [
+      '/',
+      '/pricing',
+      '/docs',
+      '/demo',
+      '/try',
+      '/terms',
+      '/login',
+      '/signup',
+      '/dashboard',
+      '/runs',
+      '/robots.txt',
+      '/brand/logo.svg',
+      '/healthz',
+      '/nothing-here',
+    ];
+    for (const start of paths) {
+      for (const startHost of [MARKETING, APP, 'www.fbx1.com']) {
+        let host = startHost;
+        let url = start;
+        let hops = 0;
+        for (;;) {
+          const res = await t.app.inject({ method: 'GET', url, headers: { host } });
+          if (res.statusCode !== 301) break;
+          const next = new URL(res.headers['location'] as string);
+          host = next.host;
+          url = `${next.pathname}${next.search}`;
+          hops += 1;
+          expect(hops, `${startHost}${start} keeps redirecting`).toBeLessThanOrEqual(2);
+        }
+      }
+    }
+  });
+
+  it('folds www into the apex rather than letting two marketing origins exist', async () => {
+    const t = makeApp({ site: SPLIT_SITE });
+    const res = await t.app.inject({
+      method: 'GET',
+      url: '/pricing',
+      headers: { host: 'www.fbx1.com' },
+    });
+    expect(res.statusCode).toBe(301);
+    expect(res.headers['location']).toBe('https://fbx1.com/pricing');
+  });
+
+  /**
+   * `/` is the one path both hosts own — the landing on one, the way in on the
+   * other. If either redirected it, the two would trade a visitor forever.
+   */
+  it('never redirects the root, on either host', async () => {
+    const t = makeApp({ site: SPLIT_SITE });
+    for (const host of [MARKETING, APP]) {
+      const res = await t.app.inject({ method: 'GET', url: '/', headers: { host } });
+      expect(res.statusCode, `${host}/ should be served, not redirected`).toBe(200);
+    }
+  });
+
+  /**
+   * Health probes arrive on the platform's internal hostname, and the identity
+   * provider's login page loads the logo from wherever it was configured. A
+   * redirect on either is an outage that looks like a DNS problem.
+   */
+  it('serves shared assets and health probes on any host, unredirected', async () => {
+    const t = makeApp({ site: SPLIT_SITE });
+    for (const host of [MARKETING, APP, 'costflow.up.railway.app']) {
+      for (const url of ['/healthz', '/brand/logo.svg', '/favicon.ico']) {
+        const res = await t.app.inject({ method: 'GET', url, headers: { host } });
+        expect(res.statusCode, `${host}${url}`).toBe(200);
+      }
+    }
+  });
+
+  it('does nothing at all until the split is configured', async () => {
     const t = makeApp();
-    const apex = await t.app.inject({
-      method: 'GET',
-      url: '/x?y=1',
-      headers: { host: 'fbx1.com' },
-    });
-    expect(apex.statusCode).toBe(301);
-    expect(apex.headers['location']).toBe('https://app.fbx1.com/x?y=1');
-    const canon = await t.app.inject({
-      method: 'GET',
-      url: '/',
-      headers: { host: 'app.fbx1.com' },
-    });
-    expect(canon.statusCode).toBe(200);
+    for (const host of ['fbx1.com', 'app.fbx1.com', 'localhost']) {
+      const res = await t.app.inject({ method: 'GET', url: '/pricing', headers: { host } });
+      expect(res.statusCode, host).toBe(200);
+    }
   });
 });

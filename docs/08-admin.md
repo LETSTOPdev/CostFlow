@@ -51,6 +51,58 @@ The checklists for before and after a push are in
 | `COSTFLOW_STORE` | `memory` for a throwaway demo. Never in production. |
 | `COSTFLOW_MAX_ISSUES` | Optional item ceiling, counted across the whole scope selection. Default 50,000. |
 | `COSTFLOW_MAX_SCOPES` | Optional cap on how many scopes one workspace may select. Default 25. |
+| `COSTFLOW_MARKETING_URL` | **The marketing/application split.** Unset, one host serves everything. Set to `https://fbx1.com`, the marketing site and the application separate. See below. |
+
+## Splitting the marketing site from the application
+
+`https://fbx1.com` is the marketing site; `https://app.fbx1.com` is the
+application. One Railway service serves both, routed on the `Host` header.
+
+**Nothing about authentication changes.** `/login`, `/signup`, `/auth/callback`
+and `/logged-out` are application paths, the session cookie is host-only, and
+the Auth0 callback and post-logout URLs stay exactly as they are. There is no
+cross-origin auth, so there is nothing in Auth0 to reconfigure.
+
+`COSTFLOW_MARKETING_URL` is the whole switch. Unset, the split is inert and the
+app behaves exactly as it did before the code shipped. That is deliberate: the
+code can go out ahead of the DNS change, and unsetting one variable rolls the
+whole thing back without a deploy.
+
+### Cutover
+
+1. **Add the domains.** In Railway, add `fbx1.com` and `www.fbx1.com` to the
+   same service that already serves `app.fbx1.com`, and point DNS at the
+   records Railway gives you. Wait for certificates to issue.
+2. **Check they reach the app.** Both should serve the site as it is today,
+   because the split is still off:
+   `curl -sI https://fbx1.com/pricing` → `200`.
+3. **Turn it on.** Set `COSTFLOW_MARKETING_URL=https://fbx1.com` and redeploy.
+4. **Verify both hosts**, below.
+5. **Tell Google.** Submit `https://fbx1.com/sitemap.xml` in Search Console and
+   add `fbx1.com` as a property. The application host stays crawlable on
+   purpose so the 301s transfer the existing index entries; do not add
+   `Disallow: /` to it.
+
+### Verifying the cutover
+
+```bash
+curl -sI https://fbx1.com/pricing | head -1                 # 200
+curl -sI https://app.fbx1.com/pricing | grep -i location    # → https://fbx1.com/pricing
+curl -sI https://fbx1.com/dashboard | grep -i location      # → https://app.fbx1.com/dashboard
+curl -sI https://www.fbx1.com/docs | grep -i location       # → https://fbx1.com/docs
+curl -s https://fbx1.com/ | grep -c 'https://app.fbx1.com/signup'   # CTAs point at the app
+curl -s https://app.fbx1.com/ | grep -c 'Create account'    # the way in, not the landing
+curl -sI https://fbx1.com/ https://app.fbx1.com/ | grep -c '301'    # 0 — the root never moves
+```
+
+Then sign in, run an analysis and sign out on `app.fbx1.com`. Sessions,
+callbacks and logout are unaffected by the split, but that is the flow whose
+breakage would be worst, so it is the one to walk.
+
+### Rolling back
+
+Unset `COSTFLOW_MARKETING_URL` and redeploy. Both hostnames go back to serving
+everything, no redirects, no code change. Leave the DNS in place.
 
 ### Getting a ClickUp API token
 

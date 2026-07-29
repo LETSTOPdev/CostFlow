@@ -27,6 +27,7 @@ import { buildJiraConnector } from '../src/connectors/jira';
 import { buildClickUpConnector } from '../src/connectors/clickup';
 import { buildConnectorRegistry } from '../src/connectors/registry';
 import { buildServer } from '../src/server';
+import { SAME_ORIGIN, splitSite } from '../src/site';
 import { MemoryStore } from '../src/store/memory';
 import {
   CLICKUP_FIXTURE_HISTORY,
@@ -71,7 +72,22 @@ clickup.lists = [
   { id: '811', name: 'Brand', kind: 'List', parentId: '810', fetchable: true },
 ];
 
+/**
+ * Walk the two-host split locally:
+ *
+ *     COSTFLOW_MARKETING_URL=http://marketing.localhost:3901 pnpm preview
+ *
+ * then send a Host header (`curl -H 'Host: marketing.localhost' …`) to see what
+ * each hostname serves. Unset, one origin serves everything, which is the
+ * walkthrough the cold-start ritual describes.
+ */
+const marketing = process.env['COSTFLOW_MARKETING_URL'];
+const site = marketing
+  ? splitSite(new URL(marketing).origin, `http://app.localhost:${PORT}`)
+  : SAME_ORIGIN;
+
 const app = buildServer({
+  site,
   store: new MemoryStore(),
   connectors: buildConnectorRegistry([
     buildJiraConnector(new StubJiraGateway()),

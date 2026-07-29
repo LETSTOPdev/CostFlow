@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { layout } from './html';
+import { SAME_ORIGIN, ownerOf, type Site } from './site';
 import type { Store } from './store/contract';
 
 /**
@@ -19,6 +20,8 @@ export interface SecurityContext {
    * the RP-initiated-logout endpoint is not blocked. Empty in dev mode.
    */
   readonly formActionOrigins?: readonly string[];
+  /** The two-host model. Defaults to one origin serving everything. */
+  readonly site?: Site;
   /** Structured log sink; defaults to stdout JSON. Injected for tests. */
   readonly logSink?: (line: Record<string, unknown>) => void;
 }
@@ -73,19 +76,59 @@ export function securityHeaders(
   return headers;
 }
 
+/**
+ * Route a request to the host that owns its path.
+ *
+ * Marketing paths belong to `fbx1.com`, application paths to `app.fbx1.com`,
+ * and each host 301s away only the paths it does NOT own. That asymmetry is
+ * what makes a loop impossible: a redirect always moves a request to the host
+ * that will serve it, and that host has no rule that would send it back.
+ *
+ * Three exceptions, all deliberate:
+ *  - `/` exists on both (the landing on one, the sign-in screen on the other)
+ *    and is never redirected;
+ *  - shared assets and health probes answer identically on both, so redirecting
+ *    them would break the identity provider's login-page logo and the
+ *    platform's health checks, which arrive without a recognisable Host;
+ *  - an unrecognised Host (the platform's internal `*.railway.app` name, a
+ *    probe by IP) is served as-is rather than redirected somewhere it may not
+ *    be able to follow.
+ *
+ * `www` folds into the apex first, so there is one canonical marketing origin
+ * rather than two competing for the same search index entry.
+ *
+ * Entirely inert until the split is configured, which is what lets the code
+ * ship ahead of the DNS change and roll back by unsetting one variable.
+ */
+export function registerHostRouter(app: FastifyInstance, site: Site): void {
+  if (!site.split) return;
+  // `hostname`, not `host`: the Host header is compared with its port stripped,
+  // and a URL's `host` keeps one. Comparing the two forms means the router
+  // silently never fires on any origin that names a port.
+  const marketingHost = new URL(site.marketingOrigin).hostname.toLowerCase();
+  const appHost = new URL(site.appOrigin).hostname.toLowerCase();
+
+  app.addHook('onRequest', async (request, reply) => {
+    const host = (request.headers.host ?? '').toLowerCase().split(':')[0] ?? '';
+    if (host === `www.${marketingHost}`) {
+      return reply.code(301).redirect(`${site.marketingOrigin}${request.url}`);
+    }
+    const owner = ownerOf(request.url);
+    if (owner === 'root' || owner === 'shared') return;
+    if (host === marketingHost && owner === 'app') {
+      return reply.code(301).redirect(`${site.appOrigin}${request.url}`);
+    }
+    if (host === appHost && owner === 'marketing') {
+      return reply.code(301).redirect(`${site.marketingOrigin}${request.url}`);
+    }
+  });
+}
+
 export function registerSecurity(app: FastifyInstance, context: SecurityContext): void {
   const log = context.logSink ?? ((line) => console.log(JSON.stringify(line)));
   const headers = securityHeaders(context.production, context.formActionOrigins ?? []);
 
-  // Canonical host is app.fbx1.com. If apex/www traffic reaches this app (once
-  // fbx1.com DNS points here), 301 to the canonical host, preserving path +
-  // query. Only fires for those exact hosts, so app.fbx1.com never loops.
-  app.addHook('onRequest', async (request, reply) => {
-    const host = (request.headers.host ?? '').toLowerCase().split(':')[0];
-    if (host === 'fbx1.com' || host === 'www.fbx1.com') {
-      return reply.code(301).redirect(`https://app.fbx1.com${request.url}`);
-    }
-  });
+  registerHostRouter(app, context.site ?? SAME_ORIGIN);
 
   app.addHook('onSend', async (request, reply, payload) => {
     for (const [name, value] of Object.entries(headers)) {

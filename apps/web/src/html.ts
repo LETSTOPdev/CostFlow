@@ -1,4 +1,5 @@
 /** Server-rendered HTML shell + premium design system (doc 09 P4.1 — no SPA build). */
+import { SAME_ORIGIN, appUrl, marketingUrl, type Site } from './site';
 
 /**
  * Brand lockup for headers/footers: the full horizontal CostFlow logo (icon +
@@ -456,26 +457,41 @@ a.report-card:hover{transform:translateY(-2px);box-shadow:var(--sh-2);border-col
 }
 `;
 
-const MARKETING_LEFT = `<a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/demo">Sample report</a>`;
-const MARKETING_RIGHT = `<a href="/about">About</a><a href="/blog">Blog</a>`;
-const MARKETING_MOBILE = `<a href="/pricing">Pricing</a><a href="/docs">Docs</a><a href="/demo">Sample report</a><a href="/about">About</a><a href="/blog">Blog</a>`;
+const marketingNav = (site: Site): { left: string; right: string; mobile: string } => {
+  const m = (path: string, label: string): string =>
+    `<a href="${marketingUrl(site, path)}">${label}</a>`;
+  const left = `${m('/pricing', 'Pricing')}${m('/docs', 'Docs')}${m('/demo', 'Sample report')}`;
+  const right = `${m('/about', 'About')}${m('/blog', 'Blog')}`;
+  return { left, right, mobile: `${left}${right}` };
+};
 
 /**
  * The notch header shell (see the `.nb-*` styles above): a raised center pod
  * bridged to slim side bars by concave corner cuts. Same markup for every
  * page; only the nav content swaps between a marketing visitor and a signed-in
  * user (via `csrf`, which also gates the CSRF-protected sign-out form).
+ *
+ * Sign in and Get started resolve to the APPLICATION origin, and the marketing
+ * links to the marketing origin. The host router would 301 a relative link to
+ * the right place anyway, but a visitor clicking "Get started" on the marketing
+ * site should arrive at the application directly — an extra hop through a
+ * redirect is a hop that can be cached, logged or lost.
  */
-function renderHeader(csrf?: string): string {
+function renderHeader(csrf?: string, site: Site = SAME_ORIGIN): string {
   const loggedOut = csrf === undefined;
+  const nav = marketingNav(site);
+  const signIn = appUrl(site, '/login');
+  const getStarted = appUrl(site, '/signup');
   const authDesktop = loggedOut
-    ? `<a href="/login">Sign in</a><a class="btn btn-sm" href="/signup">Get started</a>`
+    ? `<a href="${signIn}">Sign in</a><a class="btn btn-sm" href="${getStarted}">Get started</a>`
     : `<a href="/">Home</a><a href="/runs">Runs</a><form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
         csrf as string,
       )}"><button type="submit">Sign out</button></form>`;
   const mobileLinks = loggedOut
-    ? `${MARKETING_MOBILE}<div class="nb-mobile-cta"><a class="btn-ghost btn btn-sm" href="/login">Sign in</a><a class="btn btn-sm" href="/signup">Get started</a></div>`
+    ? `${nav.mobile}<div class="nb-mobile-cta"><a class="btn-ghost btn btn-sm" href="${signIn}">Sign in</a><a class="btn btn-sm" href="${getStarted}">Get started</a></div>`
     : `<a href="/">Home</a><a href="/runs">Runs</a>`;
+  const MARKETING_LEFT = nav.left;
+  const MARKETING_RIGHT = nav.right;
   return `<a class="skip" href="#main">Skip to content</a>
 <header class="nb">
   <div class="nb-bar nb-bar-l"></div>
@@ -548,11 +564,11 @@ const FOOTER_COLUMNS: readonly (readonly [string, readonly (readonly [string, st
  * page heading depth before the footer varies, so a fixed h-level here would
  * skip a level on some pages and break screen-reader heading navigation.
  */
-function renderFooter(): string {
+function renderFooter(site: Site = SAME_ORIGIN): string {
   const cols = FOOTER_COLUMNS.map(
     ([heading, links]) =>
       `<div class="sf-col"><p class="sf-col-h">${heading}</p><nav aria-label="${heading}">${links
-        .map(([label, href]) => `<a href="${href}">${label}</a>`)
+        .map(([label, href]) => `<a href="${marketingUrl(site, href)}">${label}</a>`)
         .join('')}</nav></div>`,
   ).join('');
   return `<footer class="site-footer"><div class="container">
@@ -582,10 +598,14 @@ export function layout(
     noindex?: boolean;
     jsonLd?: string;
     description?: string;
+    /** Which origins the shell's links resolve to. Same-origin by default. */
+    site?: Site;
   } = {},
 ): string {
-  // Canonical host is app.fbx1.com (see docs/BIBLE §fbx1). SEO tags are opt-in
-  // per page so authenticated/dynamic pages stay out of the index.
+  // Social/canonical URLs resolve to whichever host owns the public site: the
+  // marketing origin once the split is live, app.fbx1.com until then. SEO tags
+  // stay opt-in per page so authenticated pages never enter the index.
+  const og = (opts.site ?? SAME_ORIGIN).canonicalOrigin;
   const description =
     opts.description ??
     'See what workflow friction is costing your team. Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.';
@@ -614,25 +634,25 @@ export function layout(
 <meta name="theme-color" content="#fafafa">
 <meta property="og:site_name" content="CostFlow">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://app.fbx1.com/">
+<meta property="og:url" content="${esc(og)}/">
 <meta property="og:title" content="CostFlow: see what workflow friction costs your team">
 <meta property="og:description" content="Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.">
-<meta property="og:image" content="https://app.fbx1.com/og.jpg?v=2">
-<meta property="og:image:secure_url" content="https://app.fbx1.com/og.jpg?v=2">
+<meta property="og:image" content="${esc(og)}/og.jpg?v=2">
+<meta property="og:image:secure_url" content="${esc(og)}/og.jpg?v=2">
 <meta property="og:image:type" content="image/jpeg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="CostFlow: see what workflow friction costs your team">
 <meta name="twitter:description" content="Connect Jira or ClickUp and get a ranked cost report in about a minute. Every figure traces back to its formula.">
-<meta name="twitter:image" content="https://app.fbx1.com/og.jpg?v=2">
+<meta name="twitter:image" content="${esc(og)}/og.jpg?v=2">
 ${seoHead}
 <style>${STYLES}</style>
 </head>
 <body>
-${renderHeader(csrf)}
+${renderHeader(csrf, opts.site)}
 ${main}
-${csrf === undefined ? renderFooter() : ''}
+${csrf === undefined ? renderFooter(opts.site) : ''}
 </body>
 </html>`;
 }

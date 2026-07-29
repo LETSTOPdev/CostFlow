@@ -83,6 +83,7 @@ async function main(): Promise<void> {
     production: config.production,
     trustProxy: config.trustProxy,
     adminEmails: config.adminEmails,
+    site: config.site,
     ...(config.maxIssues !== undefined ? { maxIssues: config.maxIssues } : {}),
     ...(config.maxScopes !== undefined ? { maxScopes: config.maxScopes } : {}),
   });

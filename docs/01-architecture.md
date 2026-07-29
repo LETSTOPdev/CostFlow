@@ -321,6 +321,33 @@ preference.
   gateway with the pure ingestion transform. Adding a platform is a new
   connector module plus one line in the composition root.
 
+### Two hostnames, one deployment
+
+`fbx1.com` is the marketing site and `app.fbx1.com` is the application. They are
+the same Fastify instance, routed on the `Host` header by `site.ts`, which owns
+both the path classification and the cross-host link helpers. A second service
+would have duplicated the design system, the shell and the deploy for no gain at
+this size.
+
+The decision that makes it cheap: **authentication never leaves the application
+host.** `/login`, `/signup`, `/auth/callback` and `/logged-out` are application
+paths, the session cookie is host-only (no `Domain` attribute), and the identity
+provider's registered URLs are untouched. Nothing about auth is cross-origin, so
+nothing about auth changed.
+
+Each host 301s away only the paths it does *not* own. That asymmetry is what
+makes a loop impossible — a redirect always moves a request toward the host that
+will serve it, and that host has no rule sending it back. `/` is the single path
+both hosts own: the landing on one, the sign-in screen on the other, redirected
+by neither. Shared assets and health probes answer on any host, because the
+identity provider's login page loads the logo and the platform health-checks by
+an internal name.
+
+The split is off unless `COSTFLOW_MARKETING_URL` is set, so one origin serving
+everything with relative links remains a first-class configuration — it is what
+`pnpm preview` and every test run against. Cutover and rollback are in
+`08-admin.md`.
+
 ### The attribution guard
 
 The single structural choke point for the never-name-a-person rule. Immediately

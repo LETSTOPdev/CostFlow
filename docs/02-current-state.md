@@ -79,6 +79,17 @@ not to make it — and the product screenshot mirrors the real report's order:
 action, evidence, then the ranked list. The stage vocabulary shown before signup
 matches the six kinds the product actually uses.
 
+**Two hostnames.** `fbx1.com` is the marketing site, `app.fbx1.com` the
+application, served by one deployment and routed on the `Host` header. Every
+sign-in and get-started CTA on the marketing site points at the application
+directly; canonical URLs, `og:url`, structured data and the sitemap resolve to
+`fbx1.com`; the application host stays crawlable so its 301s transfer the index
+entries it currently holds. A signed-out visitor at `app.fbx1.com/` gets Sign in
+/ Create account, not the landing page. Authentication never leaves the
+application host, so Auth0 needed no change. **The split is inert until
+`COSTFLOW_MARKETING_URL` is set** — see `08-admin.md` for the cutover and the
+one-variable rollback.
+
 **The public surface claims only what exists.** Pricing states that billing is
 not built and no plan cap is enforced, and marks the four features that do not
 exist yet — machine-readable export, a second workspace, SSO/SAML, a

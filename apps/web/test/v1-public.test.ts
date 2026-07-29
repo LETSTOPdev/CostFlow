@@ -237,22 +237,138 @@ describe('SEO + canonical host', () => {
     expect(res.body).toContain('FAQPage');
   });
 
-  it('301-redirects apex/www to the canonical host, preserving path + query', async () => {
-    const { makeApp } = await import('./helpers');
-    const t = makeApp();
-    const r1 = await t.app.inject({
+  it('points canonical, og and structured data at the marketing origin', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const t = makeApp({ site: SPLIT_SITE });
+    const res = await t.app.inject({ method: 'GET', url: '/', headers: { host: 'fbx1.com' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('<link rel="canonical" href="https://fbx1.com/">');
+    expect(res.body).toContain('<meta property="og:url" content="https://fbx1.com/">');
+    expect(res.body).toContain('"@id":"https://fbx1.com/#org"');
+    // The application host must not appear as the home of the public site.
+    expect(res.body).not.toContain('canonical" href="https://app.fbx1.com');
+  });
+
+  it('serves one sitemap, on the marketing host, listing marketing URLs', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const t = makeApp({ site: SPLIT_SITE });
+    const xml = await t.app.inject({
       method: 'GET',
-      url: '/pricing?x=1',
+      url: '/sitemap.xml',
       headers: { host: 'fbx1.com' },
     });
-    expect(r1.statusCode).toBe(301);
-    expect(r1.headers['location']).toBe('https://app.fbx1.com/pricing?x=1');
-    const r2 = await t.app.inject({ method: 'GET', url: '/', headers: { host: 'www.fbx1.com' } });
-    expect(r2.statusCode).toBe(301);
-    expect(r2.headers['location']).toBe('https://app.fbx1.com/');
-    // The canonical host itself never redirects (no loop).
-    const ok = await t.app.inject({ method: 'GET', url: '/', headers: { host: 'app.fbx1.com' } });
-    expect(ok.statusCode).toBe(200);
+    expect(xml.statusCode).toBe(200);
+    expect(xml.body).toContain('<loc>https://fbx1.com/pricing</loc>');
+    expect(xml.body).not.toContain('app.fbx1.com');
+    // On the application host it moves rather than duplicating.
+    const moved = await t.app.inject({
+      method: 'GET',
+      url: '/sitemap.xml',
+      headers: { host: 'app.fbx1.com' },
+    });
+    expect(moved.statusCode).toBe(301);
+    expect(moved.headers['location']).toBe('https://fbx1.com/sitemap.xml');
+  });
+
+  /**
+   * The application host stays crawlable on purpose. Every marketing URL is
+   * currently indexed under app.fbx1.com, and a crawler forbidden to fetch one
+   * cannot see the 301 that would move it — the old URL would sit there stale
+   * instead of transferring.
+   */
+  it('keeps the application host crawlable so its redirects transfer', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const t = makeApp({ site: SPLIT_SITE });
+    const robots = await t.app.inject({
+      method: 'GET',
+      url: '/robots.txt',
+      headers: { host: 'app.fbx1.com' },
+    });
+    expect(robots.statusCode).toBe(200);
+    expect(robots.body).not.toMatch(/^Disallow: \/$/m);
+    expect(robots.body).toContain('Disallow: /dashboard');
+    // One sitemap, declared once, on the host that owns the public pages.
+    expect(robots.body).not.toContain('Sitemap:');
+    const marketing = await t.app.inject({
+      method: 'GET',
+      url: '/robots.txt',
+      headers: { host: 'fbx1.com' },
+    });
+    expect(marketing.body).toContain('Sitemap: https://fbx1.com/sitemap.xml');
+  });
+});
+
+/**
+ * The split as a customer meets it: marketing on one host, the product on the
+ * other, and every way in pointing at the right one.
+ */
+describe('the marketing site and the application are separate hosts', () => {
+  it('every public page answers on the marketing host', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const { MARKETING_PATHS } = await import('../src/site');
+    const t = makeApp({ site: SPLIT_SITE });
+    for (const path of ['/', ...MARKETING_PATHS]) {
+      const res = await t.app.inject({ method: 'GET', url: path, headers: { host: 'fbx1.com' } });
+      expect(res.statusCode, `fbx1.com${path}`).toBe(200);
+    }
+  });
+
+  it('sends a signed-out visitor on the application host to the way in, not to a pitch', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const t = makeApp({ site: SPLIT_SITE });
+    const res = await t.app.inject({ method: 'GET', url: '/', headers: { host: 'app.fbx1.com' } });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain('Sign in');
+    expect(res.body).toContain('Create account');
+    // Not the landing page.
+    expect(res.body).not.toContain('Know the one thing to fix');
+    // And a route back to the marketing site rather than a dead end.
+    expect(res.body).toContain('https://fbx1.com/');
+    // Never indexed: it is an application door, not a page.
+    expect(res.body).toContain('noindex');
+  });
+
+  it('sends every sign-in and get-started CTA to the application host', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const t = makeApp({ site: SPLIT_SITE });
+    for (const path of ['/', '/pricing', '/docs', '/demo']) {
+      const res = await t.app.inject({ method: 'GET', url: path, headers: { host: 'fbx1.com' } });
+      const body = res.body;
+      // Every auth link is absolute to the app, and none is left relative.
+      expect(body, `${path} sign-in`).toContain('href="https://app.fbx1.com/login"');
+      expect(body, `${path} relative /login`).not.toContain('href="/login"');
+      expect(body, `${path} relative /signup`).not.toContain('href="/signup"');
+    }
+    const pricing = await t.app.inject({
+      method: 'GET',
+      url: '/pricing',
+      headers: { host: 'fbx1.com' },
+    });
+    expect(pricing.body).toContain('href="https://app.fbx1.com/signup"');
+  });
+
+  it('keeps every marketing link on the marketing host', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const t = makeApp({ site: SPLIT_SITE });
+    const res = await t.app.inject({
+      method: 'GET',
+      url: '/pricing',
+      headers: { host: 'fbx1.com' },
+    });
+    expect(res.body).toContain('href="https://fbx1.com/docs"');
+    expect(res.body).toContain('href="https://fbx1.com/terms"');
+  });
+
+  it('leaves authentication entirely on the application host', async () => {
+    const { makeApp, SPLIT_SITE } = await import('./helpers');
+    const t = makeApp({ site: SPLIT_SITE });
+    // The auth routes are app-owned, so the marketing host hands them over
+    // rather than serving a second copy on a second origin.
+    for (const path of ['/login', '/signup', '/auth/callback', '/logged-out']) {
+      const res = await t.app.inject({ method: 'GET', url: path, headers: { host: 'fbx1.com' } });
+      expect(res.statusCode, `fbx1.com${path}`).toBe(301);
+      expect(res.headers['location']).toBe(`https://app.fbx1.com${path}`);
+    }
   });
 });
 

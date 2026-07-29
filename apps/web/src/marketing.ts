@@ -1,4 +1,5 @@
 import { SUPPORT_EMAIL, layout } from './html';
+import { SAME_ORIGIN, appUrl, marketingUrl, type Site } from './site';
 
 /**
  * The marketing/trust/company pages beyond the landing, Terms, and Privacy:
@@ -9,7 +10,6 @@ import { SUPPORT_EMAIL, layout } from './html';
  * invents a fact about CostFlow's history, team, or certifications.
  */
 
-const CANON = 'https://app.fbx1.com';
 const MAIL = `mailto:${SUPPORT_EMAIL}`;
 
 /** Centered eyebrow/h1/lead header used at the top of every page in this file. */
@@ -26,10 +26,17 @@ function prose(inner: string): string {
   return `<article class="panel" style="max-width:46rem;margin-inline:auto;margin-top:2rem">${inner}</article>`;
 }
 
-function page(title: string, description: string, path: string, body: string): string {
+/**
+ * Every page in this file takes the `Site` and passes it straight here, rather
+ * than reading a module-level origin. It is more typing at 16 call sites and it
+ * means the origins are an argument a test can vary, not process state a test
+ * has to install and remember to remove.
+ */
+function page(site: Site, title: string, description: string, path: string, body: string): string {
   return layout(title, body, undefined, {
-    canonical: `${CANON}${path}`,
+    canonical: `${site.canonicalOrigin}${path}`,
     description,
+    site,
   });
 }
 
@@ -129,7 +136,7 @@ const PRICING_FAQ: [string, string][] = [
   ],
 ];
 
-export function renderPricing(): string {
+export function renderPricing(site: Site = SAME_ORIGIN): string {
   const cards = TIERS.map(
     (
       t,
@@ -146,7 +153,7 @@ export function renderPricing(): string {
           )
           .join('')}
       </ul>
-      <a class="btn btn-block${t.featured ? '' : ' btn-ghost'}" href="${t.cta.href}">${t.cta.label}</a>
+      <a class="btn btn-block${t.featured ? '' : ' btn-ghost'}" href="${t.cta.href.startsWith('/') ? appUrl(site, t.cta.href) : t.cta.href}">${t.cta.label}</a>
     </div>`,
   ).join('');
 
@@ -177,10 +184,11 @@ export function renderPricing(): string {
     </div>
     <div class="cta-band" style="margin-top:3rem">
       <h2>Ready to see what it's costing you?</h2>
-      <a class="btn btn-lg" href="/signup">Get started free</a>
+      <a class="btn btn-lg" href="${appUrl(site, '/signup')}">Get started free</a>
     </div>`;
 
   return page(
+    site,
     'Pricing',
     'Start free. Pay per person once you need the whole team on it.',
     '/pricing',
@@ -192,7 +200,7 @@ export function renderPricing(): string {
  * 2. Security
  * ------------------------------------------------------------------ */
 
-export function renderSecurity(): string {
+export function renderSecurity(site: Site = SAME_ORIGIN): string {
   const body = `
     ${pageHead(
       'Security',
@@ -246,6 +254,7 @@ export function renderSecurity(): string {
     `)}`;
 
   return page(
+    site,
     'Security',
     'How CostFlow handles your workspace data, credentials, and individual privacy, in plain language.',
     '/security',
@@ -257,7 +266,7 @@ export function renderSecurity(): string {
  * 3. About
  * ------------------------------------------------------------------ */
 
-export function renderAbout(): string {
+export function renderAbout(site: Site = SAME_ORIGIN): string {
   const body = `
     ${pageHead(
       'About',
@@ -286,10 +295,11 @@ export function renderAbout(): string {
       with the people who'll actually use it than in a vacuum. If something's wrong, confusing, or missing,
       we want to hear about it. <a href="${MAIL}">${SUPPORT_EMAIL}</a> reaches actual humans, not a ticket
       queue.</p>
-      <p style="margin-top:1.5rem"><a class="btn" href="/signup">See what it's costing your team</a></p>
+      <p style="margin-top:1.5rem"><a class="btn" href="${appUrl(site, '/signup')}">See what it's costing your team</a></p>
     `)}`;
 
   return page(
+    site,
     'About',
     'CostFlow is built by FBX1. We build focused software for problems that are usually left to guesswork.',
     '/about',
@@ -301,7 +311,7 @@ export function renderAbout(): string {
  * 4. Contact
  * ------------------------------------------------------------------ */
 
-export function renderContact(): string {
+export function renderContact(site: Site = SAME_ORIGIN): string {
   const body = `
     ${pageHead(
       'Contact',
@@ -327,6 +337,7 @@ export function renderContact(): string {
     `)}`;
 
   return page(
+    site,
     'Contact',
     'One real way to reach CostFlow: email. We read everything.',
     '/contact',
@@ -338,7 +349,7 @@ export function renderContact(): string {
  * 5. Changelog
  * ------------------------------------------------------------------ */
 
-export function renderChangelog(): string {
+export function renderChangelog(site: Site = SAME_ORIGIN): string {
   const body = `
     ${pageHead(
       'Changelog',
@@ -359,7 +370,7 @@ export function renderChangelog(): string {
 Longer explanation if it needs one: what changed, why, and whether anyone needs to do anything about it.</code></pre>
     `)}`;
 
-  return page('Changelog', "What's shipped, in the order it shipped.", '/changelog', body);
+  return page(site, 'Changelog', "What's shipped, in the order it shipped.", '/changelog', body);
 }
 
 /* ------------------------------------------------------------------ *
@@ -385,7 +396,7 @@ const BLOG_TOPICS = [
   ],
 ] as const;
 
-export function renderBlog(): string {
+export function renderBlog(site: Site = SAME_ORIGIN): string {
   const topics = BLOG_TOPICS.map(
     ([t, d]) => `<div class="feature is-static"><h3>${t}</h3><p>${d}</p></div>`,
   ).join('');
@@ -409,6 +420,7 @@ export function renderBlog(): string {
     </div>`;
 
   return page(
+    site,
     'Blog',
     "Notes on workflow friction, pricing methodology, and what we're building.",
     '/blog',
@@ -420,7 +432,7 @@ export function renderBlog(): string {
  * 7. Careers
  * ------------------------------------------------------------------ */
 
-export function renderCareers(): string {
+export function renderCareers(site: Site = SAME_ORIGIN): string {
   const body = `
     ${pageHead(
       'Careers',
@@ -444,6 +456,7 @@ export function renderCareers(): string {
     `)}`;
 
   return page(
+    site,
     'Careers',
     "Not actively hiring right now. Here's what we'd look for when that changes.",
     '/careers',
@@ -536,7 +549,7 @@ const DOCS_SECTIONS: [string, string][] = [
   ],
 ];
 
-export function renderDocs(): string {
+export function renderDocs(site: Site = SAME_ORIGIN): string {
   const sections = DOCS_SECTIONS.map(
     ([h, p]) =>
       `<section class="ws" style="margin-bottom:1.1rem"><h3 style="margin-top:0">${h}</h3><div class="note" style="margin:0">${p}</div></section>`,
@@ -552,6 +565,7 @@ export function renderDocs(): string {
     <p class="note" style="text-align:center;margin-top:1.5rem">Not covered here? <a href="${MAIL}">${SUPPORT_EMAIL}</a>. A real person answers.</p>`;
 
   return page(
+    site,
     'Documentation',
     'How to connect your tracker, read your report, and understand the numbers.',
     '/docs',
@@ -563,7 +577,7 @@ export function renderDocs(): string {
  * 9. Cookies
  * ------------------------------------------------------------------ */
 
-export function renderCookies(): string {
+export function renderCookies(site: Site = SAME_ORIGIN): string {
   const body = `
     ${pageHead(
       'Cookies',
@@ -591,6 +605,7 @@ export function renderCookies(): string {
     `)}`;
 
   return page(
+    site,
     'Cookie Policy',
     "CostFlow uses one cookie, and it's not for tracking you.",
     '/cookies',
@@ -602,7 +617,7 @@ export function renderCookies(): string {
  * 10. Data processing / Subprocessors
  * ------------------------------------------------------------------ */
 
-export function renderSubprocessors(): string {
+export function renderSubprocessors(site: Site = SAME_ORIGIN): string {
   const body = `
     ${pageHead(
       'Data processing',
@@ -632,6 +647,7 @@ export function renderSubprocessors(): string {
     `)}`;
 
   return page(
+    site,
     'Subprocessors',
     'The infrastructure and services CostFlow relies on to run.',
     '/dpa',
@@ -643,7 +659,7 @@ export function renderSubprocessors(): string {
  * 11. Accessibility
  * ------------------------------------------------------------------ */
 
-export function renderAccessibility(): string {
+export function renderAccessibility(site: Site = SAME_ORIGIN): string {
   const body = `
     ${pageHead(
       'Accessibility',
@@ -669,6 +685,7 @@ export function renderAccessibility(): string {
     `)}`;
 
   return page(
+    site,
     'Accessibility',
     'How CostFlow approaches accessibility, and how to tell us where it falls short.',
     '/accessibility',
@@ -720,7 +737,7 @@ const SITEMAP_GROUPS: [string, [string, string][]][] = [
   ],
 ];
 
-export function renderSitemap(): string {
+export function renderSitemap(site: Site = SAME_ORIGIN): string {
   const groups = SITEMAP_GROUPS.map(
     ([heading, links]) => `<div class="ws" style="text-align:left">
       <h4>${heading}</h4>
@@ -728,7 +745,7 @@ export function renderSitemap(): string {
         ${links
           .map(([href, label]) => {
             const [name, ...rest] = label.split(': ');
-            return `<li><a href="${href}">${name}</a>${rest.length ? `: ${rest.join(': ')}` : ''}</li>`;
+            return `<li><a href="${marketingUrl(site, href)}">${name}</a>${rest.length ? `: ${rest.join(': ')}` : ''}</li>`;
           })
           .join('')}
       </ul>
@@ -739,7 +756,7 @@ export function renderSitemap(): string {
     ${pageHead('Sitemap', 'Everything on this site.', 'Every page on CostFlow, in one list.')}
     <div class="grid grid-2" style="max-width:44rem;margin:1.5rem auto 0">${groups}</div>`;
 
-  return page('Sitemap', 'Every page on CostFlow, in one list.', '/sitemap', body);
+  return page(site, 'Sitemap', 'Every page on CostFlow, in one list.', '/sitemap', body);
 }
 
 /* ------------------------------------------------------------------ *
@@ -785,7 +802,7 @@ const FAQ_ALL: [string, string][] = [
   ],
 ];
 
-export function renderFaq(): string {
+export function renderFaq(site: Site = SAME_ORIGIN): string {
   const items = FAQ_ALL.map(
     ([q, a]) => `<details><summary>${q}</summary><p class="note">${a}</p></details>`,
   ).join('');
@@ -795,6 +812,7 @@ export function renderFaq(): string {
     <div class="faq-list" style="margin-top:1.5rem">${items}</div>`;
 
   return page(
+    site,
     'FAQ',
     'Answers to the questions that come up most before and after connecting.',
     '/faq',
