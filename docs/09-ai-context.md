@@ -97,6 +97,15 @@ build next, the experience wins and the architecture changes.
 
 ### The milestone loop
 
+> **Read `03-roadmap.md` first.** As of 2026-07-29 the build phase is complete
+> and the product is feature-complete: the current phase is Design Partner
+> Validation, and **new capabilities are not to be started**. The loop below
+> still governs anything that does get built — a defect a real customer hit, a
+> clarity fix, a fault found by the ritual — but "implement the highest-impact
+> items" no longer means shipping features nobody has asked for yet. Where you
+> would once have proposed a capability, propose reading what real usage says
+> instead, and name the observation any proposal came from.
+
 Founder directive, 2026-07-28: act as Product & Technical Lead. Do not wait for
 every UX issue to be named. Each milestone runs:
 

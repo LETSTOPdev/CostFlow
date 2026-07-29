@@ -151,29 +151,30 @@ with no disclosure.
 
 ## Active milestone
 
-**None.** OI1, MC-5, MW1 and multi-scope monitoring are complete. The founder
-chose to stop expanding the intelligence layer until real customers have
-exercised it.
+**None, and none is to be started.** Founder directive, 2026-07-29: the build
+phase is complete and the core product is feature-complete. The current phase is
+**Design Partner Validation** — no new capabilities, and remaining product work
+driven by evidence from real companies rather than internal intuition. What to
+do instead is the first section of `03-roadmap.md`.
 
-The next area named was the admin dashboard, but the console and customer
-database already exist, so the scope is **unconfirmed**. Ask before building.
+A launch readiness review preceded the decision: the public surface was checked
+for over-promises, under-explanations, inconsistent terminology and places a
+first-time executive could lose trust, and what it found was fixed.
 
 ## Current priorities
 
+Both are operator actions, not code changes, and both gate the phase:
+
 1. **`/admin` is inaccessible in production.** `COSTFLOW_ADMIN_EMAILS` does not
-   contain the operator's email. Operator action in Railway, not a code change.
-   Procedure in `08-admin.md`.
-2. **OI1 has never been used by a real customer.** It is live but unexercised.
-   The founder wants evidence from real workspaces before anything is built on
-   top of it.
-3. **Confirm the next milestone.** Candidates in `03-roadmap.md`.
+   contain the operator's email, so no funnel, usage or health data can be read
+   — which is the whole point of a validation phase. Procedure in `08-admin.md`.
+2. **No real Jira or ClickUp account has ever been connected.** Every
+   walkthrough, test and golden runs against stubs or recorded fixtures. One
+   real connection before any partner is invited (R11).
 
 ## Open work
 
 **Unconfirmed product questions**
-- Should the recommendations section appear on `/demo` and `/try/report`? Those
-  are public marketing surfaces; showing it would demonstrate the layer to
-  prospects.
 - Billing is a Lemon Squeezy-shaped scaffold with nothing behind it: every
   organisation is plan `beta`, status `free_beta`, provider `none`, all dates
   null. The schema maps one-to-one onto Lemon Squeezy records, so integrating

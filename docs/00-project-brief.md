@@ -102,6 +102,12 @@ Full detail: **`01-architecture.md`**.
 
 ## Implementation status
 
+**The build phase is complete and the core product is feature-complete**
+(founder directive, 2026-07-29). The current phase is **Design Partner
+Validation**: no new capabilities, and remaining product work is driven by
+evidence from real companies using their own data. What that means in practice
+is the first section of `03-roadmap.md`.
+
 **Shipped and live.** The product works end to end: connect a tracker, map
 statuses, set assumptions, run an analysis, read a priced report with
 recommended actions, and compare against the previous run.
