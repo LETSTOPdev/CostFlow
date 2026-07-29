@@ -71,18 +71,42 @@ mkdir -p .vercel && cp <repo>/.vercel/project.json .vercel/project.json
 vercel deploy --prebuilt --prod --yes
 ```
 
-### Connecting the marketing site to the repository
+### Automatic deployment of the marketing site
 
-When linking the project, **use the full name and check the result**:
+`.github/workflows/deploy-marketing.yml` deploys `fbx1.com` on every push to
+`main`, and a preview URL on every pull request. It needs no Vercel GitHub App:
+it builds the Build Output directory itself and uploads it with `--prebuilt`.
+
+**It is inert until a `VERCEL_TOKEN` secret exists.** Create a *project-only*
+token (Vercel → Settings → Tokens, scoped to `costflow-marketing`) and add it:
+
+```bash
+gh secret set VERCEL_TOKEN --repo LETSTOPdev/CostFlow
+```
+
+The org and project ids are not secrets and are inlined in the workflow.
+
+If the Vercel GitHub App is ever connected to this repository instead, **delete
+the workflow** — otherwise every push deploys twice.
+
+### If you connect the repository to Vercel directly
+
+Use the full name and check the result:
 
 ```bash
 vercel git connect https://github.com/LETSTOPdev/CostFlow
 ```
 
 `ddoorr1185-ctrl` owns a different, private repository also called `costflow`,
-stale since before the host split. Linking by bare name binds to that one
-without complaint, and the next push there would replace `fbx1.com` with it.
-Verify afterwards that the project's `link.org` reads `LETSTOPdev`.
+stale since before the host split, and it is currently the only repository
+Vercel's GitHub installation can see. Linking by bare name binds to that one
+without complaint. Verify afterwards that the project's `link.org` reads
+`LETSTOPdev`.
+
+As a backstop the project's **ignored build step** refuses any git-triggered
+build whose `VERCEL_GIT_REPO_OWNER` is not `LETSTOPdev`, so a wrong link
+produces no deployment rather than a wrong one. Manual `--prebuilt` deploys are
+unaffected: they run no build step.
 
 Migrations are idempotent: `schema.sql` is re-applied in full on every deploy,
 using `create table if not exists` and `create index if not exists` throughout,

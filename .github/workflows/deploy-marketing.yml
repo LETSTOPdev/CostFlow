@@ -1,0 +1,78 @@
+name: Deploy marketing site
+
+# The marketing site at fbx1.com is a Vercel project that is NOT connected to
+# this repository — the Vercel GitHub App is installed on a different GitHub
+# account than the one that owns it (docs/06-known-risks.md R13). This workflow
+# deploys it without the App: it builds the same Build Output directory the
+# manual deploy produces and uploads it with `--prebuilt`, so Vercel runs
+# nothing of its own and CI is the only thing that decides what ships.
+#
+# It is INERT until a VERCEL_TOKEN secret exists. Add a PROJECT-ONLY token
+# (Vercel → Settings → Tokens, scoped to `costflow-marketing`) and this starts
+# deploying on the next push:
+#
+#     gh secret set VERCEL_TOKEN --repo LETSTOPdev/CostFlow
+#
+# If the Vercel GitHub App is ever connected to this repository instead, DELETE
+# this workflow — otherwise every push deploys twice.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: marketing-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: team_nwQLrPSqFC4sl4W2kzHHFwOp
+      VERCEL_PROJECT_ID: prj_dQRXThNiebDT6dqkcCp1pJUYBj5P
+    steps:
+      - name: Check the deploy credential is present
+        id: gate
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "No VERCEL_TOKEN secret — skipping. See docs/06-known-risks.md R13." >> "$GITHUB_STEP_SUMMARY"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.ready == 'true'
+      - uses: pnpm/action-setup@v4
+        if: steps.gate.outputs.ready == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.ready == 'true'
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        if: steps.gate.outputs.ready == 'true'
+
+      # The pages about to be published, checked before they are. The full
+      # suite runs in ci.yml; this is the subset that decides whether what
+      # ships is correct — routing, canonicals, the sitemap, the 404.
+      - name: Test the marketing site
+        if: steps.gate.outputs.ready == 'true'
+        run: pnpm vitest run apps/marketing
+
+      - name: Build
+        if: steps.gate.outputs.ready == 'true'
+        run: pnpm --filter @costflow/marketing build
+
+      # Production on main, a preview URL on everything else. `--prebuilt`
+      # uploads exactly what the step above wrote.
+      - name: Deploy
+        if: steps.gate.outputs.ready == 'true'
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            npx --yes vercel@latest deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
+          else
+            npx --yes vercel@latest deploy --prebuilt --yes --token "$VERCEL_TOKEN"
+          fi
