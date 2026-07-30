@@ -213,6 +213,15 @@ that is divided into an hourly rate by exact decimal arithmetic — the salary a
 divisor live in workspace configuration, not in the assumption set, so the
 engine still prices on hourly rates alone.
 
+The signed-in navigation carries Settings alongside Home and Runs. It used to be
+reachable only from the dashboard footer, which does not exist until a first
+analysis has run, and from error pages — so a customer part-way through
+onboarding could not change their scope and could not invite a colleague, while
+`/docs` told them setup was changeable from Settings. Settings is the
+configuration hub and already owns the links to connection, scope, statuses,
+roles, assumptions and the organization, so giving the hub an entrance was the
+whole fix; the dashboard stays clear of every one of them.
+
 **Admin console.** Twenty routes at `/admin`: executive dashboard, customer
 database with per-customer detail, activity feed, onboarding funnel, monitoring
 workspaces, organisations, users, workspaces, jobs, runs, invitations, audit log,

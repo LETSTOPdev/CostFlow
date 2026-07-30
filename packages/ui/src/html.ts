@@ -482,14 +482,33 @@ function renderHeader(csrf?: string, site: Site = APP_SITE): string {
   const nav = marketingNav(site);
   const signIn = appUrl(site, '/login');
   const getStarted = appUrl(site, '/signup');
+  /**
+   * Settings is IN the nav, not only behind a completed run.
+   *
+   * It used to be reachable from exactly two places: the dashboard footer,
+   * which does not exist until a first analysis has run, and error pages. So a
+   * customer part-way through onboarding could not change their scope, and
+   * could not invite a colleague, while `/docs` told them setup was "changeable
+   * afterwards from Settings". Team access is a shipped feature that was
+   * effectively undiscoverable.
+   *
+   * Settings ONLY, deliberately. `/settings` is the configuration hub and owns
+   * the links to connect, scope, statuses, actors, assumptions and the
+   * organization; the dashboard is kept clear of all of them so it stays a
+   * decision surface (`dashboard.test.ts`, "configuration is exiled"). Putting
+   * Organization in the global nav would have crossed that rule on every page.
+   * The reachability problem was the hub having no entrance, not the hub's
+   * contents.
+   */
+  const appLinks = `<a href="/">Home</a><a href="/runs">Runs</a><a href="/settings">Settings</a>`;
   const authDesktop = loggedOut
     ? `<a href="${signIn}">Sign in</a><a class="btn btn-sm" href="${getStarted}">Get started</a>`
-    : `<a href="/">Home</a><a href="/runs">Runs</a><form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
+    : `${appLinks}<form method="post" action="/logout" class="signout"><input type="hidden" name="csrf" value="${esc(
         csrf as string,
       )}"><button type="submit">Sign out</button></form>`;
   const mobileLinks = loggedOut
     ? `${nav.mobile}<div class="nb-mobile-cta"><a class="btn-ghost btn btn-sm" href="${signIn}">Sign in</a><a class="btn btn-sm" href="${getStarted}">Get started</a></div>`
-    : `<a href="/">Home</a><a href="/runs">Runs</a>`;
+    : appLinks;
   const MARKETING_LEFT = nav.left;
   const MARKETING_RIGHT = nav.right;
   return `<a class="skip" href="#main">Skip to content</a>

@@ -255,3 +255,69 @@ describe('P4.1 acceptance: the complete first-report journey', () => {
     expect(report.body).toContain('Confidence');
   });
 });
+
+/**
+ * Settings is reachable from anywhere signed in, and Organization through it.
+ *
+ * Settings was reachable from exactly two places: the dashboard footer, which
+ * does not exist until a first analysis has run, and error pages. A customer
+ * part-way through onboarding could not change their scope and could not invite
+ * a colleague, while `/docs` told them setup was "changeable afterwards from
+ * Settings". Team access is a shipped feature that was effectively
+ * undiscoverable.
+ *
+ * The fix is an entrance to the hub, not a second copy of its contents.
+ * `/settings` owns the links to connect, scope, statuses, actors, assumptions
+ * and the organization, and the dashboard is deliberately kept clear of all of
+ * them (`dashboard.test.ts`, "configuration is exiled"). Putting Organization in
+ * the global nav would have crossed that rule on every page, so the chain is
+ * what this pins: any signed-in page reaches Settings, Settings reaches
+ * Organization.
+ *
+ * Taken at the WORST moment — signed in, zero workspaces, no run — because that
+ * is the state that had no path at all.
+ */
+describe('the signed-in navigation reaches the configuration hub', () => {
+  it('offers Settings before any workspace exists, and Settings reaches Organization', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'nav-fresh@example.com');
+    const tenantId = (await t.store.findUserByEmail('nav-fresh@example.com'))!.tenantId;
+    expect(await t.store.listWorkspaces(tenantId)).toHaveLength(0);
+
+    // `/` sends a workspace-less manager to /connect: the genuine first screen.
+    const entry = await get(t, cookie, '/');
+    expect(entry.statusCode).toBe(302);
+    expect(entry.headers['location']).toBe('/connect');
+
+    const first = await get(t, cookie, '/connect');
+    expect(first.statusCode).toBe(200);
+    expect(first.body, 'no path to Settings from the first screen').toContain('href="/settings"');
+
+    // ...and the hub carries Organization, so team access is two clicks from
+    // anywhere rather than unreachable.
+    const settings = await get(t, cookie, '/settings');
+    expect(settings.statusCode).toBe(200);
+    expect(settings.body, 'Settings does not reach Organization').toContain('href="/org"');
+  });
+
+  it('keeps Settings on every signed-in page, not just the entry point', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'nav-every@example.com');
+    for (const url of ['/connect', '/runs', '/settings', '/org']) {
+      const res = await get(t, cookie, url);
+      expect(res.statusCode, url).toBe(200);
+      expect(res.body, `${url} lost the Settings link`).toContain('href="/settings"');
+    }
+  });
+
+  /**
+   * The nav must not carry Organization: the dashboard renders this same header,
+   * and configuration links are exiled from it by design.
+   */
+  it('does not put Organization in the global nav', async () => {
+    const t = makeApp();
+    const cookie = await signIn(t, 'nav-exile@example.com');
+    const connect = await get(t, cookie, '/connect');
+    expect(connect.body).not.toContain('href="/org"');
+  });
+});

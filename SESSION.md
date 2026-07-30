@@ -14,10 +14,10 @@ true of the shipped product → `docs/02-current-state.md`.
 
 ## Next
 
-- Awaiting a pick from the audit queue. Highest-ranked unstarted code item is adding
-  Settings and Organization to the signed-in nav (`packages/ui/src/html.ts:487`, `:492`)
-  — both unreachable before a first run, while `/docs` tells customers to change setup
-  there.
+- Awaiting a pick from the audit queue. Nothing in it is now blocking a design partner;
+  what remains is P2/P3 polish (empty `/blog`, `/changelog` and `/careers` in the footer,
+  `/security`'s claim that nobody can read a stored token back, the `/demo` sample being
+  a three-item board).
 - The audit lives only in chat. Promote anything durable to `docs/06-known-risks.md`
   rather than leaving it here.
 
