@@ -412,9 +412,9 @@ Google marks as an unverified app.
 
 **Impact.** High, and it lands at the worst moment. Everything `/security`
 argues about credential handling is contradicted by the screen that asks for
-credentials, before any value has been shown. The same tenant is why R15 is
-worth closing in code rather than trusting configuration: a development tenant's
-defaults have never been reviewed.
+credentials, before any value has been shown. A development tenant's defaults
+have also never been reviewed, which is why the application now refuses an
+unverified email itself rather than trusting the tenant to do it.
 
 **Mitigation.** None available in the codebase. `config.ts` already refuses to
 boot with `COSTFLOW_AUTH=dev` in production, so this is not the app running dev
@@ -427,26 +427,3 @@ repointing the four `COSTFLOW_OIDC_*` variables.
 invalidates every existing session; accounts survive, because identity is keyed
 on email rather than on the provider's subject.
 
----
-
-## R15 — Sign-in accepts an unverified email address
-
-**Description.** The callback reads `email_verified` from the identity provider
-(`apps/web/src/auth.ts:454`), records it as an analytics observation, and never
-gates on it. Accounts resolve by email alone (`auth.ts:172`), so any identity
-asserting an existing user's address resolves to that user's session and tenant.
-
-**Impact.** Potentially high, and conditional on configuration this repository
-cannot see. If the Auth0 tenant permits sign-up with an unverified address, or
-lets two connections assert the same address, the pattern is pre-registration
-account takeover. The code comments show the intent was to delegate verification
-to Auth0 Actions; whether such an Action exists has never been checked, and R14
-means the tenant has never been hardened.
-
-**Mitigation.** None applied. The guard is cheap and the claim is already in
-hand: refuse sign-in when `email_verified === false`, treating an absent claim
-as absent rather than false, so a provider that omits it does not lock everyone
-out.
-
-**Status.** Open. Unlike R14 this is fixable in code, and the fix does not need
-the JWKS and nonce work that a full ID-token verification would.

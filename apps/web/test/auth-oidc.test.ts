@@ -243,3 +243,142 @@ describe('managed authentication (OIDC adapter)', () => {
     expect(serialized).not.toContain('good-code'); // auth code
   });
 });
+
+/**
+ * R15 — an account IS its email address, so the address has to be proven.
+ *
+ * `signInByEmail` resolves an existing user by email alone. An identity that
+ * asserts someone else's address therefore resolves to that person's session
+ * and tenant, and the only thing between those two facts is whether the
+ * provider verified the address. The `email_verified` claim was read here and
+ * spent on analytics.
+ *
+ * The intent was to delegate this to an Auth0 Action. That is a setting in a
+ * tenant this repository cannot read, on a tenant nobody has hardened (R14), so
+ * the guard lives in the application where a test can hold it.
+ */
+describe('R15: sign-in requires a verified email address', () => {
+  const oidc = {
+    issuer: 'https://idp.example',
+    clientId: 'costflow',
+    clientSecret: 'cs-secret',
+    redirectUri: 'https://app.costflow.example/auth/callback',
+    postLogoutRedirectUri: 'https://app.costflow.example/logged-out',
+  };
+
+  /** Same stub as above, with the verification claim under the test's control. */
+  function stubIdp(claim: { email_verified?: boolean }): typeof fetch {
+    return (async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url === 'https://idp.example/.well-known/openid-configuration') {
+        return new Response(
+          JSON.stringify({
+            authorization_endpoint: 'https://idp.example/authorize',
+            token_endpoint: 'https://idp.example/token',
+            userinfo_endpoint: 'https://idp.example/userinfo',
+          }),
+        );
+      }
+      if (url === 'https://idp.example/token') {
+        const body = String(init?.body ?? '');
+        if (!body.includes('code=good-code')) return new Response('{}', { status: 400 });
+        return new Response(JSON.stringify({ access_token: 'at-1' }));
+      }
+      if (url === 'https://idp.example/userinfo') {
+        return new Response(JSON.stringify({ email: 'victim@acme.example', ...claim }));
+      }
+      return new Response('not found', { status: 404 });
+    }) as typeof fetch;
+  }
+
+  /** True when the response set no session cookie at all. */
+  const noSession = (res: { headers: Record<string, unknown> }): boolean => {
+    const raw = res.headers['set-cookie'];
+    const list = Array.isArray(raw) ? raw : raw === undefined ? [] : [raw as string];
+    return !list.some((c) => typeof c === 'string' && c.startsWith('cf_session='));
+  };
+
+  async function callback(claim: { email_verified?: boolean }) {
+    const t = makeApp({
+      auth: {
+        mode: 'oidc',
+        sessionKey: Buffer.alloc(32, 1),
+        credentialKey: Buffer.alloc(32, 2),
+        oidc,
+        fetchFn: stubIdp(claim),
+      },
+    });
+    const login = await t.app.inject({ method: 'GET', url: '/login' });
+    const state = new URL(login.headers['location'] as string).searchParams.get('state') as string;
+    const res = await t.app.inject({
+      method: 'GET',
+      url: `/auth/callback?code=good-code&state=${state}`,
+      headers: { cookie: cookieOf(login, 'cf_oidc_state') },
+    });
+    return { t, res };
+  }
+
+  it('refuses when the provider says the address is unverified', async () => {
+    const { t, res } = await callback({ email_verified: false });
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toContain('Verify your email');
+    // No session, and no account brought into existence by the attempt.
+    expect(noSession(res)).toBe(true);
+    expect(await t.store.findUserByEmail('victim@acme.example')).toBeNull();
+    expect(t.events[0]).toMatchObject({ event: 'tm-web-signin', fields: { ok: false } });
+  });
+
+  it('an unverified identity cannot take over an existing account', async () => {
+    // The account exists and is legitimately someone's.
+    const seed = await callback({ email_verified: true });
+    expect(seed.res.statusCode).toBe(302);
+    const owner = await seed.t.store.findUserByEmail('victim@acme.example');
+    expect(owner).not.toBeNull();
+
+    // A second identity asserts the same address without verification.
+    const attack = await callback({ email_verified: false });
+    expect(attack.res.statusCode).toBe(403);
+    expect(noSession(attack.res)).toBe(true);
+  });
+
+  it('signs in when the provider confirms the address', async () => {
+    const { t, res } = await callback({ email_verified: true });
+    expect(res.statusCode).toBe(302);
+    expect(res.headers['location']).toBe('/');
+    expect(cookieOf(res, 'cf_session').length).toBeGreaterThan(20);
+    expect(await t.store.findUserByEmail('victim@acme.example')).not.toBeNull();
+  });
+
+  /**
+   * Absent is not false. A provider that omits the claim has said nothing about
+   * the address; refusing on silence would lock out every user of an IdP that
+   * does not send it, which is a worse failure than the one being prevented.
+   */
+  it('signs in when the provider sends no verification claim at all', async () => {
+    const { t, res } = await callback({});
+    expect(res.statusCode).toBe(302);
+    expect(cookieOf(res, 'cf_session').length).toBeGreaterThan(20);
+    expect(await t.store.findUserByEmail('victim@acme.example')).not.toBeNull();
+  });
+
+  it('logs the refusal without the address', async () => {
+    const t = makeApp({
+      auth: {
+        mode: 'oidc',
+        sessionKey: Buffer.alloc(32, 1),
+        credentialKey: Buffer.alloc(32, 2),
+        oidc,
+        fetchFn: stubIdp({ email_verified: false }),
+      },
+    });
+    const login = await t.app.inject({ method: 'GET', url: '/login' });
+    const state = new URL(login.headers['location'] as string).searchParams.get('state') as string;
+    await t.app.inject({
+      method: 'GET',
+      url: `/auth/callback?code=good-code&state=${state}`,
+      headers: { cookie: cookieOf(login, 'cf_oidc_state') },
+    });
+    expect(t.logs.some((l) => l['msg'] === 'signin-refused')).toBe(true);
+    expect(JSON.stringify(t.logs)).not.toContain('victim@acme.example');
+  });
+});

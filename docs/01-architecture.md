@@ -312,6 +312,12 @@ params; actions are CSRF-protected POSTs. This is a hard constraint, not a
 preference.
 
 - **Auth** — OIDC via Auth0, stateless signed-cookie sessions, per-session CSRF.
+  An account **is** its email address, so sign-in refuses an identity the
+  provider reports as unverified. Enforced here rather than delegated to an IdP
+  rule, because a guard living in configuration this repository cannot read is
+  not a guard. An absent claim is not a refusal: Auth0's normalized profile
+  makes `email_verified` optional, so refusing on silence would lock out every
+  user of a connection that does not send it.
 - **Storage** — one `Store` interface, two implementations (Postgres, in-memory
   for tests), held to a shared contract test.
 - **Tenancy** — every query is tenant-scoped. The single sanctioned exception is

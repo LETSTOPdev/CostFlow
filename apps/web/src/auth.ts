@@ -460,6 +460,51 @@ export function registerAuthRoutes(
       onSignIn(false);
       return reply.code(502).send('Identity provider returned no email.');
     }
+    /**
+     * An account is the email address, so the address has to be proven.
+     *
+     * `signInByEmail` resolves an existing user by email alone, which means an
+     * identity asserting someone else's address resolves to that person's
+     * session and tenant. The only thing standing between those two facts is
+     * whether the provider verified the address, and the claim saying so was
+     * being read here and used for analytics.
+     *
+     * Enforced in the application rather than delegated to an IdP Action. The
+     * delegation was the intent (see the `access_denied` branch above), but it
+     * is a setting in a tenant this repository cannot read, on a tenant nobody
+     * has hardened (R14). A guard that depends on configuration nobody has
+     * verified is not a guard.
+     *
+     * ABSENT is not false, and that is a fact about Auth0 rather than caution.
+     * Its normalized user profile lists `email_verified` under "fields that are
+     * generated when the details are available", so it is optional and is not
+     * guaranteed to accompany `email`; for federated connections the upstream
+     * IdP decides whether to send it at all. OIDC Core agrees — a claim the
+     * provider does not have is omitted, not returned false.
+     *
+     * So refusing on silence would lock out every user of a connection that
+     * does not send it, which is a worse failure than the one being prevented.
+     * Only an explicit `false` refuses. Same absent-is-not-empty rule the
+     * artifact reader follows.
+     */
+    if (userinfo.email_verified === false) {
+      onSignIn(false);
+      log({ level: 'warn', msg: 'signin-refused', reason: 'email-unverified' });
+      return reply
+        .code(403)
+        .type('text/html')
+        .send(
+          layout(
+            'Verify your email',
+            `<div class="panel" style="max-width:34rem;margin:2rem auto;text-align:center">
+               <h1>Verify your email first</h1>
+               <p class="lead">Your identity provider has not confirmed this email address, so we cannot sign you in with it yet.</p>
+               <p class="note">Check your inbox for a verification link, then sign in again. If you have already verified it, contact <a href="mailto:support@fbx1.com">support@fbx1.com</a>.</p>
+               <div class="hero-actions" style="margin-top:1.5rem"><a class="btn btn-lg" href="/login">Try again</a></div>
+             </div>`,
+          ),
+        );
+    }
     // Only claims the IdP actually sent. An absent claim stays absent rather
     // than being defaulted, so "unknown" and "false" never get conflated.
     const observation: IdentityObservation = {

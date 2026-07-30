@@ -14,12 +14,12 @@ true of the shipped product → `docs/02-current-state.md`.
 
 ## Next
 
-- Awaiting a pick from the audit queue. Highest-ranked unstarted code item is R15
-  (refuse sign-in on `email_verified === false`), then adding Settings and Organization
-  to the signed-in nav (`packages/ui/src/html.ts:487`, `:492`) — both unreachable
-  before a first run, while `/docs` tells customers to change setup there.
-- The audit lives only in chat. Its two most serious findings are now R14 and R15;
-  promote anything else durable to `docs/06-known-risks.md` rather than leaving it here.
+- Awaiting a pick from the audit queue. Highest-ranked unstarted code item is adding
+  Settings and Organization to the signed-in nav (`packages/ui/src/html.ts:487`, `:492`)
+  — both unreachable before a first run, while `/docs` tells customers to change setup
+  there.
+- The audit lives only in chat. Promote anything durable to `docs/06-known-risks.md`
+  rather than leaving it here.
 
 ## Blockers
 
