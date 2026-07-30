@@ -25,3 +25,10 @@ mistakes that have actually been made here. **All process guidance lives there.*
   `docs/reference/NN-*.md`, not the living `docs/0N-*.md`. Do not renumber them.
 - **When documentation and code disagree, the code is the evidence.**
   Investigate, then fix the documentation — that is part of finishing the task.
+
+Current working state is in [`SESSION.md`](SESSION.md), not here.
+
+## Notes
+
+<!-- manual -->
+<!-- Human-authored. Never rewritten or pruned by Update Project. -->
