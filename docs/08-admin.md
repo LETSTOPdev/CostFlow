@@ -127,6 +127,7 @@ The checklists for before and after a push are in
 
 | Variable | Purpose |
 |---|---|
+| `COSTFLOW_ENV` | **`production` turns on the entire production posture.** See below. |
 | `DATABASE_URL` | Postgres connection. Required unless `COSTFLOW_STORE=memory`. |
 | `COSTFLOW_SESSION_KEY` | Signs session cookies. |
 | `COSTFLOW_CREDENTIAL_KEY` | AES-256-GCM key for connector secrets and org salts. |
@@ -142,6 +143,22 @@ The marketing site needs **no environment variables at all**. It has no session,
 no database and no secrets, and both origins are constants in
 `packages/ui/src/site.ts` — an origin only one of the two deployments knows
 about is an origin the two can disagree on.
+
+### `COSTFLOW_ENV` decides more than it looks like it does
+
+One string comparison in `config.ts` (`env['COSTFLOW_ENV'] === 'production'`)
+gates the whole production posture: the `Secure` attribute on the session
+cookie, trusting the edge proxy, refusing dev auth, refusing the in-memory
+store, requiring `DATABASE_URL`, and both https origin validations.
+
+Nothing fails loudly when it is unset or misspelled. The app boots, serves, and
+passes its healthcheck while sending the session cookie over HTTPS without
+`Secure` and with the proxy untrusted. `COSTFLOW_AUTH=oidc` still works, so
+sign-in gives no signal either.
+
+The one place that reports the truth is `/admin/system`, which shows *Secure
+cookies* and *Production posture* — and it sits behind the allowlist that R1
+describes as unreachable. Check it there once `/admin` opens.
 
 ## The two hostnames
 

@@ -209,10 +209,13 @@ The instrument already exists: the event spine and the onboarding funnel in
 `/admin` record every step of every real signup. Nothing here needs new
 telemetry — it needs traffic, and then someone to read it.
 
-## R13 — The marketing site does not deploy on push
+## R13 — The marketing site deploys from CI, not from Vercel's own link
 
 **Description.** The Vercel project `costflow-marketing` is connected to no
-repository, so `fbx1.com` only updates when someone deploys it deliberately.
+repository. `fbx1.com` now deploys on every push to `main`, but through
+`.github/workflows/deploy-marketing.yml` rather than through Vercel's own git
+integration — the workflow builds the Build Output directory and uploads it with
+`--prebuilt`.
 
 The cause is an identity mismatch, not a missing install. The Vercel GitHub App
 **is** installed — on the GitHub account `ddoorr1185-ctrl` (installation
@@ -243,13 +246,14 @@ afterwards** — never a bare repository name.
 
 **Mitigation.** `.github/workflows/deploy-marketing.yml` deploys the site
 without the GitHub App at all, building the same output the manual deploy
-produces and uploading it with `--prebuilt`. It is inert until a `VERCEL_TOKEN`
-secret exists. Creating a **project-only** token (Vercel → Settings → Tokens,
-scoped to `costflow-marketing`) and adding it closes this risk:
+produces and uploading it with `--prebuilt`. **The `VERCEL_TOKEN` secret now
+exists and the workflow deploys**, verified 2026-07-29: a real production upload
+under `dors-projects-ceb7e8c1/costflow-marketing`, after which all 17
+prerendered pages were byte-identical to the artifact built from `origin/main`.
 
-```bash
-gh secret set VERCEL_TOKEN --repo LETSTOPdev/CostFlow
-```
+Adding it was the whole fix, and it also settled two things the repository could
+not answer on its own: the token is valid and correctly scoped, and the
+hardcoded `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` resolve to the real project.
 
 A project-only token is the point. The account-wide token this machine holds
 would also work and is the wrong instrument: it carries authority over every
@@ -269,9 +273,18 @@ administrative control of its own production repository. The sequenced
 procedure, with verification and rollback at every step, is
 [`runbooks/github-org-migration.md`](runbooks/github-org-migration.md).
 
-**Status.** Open. The permanent fix is written and unscheduled; the workflow
-above closes the deployment half of it in the meantime, and is not a code
-change.
+**Status.** Deployment half **closed**. What remains open is the ownership
+split underneath it: the Vercel team belongs to one person and the GitHub
+repository to another, so Vercel's own git integration still cannot reach this
+repository and CI holds a token instead of a link. The permanent fix is the
+migration in
+[`runbooks/github-org-migration.md`](runbooks/github-org-migration.md), written
+and unscheduled.
+
+One trap the workflow leaves behind: with no token it reported **success** while
+skipping every real step, so a stale site looked shipped. That is logged as
+separate operational work and is dormant, not fixed — it returns the moment the
+token is rotated or removed.
 
 ---
 
@@ -382,3 +395,58 @@ would be optimising around U5 rather than testing it. Revisit once real usage
 says whether anyone returns unprompted.
 
 **Status.** Open, accepted for the design-partner phase.
+
+---
+
+## R14 — Production authentication runs on a dev-tier Auth0 tenant
+
+**Description.** `/login` and `/signup` on `app.fbx1.com` hand off to
+`dev-0l6ne8ms0d1s30aw.us.auth0.com`. It is visible without signing in: the
+application's `content-security-policy` names that host in `form-action`.
+
+A design partner's first screen after "Get started" therefore carries a red
+dev-keys warning, the raw tenant id in the heading ("Log in to
+dev-0l6ne8ms0d1s30aw to continue to CostFlow"), no CostFlow branding, and a
+"Continue with Google" button on Auth0's shared development credentials, which
+Google marks as an unverified app.
+
+**Impact.** High, and it lands at the worst moment. Everything `/security`
+argues about credential handling is contradicted by the screen that asks for
+credentials, before any value has been shown. The same tenant is why R15 is
+worth closing in code rather than trusting configuration: a development tenant's
+defaults have never been reviewed.
+
+**Mitigation.** None available in the codebase. `config.ts` already refuses to
+boot with `COSTFLOW_AUTH=dev` in production, so this is not the app running dev
+auth — it is production OIDC pointed at a development tenant, which the code
+cannot detect and should not try to. The fix is a production Auth0 tenant with a
+custom domain, real Google OAuth credentials and CostFlow branding, then
+repointing the four `COSTFLOW_OIDC_*` variables.
+
+**Status.** Open. Operator action, no code change. Changing the issuer
+invalidates every existing session; accounts survive, because identity is keyed
+on email rather than on the provider's subject.
+
+---
+
+## R15 — Sign-in accepts an unverified email address
+
+**Description.** The callback reads `email_verified` from the identity provider
+(`apps/web/src/auth.ts:454`), records it as an analytics observation, and never
+gates on it. Accounts resolve by email alone (`auth.ts:172`), so any identity
+asserting an existing user's address resolves to that user's session and tenant.
+
+**Impact.** Potentially high, and conditional on configuration this repository
+cannot see. If the Auth0 tenant permits sign-up with an unverified address, or
+lets two connections assert the same address, the pattern is pre-registration
+account takeover. The code comments show the intent was to delegate verification
+to Auth0 Actions; whether such an Action exists has never been checked, and R14
+means the tenant has never been hardened.
+
+**Mitigation.** None applied. The guard is cheap and the claim is already in
+hand: refuse sign-in when `email_verified === false`, treating an absent claim
+as absent rather than false, so a provider that omits it does not lock everyone
+out.
+
+**Status.** Open. Unlike R14 this is fixable in code, and the fix does not need
+the JWKS and nonce work that a full ID-token verification would.
